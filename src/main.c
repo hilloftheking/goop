@@ -228,6 +228,8 @@ int main() {
 
   GLint blobs_uniform = glGetUniformLocation(shader_program, "blobs");
   GLint solids_uniform = glGetUniformLocation(shader_program, "solids");
+  GLint solid_pools_uniform =
+      glGetUniformLocation(shader_program, "solid_pools");
 
   Blob blobs[BLOB_COUNT];
   for (int i = 0; i < BLOB_COUNT; i++) {
@@ -239,36 +241,40 @@ int main() {
   }
   vec3 prev_blobs_pos[BLOB_COUNT] = {0};
 
+  int *solid_pools = malloc(32 * 3 * 3 * 3 * sizeof(int));
+  // Terminate all pools with -1
+  for (int i = 0; i < 3 * 3 * 3; i++) {
+    solid_pools[i * 32] = -1;
+  }
+  int solid_pool_sizes[3 * 3 * 3] = {0};
+
   Solid solids[SOLID_COUNT];
   for (int i = 0; i < SOLID_COUNT; i++) {
     Solid *s = &solids[i];
-    s->pos[0] = 1.0f + rand_float() * 9.0f;
-    s->pos[1] = 1.0f + rand_float() * 9.0f;
-    s->pos[2] = 1.0f + rand_float() * 9.0f;
+    s->pos[0] = 1.0f + rand_float() * 7.0f;
+    s->pos[1] = 1.0f + rand_float() * 7.0f;
+    s->pos[2] = 1.0f + rand_float() * 7.0f;
     s->unused = 0.0f;
+
+    int pool_pos[3];
+    for (int x = 0; x < 3; x++) {
+      pool_pos[x] = (int)floorf(s->pos[x] / 3.0f);
+    }
+
+    int pool_idx = (pool_pos[0] * 3 * 3) + (pool_pos[1] * 3) + pool_pos[2];
+
+    int *pool_size = &solid_pool_sizes[pool_idx];
+    solid_pools[pool_idx * 32 + *pool_size] = i;
+
+    //printf("Put solid %d into pool %d of size %d\n", i, pool_idx, *pool_size);
+
+    (*pool_size)++;
+    // Terminate the pool with index -1
+    solid_pools[pool_idx * 32 + *pool_size] = -1;
   }
 
   glUniform4fv(solids_uniform, SOLID_COUNT, solids[0].pos);
-
-  GLuint sdf_tex;
-  glGenTextures(1, &sdf_tex);
-  glActiveTexture(GL_TEXTURE0);
-  glBindTexture(GL_TEXTURE_3D, sdf_tex);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-
-  glTexImage3D(GL_TEXTURE_3D, 0, GL_RED, 128, 128, 128, 0, GL_RED,
-               GL_UNSIGNED_BYTE, NULL);
-  glBindImageTexture(0, sdf_tex, 0, GL_FALSE, 0, GL_READ_ONLY, GL_R8UI);
-
-  GLuint compute_program = create_compute_program("shaders/compute.glsl");
-
-  glUseProgram(compute_program);
-  glUniform4fv(1, SOLID_COUNT, solids[0].pos);
-  glDispatchCompute(32, 32, 32);
-  glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+  glUniform4iv(solid_pools_uniform, (32 * 3 * 3 * 3) / 4, solid_pools);
 
   vec3 fall_order[] = {
       {0, -1, 0}, {1, -1, 0}, {-1, -1, 0}, {0, -1, 1}, {0, -1, -1}};

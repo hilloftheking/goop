@@ -137,12 +137,14 @@
   <ItemGroup>
     <ClInclude Include="include\linmath.h" />
     <ClInclude Include="src\blob.h" />
+    <ClInclude Include="src\pool.h" />
     <ClInclude Include="src\solid.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="lib\glad.c" />
     <ClCompile Include="src\blob.c" />
     <ClCompile Include="src\main.c" />
+    <ClCompile Include="src\pool.c" />
     <ClCompile Include="src\solid.c" />
   </ItemGroup>
   <ItemGroup>
