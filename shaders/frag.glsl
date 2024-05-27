@@ -8,13 +8,19 @@ uniform mat4 cam_trans;
 uniform float cam_fov;
 uniform float cam_aspect;
 
-uniform sampler2D picture;
+uniform sampler3D picture;
 
-#define BLOB_COUNT 400
+#define BLOB_COUNT 20
 #define BLOB_RADIUS 0.5
 #define BLOB_SMOOTH 0.7
+#define BLOB_COLOR 1.0, 1.0, 0.8
 
-#define SOLID_COUNT 3
+#define SOLID_COUNT 200
+#define SOLID_RADIUS 0.5
+#define SOLID_SMOOTH 0.5
+#define SOLID_COLOR 0.5, 1.0, 0.3
+
+#define BRIGHTNESS 0.3
 
 uniform vec4 blobs[BLOB_COUNT];
 uniform vec4 solids[SOLID_COUNT];
@@ -34,7 +40,24 @@ vec4 map_the_world(vec3 p) {
     value = smin(value, distance_from_sphere(p, blobs[i].xyz, BLOB_RADIUS), BLOB_SMOOTH);
   }
 
-  return vec4(value, 1.0, 1.0, 0.8);
+  float solid_value = texture(picture, p / 10.0).r * 10.0;
+  if (solid_value < 0.01) {
+    solid_value = distance_from_sphere(p, solids[0].xyz, SOLID_RADIUS);
+    for (int i = 1; i < SOLID_COUNT; i++) {
+      solid_value = smin(solid_value,
+                         distance_from_sphere(p, solids[i].xyz, SOLID_RADIUS),
+                         SOLID_SMOOTH);
+    }
+  }
+
+  vec3 color;
+  if (value < solid_value) {
+    color = vec3(BLOB_COLOR);
+  } else {
+    color = vec3(SOLID_COLOR);
+  }
+
+  return vec4(min(value, solid_value), color);
 }
 
 vec3 calculate_normal(vec3 p) {
@@ -70,7 +93,8 @@ vec3 ray_march(vec3 ro, vec3 rd) {
       
       vec3 light_direction = -normalize(vec3(2.0, -5.0, 3.0));
 
-      float diffuse_intensity = max(0.0, dot(norm, light_direction));
+      float diffuse_intensity =
+          mix(max(0.0, dot(norm, light_direction)), 1.0, BRIGHTNESS);
 
       return color * diffuse_intensity;
     }
@@ -99,5 +123,5 @@ void main() {
   vec3 rd = normalize(vec3((rot_mat * dir_mat)[3]));
 
   out_color = vec4(ray_march(ro, rd), 1.0);
-  //out_color = vec4(texture(picture, frag_pos).rgb, 1.0);
+  //out_color = vec4(texture(picture, vec3(frag_pos, 0.5)).rgb, 1.0);
 }

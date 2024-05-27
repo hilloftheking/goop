@@ -13,6 +13,7 @@
 #include "stb_image.h"
 
 #include "blob.h"
+#include "solid.h"
 
 static GLuint compile_shader(const char *path, GLenum shader_type) {
   FILE *f = fopen(path, "rb");
@@ -27,7 +28,7 @@ static GLuint compile_shader(const char *path, GLenum shader_type) {
   fseek(f, 0, SEEK_SET);
 
   if (size == 0) {
-    fprintf(stderr, "File %s is empty\n");
+    fprintf(stderr, "File %s is empty\n", path);
     return 0;
   }
 
@@ -204,46 +205,6 @@ int main() {
 
   gladLoadGLLoader(glfwGetProcAddress);
 
-  GLuint tex_in, tex_out;
-  glGenTextures(1, &tex_in);
-  glGenTextures(1, &tex_out);
-  glActiveTexture(GL_TEXTURE0);
-  glBindTexture(GL_TEXTURE_2D, tex_in);
-  glActiveTexture(GL_TEXTURE1);
-  glBindTexture(GL_TEXTURE_2D, tex_out);
-
-  glActiveTexture(GL_TEXTURE0);
-  for (int i = 0; i < 2; i++) {
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-
-    glActiveTexture(GL_TEXTURE1);
-  }
-
-  int tex_w, tex_h;
-  stbi_set_flip_vertically_on_load(true);
-  stbi_uc* tex_dat = stbi_load("assets/test.png", &tex_w, &tex_h, NULL, STBI_rgb_alpha);
-
-  glActiveTexture(GL_TEXTURE0);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tex_w, tex_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex_dat);
-  glBindImageTexture(0, tex_in, 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA8UI);
-
-  stbi_image_free(tex_dat);
-
-  glActiveTexture(GL_TEXTURE1);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tex_w, tex_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-  glBindImageTexture(1, tex_out, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA8UI);
-
-  GLuint compute_program = create_compute_program("shaders/compute.glsl");
-
-  glUseProgram(compute_program);
-  glUniform1i(0, 0);
-  glUniform1i(1, 1);
-  glDispatchCompute(tex_w / 32, tex_h / 32, 1);
-  glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-
   GLuint vao;
   glGenVertexArrays(1, &vao);
   glBindVertexArray(vao);
@@ -266,18 +227,48 @@ int main() {
   cam.rot[0] = 0.5f;
 
   GLint blobs_uniform = glGetUniformLocation(shader_program, "blobs");
-
-  GLint picture_uniform = glGetUniformLocation(shader_program, "picture");
-  glUniform1i(picture_uniform, 1);
+  GLint solids_uniform = glGetUniformLocation(shader_program, "solids");
 
   Blob blobs[BLOB_COUNT];
   for (int i = 0; i < BLOB_COUNT; i++) {
-    blobs[i].pos[0] = (rand_float() - 0.5f) * 1.0f;
-    blobs[i].pos[1] = 4.0f + (rand_float() * 4.0f);
-    blobs[i].pos[2] = (rand_float() - 0.5f) * 1.0f;
-    blobs[i].unused = 0.0f;
+    Blob *b = &blobs[i];
+    b->pos[0] = (rand_float() - 0.5f) * 1.0f;
+    b->pos[1] = 4.0f + (rand_float() * 4.0f);
+    b->pos[2] = (rand_float() - 0.5f) * 1.0f;
+    b->unused = 0.0f;
   }
   vec3 prev_blobs_pos[BLOB_COUNT] = {0};
+
+  Solid solids[SOLID_COUNT];
+  for (int i = 0; i < SOLID_COUNT; i++) {
+    Solid *s = &solids[i];
+    s->pos[0] = 1.0f + rand_float() * 9.0f;
+    s->pos[1] = 1.0f + rand_float() * 9.0f;
+    s->pos[2] = 1.0f + rand_float() * 9.0f;
+    s->unused = 0.0f;
+  }
+
+  glUniform4fv(solids_uniform, SOLID_COUNT, solids[0].pos);
+
+  GLuint sdf_tex;
+  glGenTextures(1, &sdf_tex);
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_3D, sdf_tex);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+  glTexImage3D(GL_TEXTURE_3D, 0, GL_RED, 128, 128, 128, 0, GL_RED,
+               GL_UNSIGNED_BYTE, NULL);
+  glBindImageTexture(0, sdf_tex, 0, GL_FALSE, 0, GL_READ_ONLY, GL_R8UI);
+
+  GLuint compute_program = create_compute_program("shaders/compute.glsl");
+
+  glUseProgram(compute_program);
+  glUniform4fv(1, SOLID_COUNT, solids[0].pos);
+  glDispatchCompute(32, 32, 32);
+  glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
   vec3 fall_order[] = {
       {0, -1, 0}, {1, -1, 0}, {-1, -1, 0}, {0, -1, 1}, {0, -1, -1}};

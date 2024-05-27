@@ -43,5 +43,8 @@
     <None Include="shaders\frag.glsl">
       <Filter>Source Files</Filter>
     </None>
+    <None Include="shaders\compute.glsl">
+      <Filter>Source Files</Filter>
+    </None>
   </ItemGroup>
 </Project>
