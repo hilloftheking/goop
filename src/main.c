@@ -236,9 +236,9 @@ int main() {
   Blob blobs[BLOB_COUNT];
   for (int i = 0; i < BLOB_COUNT; i++) {
     Blob *b = &blobs[i];
-    b->pos[0] = (rand_float() - 0.5f) * 1.0f;
+    b->pos[0] = (rand_float() - 0.5f) * 5.0f;
     b->pos[1] = 4.0f + (rand_float() * 6.0f);
-    b->pos[2] = (rand_float() - 0.5f) * 1.0f;
+    b->pos[2] = (rand_float() - 0.5f) * 5.0f;
     b->sleep_ticks = 0;
   }
   vec3 prev_blobs_pos[BLOB_COUNT] = {0};

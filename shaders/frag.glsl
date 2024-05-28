@@ -8,14 +8,34 @@ uniform mat4 cam_trans;
 uniform float cam_fov;
 uniform float cam_aspect;
 
-#define BLOB_COUNT 400
+#define BLOB_COUNT 200
 #define BLOB_RADIUS 0.5
-//#define BLOB_SMOOTH 0.7
+#define BLOB_SMOOTH 0.5
 #define BLOB_COLOR 1.0, 1.0, 0.8
 
 #define DIST_MAX 100000000.0
 
 uniform vec4 blobs[BLOB_COUNT];
+
+float get_ray_sphere_intersection(vec3 ro, vec3 rd, vec3 center, float r) {
+  float a = 1.0;
+  float b = dot(2.0 * rd, ro - center);
+  float c = dot(ro - center, ro - center) - r * r;
+  float discriminant = b * b - 4 * a * c;
+
+  if (discriminant > 0.0) {
+    return (-b - sqrt(discriminant)) / (2.0 * a);
+  }
+
+  return DIST_MAX;
+}
+
+float get_blob_influence(vec3 ro, vec3 rd, vec3 center) {
+  float ray_dist_from_center =
+      sqrt(length(center - ro) * length(center - ro) -
+           dot(center - ro, rd) * dot(center - ro, rd));
+  return (BLOB_RADIUS + BLOB_SMOOTH - ray_dist_from_center) / BLOB_RADIUS;
+}
 
 void main() {
   vec3 ro = vec3(cam_trans[3]);
@@ -31,31 +51,74 @@ void main() {
   vec3 rd = normalize(vec3((rot_mat * dir_mat)[3]));
 
   float tmin = DIST_MAX;
-  vec3 normal;
+
+  vec3 normal = vec3(0.0);
+  vec3 tnormal = vec3(0.0);
 
   for (int i = 0; i < BLOB_COUNT; i++) {
     vec3 center = blobs[i].xyz;
+    float r = BLOB_RADIUS + BLOB_SMOOTH;
 
-    float a = 1.0;
-    float b = dot(2.0 * rd, ro - center);
-    float c = dot(ro - center, ro - center) - BLOB_RADIUS * BLOB_RADIUS;
-    float discriminant = b * b - 4 * a * c;
+    float dist = get_ray_sphere_intersection(ro, rd, center, r);
 
-    if (discriminant > 0.0) {
-      float root = (-b - sqrt(discriminant)) / (2.0 * a);
+    if (dist > 0.0 && dist < DIST_MAX) {
+      if (dist >= tmin) {
+        continue;
+      }
 
-      if (root > 0.0 && root < tmin) {
-        tmin = root;
-        normal = normalize((ro + root * rd) - center);
+      float influence = get_blob_influence(ro, rd, center);
+
+      normal = normalize((ro + (dist + BLOB_SMOOTH) * rd) - center) * influence;
+
+      if (influence >= 1.0) {
+        if (dist < tmin) {
+          tmin = dist;
+          tnormal = normal;
+        }
+        continue;
+      }
+
+      vec3 point_in_sphere = ro + dot(center - ro, rd) * rd;
+
+      for (int o = 0; o < BLOB_COUNT; o++) {
+        if (o == i) {
+          continue;
+        }
+
+        vec3 ocenter = blobs[o].xyz;
+        if (length(ocenter - center) >= r * 2.0) {
+          continue;
+        }
+
+        float odist = get_ray_sphere_intersection(ro, rd, ocenter, r);
+        if (odist >= DIST_MAX) {
+          continue;
+        }
+
+        vec3 opoint_in_sphere = ro + dot(ocenter - ro, rd) * rd;
+        float point_dist = length(opoint_in_sphere - point_in_sphere);
+
+        float oinfluence = max(0.0, get_blob_influence(ro, rd, ocenter) - point_dist);
+        influence += oinfluence;
+
+        normal += normalize((ro + odist * rd) - ocenter) * oinfluence;
+
+        if (influence >= 1.0) {
+          tmin = odist;
+          tnormal = normal;
+          break;
+        }
       }
     }
   }
+
+  tnormal = normalize(tnormal);
 
   if (tmin < DIST_MAX) {
     vec3 light_direction = -normalize(vec3(2.0, -5.0, 3.0));
 
     float diffuse_intensity =
-        mix(max(0.0, dot(normal, light_direction)), 1.0, 0.2);
+        mix(max(0.0, dot(tnormal, light_direction)), 1.0, 0.2);
 
     out_color = vec4(vec3(BLOB_COLOR) * diffuse_intensity, 1.0);
   } else {
