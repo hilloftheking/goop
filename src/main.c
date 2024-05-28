@@ -237,9 +237,9 @@ int main() {
   for (int i = 0; i < BLOB_COUNT; i++) {
     Blob *b = &blobs[i];
     b->pos[0] = (rand_float() - 0.5f) * 1.0f;
-    b->pos[1] = 4.0f + (rand_float() * 4.0f);
+    b->pos[1] = 4.0f + (rand_float() * 6.0f);
     b->pos[2] = (rand_float() - 0.5f) * 1.0f;
-    b->unused = 0.0f;
+    b->sleep_ticks = 0;
   }
   vec3 prev_blobs_pos[BLOB_COUNT] = {0};
 
@@ -337,10 +337,14 @@ int main() {
       tick_timer = TICK_TIME;
 
       for (int b = 0; b < BLOB_COUNT; b++) {
+        if (blobs[b].sleep_ticks >= BLOB_SLEEP_TICKS_REQUIRED) {
+          continue;
+        }
+
         vec3_dup(prev_blobs_pos[b], blobs[b].pos);
 
         vec3 velocity = {0};
-        float attraction_magnitude = 0.0f;
+        float attraction_total_magnitude = 0.0f;
 
         for (int ob = 0; ob < BLOB_COUNT; ob++) {
           if (ob == b)
@@ -349,15 +353,24 @@ int main() {
           vec3 attraction;
           blob_get_attraction_with(attraction, &blobs[b], &blobs[ob]);
 
-          attraction_magnitude += vec3_len(attraction);
+          float attraction_magnitude = vec3_len(attraction);
+          if (attraction_magnitude > BLOB_SLEEP_THRESHOLD) {
+            blobs[ob].sleep_ticks = 0;
+          }
+
+          attraction_total_magnitude += vec3_len(attraction);
           vec3_add(velocity, velocity, attraction);
         }
 
+        // TODO: This is flawed since "attraction" is only high when blobs are NOT properly connected
         // There is less gravity when there is lots of attraction
-        float g =
-            1.0f -
-            fminf(60.0f * attraction_magnitude * attraction_magnitude, 1.1f);
+        float g = 1.0f - fminf(40.0f * attraction_total_magnitude *
+                                   attraction_total_magnitude,
+                               1.1f);
         velocity[1] -= BLOB_FALL_SPEED * g;
+
+        vec3 pos_before;
+        vec3_dup(pos_before, blobs[b].pos);
 
         vec3_add(blobs[b].pos, blobs[b].pos, velocity);
 
@@ -368,6 +381,16 @@ int main() {
           if (blobs[b].pos[i] > blob_max_pos[i]) {
             blobs[b].pos[i] = blob_max_pos[i];
           }
+        }
+
+        // If movement during this tick was under the sleep threshold, the sleep counter can be incremented
+        vec3 pos_diff;
+        vec3_sub(pos_diff, blobs[b].pos, pos_before);
+        float movement = vec3_len(pos_diff);
+        if (movement < BLOB_SLEEP_THRESHOLD) {
+          blobs[b].sleep_ticks++;
+        } else {
+          blobs[b].sleep_ticks = 0;
         }
       }
     }

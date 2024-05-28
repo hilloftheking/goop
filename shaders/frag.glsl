@@ -13,6 +13,8 @@ uniform float cam_aspect;
 //#define BLOB_SMOOTH 0.7
 #define BLOB_COLOR 1.0, 1.0, 0.8
 
+#define DIST_MAX 100000000.0
+
 uniform vec4 blobs[BLOB_COUNT];
 
 void main() {
@@ -28,7 +30,7 @@ void main() {
 
   vec3 rd = normalize(vec3((rot_mat * dir_mat)[3]));
 
-  float tmin = 1000000.0;
+  float tmin = DIST_MAX;
   vec3 normal;
 
   for (int i = 0; i < BLOB_COUNT; i++) {
@@ -41,18 +43,15 @@ void main() {
 
     if (discriminant > 0.0) {
       float root = (-b - sqrt(discriminant)) / (2.0 * a);
-      if (root >= tmin) {
-        root = (-b + sqrt(discriminant)) / (2.0 * a);
-      }
 
-      if (root < tmin) {
+      if (root > 0.0 && root < tmin) {
         tmin = root;
         normal = normalize((ro + root * rd) - center);
       }
     }
   }
 
-  if (tmin < 1000000.0) {
+  if (tmin < DIST_MAX) {
     vec3 light_direction = -normalize(vec3(2.0, -5.0, 3.0));
 
     float diffuse_intensity =
