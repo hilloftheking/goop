@@ -22,4 +22,8 @@ typedef struct Blob {
 static vec3 blob_min_pos = {-20.0f, 0.0f, -20.0f};
 static vec3 blob_max_pos = {20.0f, 20.0f, 20.0f};
 
-void blob_get_attraction_with(vec3 r, Blob *b, Blob *other);
+// How much force is needed to attract b to other
+void blob_get_attraction_to(vec3 r, Blob *b, Blob *other);
+
+// How much anti gravitational force is applied to b from other
+float blob_get_support_with(Blob *b, Blob *other);

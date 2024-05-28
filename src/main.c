@@ -345,13 +345,14 @@ int main() {
 
         vec3 velocity = {0};
         float attraction_total_magnitude = 0.0f;
+        float anti_grav = 0.0f;
 
         for (int ob = 0; ob < BLOB_COUNT; ob++) {
           if (ob == b)
             continue;
 
           vec3 attraction;
-          blob_get_attraction_with(attraction, &blobs[b], &blobs[ob]);
+          blob_get_attraction_to(attraction, &blobs[b], &blobs[ob]);
 
           float attraction_magnitude = vec3_len(attraction);
           if (attraction_magnitude > BLOB_SLEEP_THRESHOLD) {
@@ -360,14 +361,11 @@ int main() {
 
           attraction_total_magnitude += vec3_len(attraction);
           vec3_add(velocity, velocity, attraction);
+
+          anti_grav += blob_get_support_with(&blobs[b], &blobs[ob]);
         }
 
-        // TODO: This is flawed since "attraction" is only high when blobs are NOT properly connected
-        // There is less gravity when there is lots of attraction
-        float g = 1.0f - fminf(40.0f * attraction_total_magnitude *
-                                   attraction_total_magnitude,
-                               1.1f);
-        velocity[1] -= BLOB_FALL_SPEED * g;
+        velocity[1] -= BLOB_FALL_SPEED * (1.0f - fminf(anti_grav, 1.0f));
 
         vec3 pos_before;
         vec3_dup(pos_before, blobs[b].pos);
