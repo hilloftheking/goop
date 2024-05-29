@@ -8,27 +8,22 @@ uniform mat4 cam_trans;
 uniform float cam_fov;
 uniform float cam_aspect;
 
-#define BLOB_COUNT 200
-#define BLOB_RADIUS 0.5
-#define BLOB_SMOOTH 0.5
 #define BLOB_COLOR 1.0, 1.0, 0.8
 
 #define MARCH_STEPS 128
-#define MARCH_INTERSECT 0.01
+#define MARCH_INTERSECT 0.001
 #define MARCH_MAX_DIST 100.0
 #define MARCH_NORM_STEP 0.2
 
 #define BG_COLOR 0.05, 0.03, 0.1
 #define BRIGHTNESS 0.2
 
-uniform vec4 blobs[BLOB_COUNT];
-
 uniform sampler3D sdf_tex;
 
 // Figure out the normal with a gradient
 vec3 get_normal_at(vec3 p) {
-  const vec3 small_step = vec3(MARCH_NORM_STEP / 40.0, 0.0, 0.0);
-  vec3 uvw = (p + vec3(20, 0, 20)) / vec3(40);
+  const vec3 small_step = vec3(MARCH_NORM_STEP / 20.0, 0.0, 0.0);
+  vec3 uvw = (p + vec3(10, 0, 10)) / vec3(20);
 
   float gradient_x = texture(sdf_tex, uvw + small_step.xyy).r -
                      texture(sdf_tex, uvw - small_step.xyy).r;
@@ -46,11 +41,11 @@ vec3 ray_march(vec3 ro, vec3 rd) {
   for (int i = 0; i < MARCH_STEPS; i++) {
     vec3 p = ro + rd * traveled;
 
-    if (abs(p.x) >= 20.0 || p.y <= 0.0 || p.y >= 40.0 || abs(p.z) >= 20.0) {
+    if (p.y <= 0.0) {
       break;
     }
 
-    float dist = texture(sdf_tex, (p + vec3(20, 0, 20)) / vec3(40)).r;
+    float dist = texture(sdf_tex, (p + vec3(10, 0, 10)) / vec3(20)).r;
 
     if (dist <= MARCH_INTERSECT) {
       vec3 normal = get_normal_at(p);

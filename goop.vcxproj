@@ -148,7 +148,7 @@
     <ClCompile Include="src\solid.c" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="shaders\compute.glsl" />
+    <None Include="shaders\compute_sdf.glsl" />
     <None Include="shaders\frag.glsl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
 #define _USE_MATH_DEFINES
 #include <math.h>
 
@@ -193,7 +194,7 @@ int main() {
 
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-  //glfwWindowHint(GLFW_FLOATING, GLFW_TRUE);
+  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
   GLFWwindow *window = glfwCreateWindow(512, 512, "goop", NULL, NULL);
   if (!window) {
@@ -242,9 +243,7 @@ int main() {
   cam.pos[2] = -5.0f;
   cam.rot[0] = 0.5f;
 
-  GLint blobs_uniform = glGetUniformLocation(shader_program, "blobs");
-
-  Blob blobs[BLOB_COUNT];
+  Blob *blobs = malloc(BLOB_COUNT * sizeof(Blob));
   for (int i = 0; i < BLOB_COUNT; i++) {
     Blob *b = &blobs[i];
     b->pos[0] = (rand_float() - 0.5f) * 5.0f;
@@ -252,7 +251,9 @@ int main() {
     b->pos[2] = (rand_float() - 0.5f) * 5.0f;
     b->sleep_ticks = 0;
   }
-  vec3 prev_blobs_pos[BLOB_COUNT] = {0};
+
+  vec3 *prev_blobs_pos = calloc(BLOB_COUNT, sizeof(vec3));
+  vec4 *blob_lerp = calloc(BLOB_COUNT, sizeof(vec4));
 
   vec3 fall_order[] = {
       {0, -1, 0}, {1, -1, 0}, {-1, -1, 0}, {0, -1, 1}, {0, -1, -1}};
@@ -265,22 +266,29 @@ int main() {
   glGenTextures(1, &sdf_tex);
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_3D, sdf_tex);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexImage3D(GL_TEXTURE_3D, 0, GL_R32F, BLOB_SDF_RES, BLOB_SDF_RES,
                BLOB_SDF_RES, 0, GL_RED, GL_FLOAT, NULL);
   glBindImageTexture(0, sdf_tex, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_R32F);
 
-  GLuint compute_program = create_compute_program("shaders/compute.glsl");
+  GLuint blobs_tex;
+  glGenTextures(1, &blobs_tex);
+  glActiveTexture(GL_TEXTURE1);
+  glBindTexture(GL_TEXTURE_1D, blobs_tex);
+  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA32F, BLOB_COUNT, 0, GL_RGBA, GL_FLOAT,
+               NULL);
+  glBindImageTexture(1, blobs_tex, 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA32F);
+
+  GLuint compute_program = create_compute_program("shaders/compute_sdf.glsl");
   glUseProgram(compute_program);
-  glUniform1i(0, 0);
-  glUniform4fv(1, BLOB_COUNT, blobs[0].pos);
-  glDispatchCompute(BLOB_SDF_RES / BLOB_SDF_GROUPS,
-                    BLOB_SDF_RES / BLOB_SDF_GROUPS,
-                    BLOB_SDF_RES / BLOB_SDF_GROUPS);
+  glUniform1i(2, BLOB_COUNT);
 
   uint64_t timer_freq = glfwGetTimerFrequency();
   uint64_t prev_timer = glfwGetTimerValue();
@@ -449,8 +457,6 @@ int main() {
 
     // Lerp the positions of the blobs
 
-    vec4 blob_lerp[BLOB_COUNT];
-
     for (int i = 0; i < BLOB_COUNT; i++) {
       float *pos_lerp = blob_lerp[i];
       for (int x = 0; x < 3; x++) {
@@ -460,10 +466,10 @@ int main() {
       }
     }
 
-    glUniform4fv(blobs_uniform, BLOB_COUNT, blob_lerp);
+    glTexSubImage1D(GL_TEXTURE_1D, 0, 0, BLOB_COUNT, GL_RGBA, GL_FLOAT,
+                    blob_lerp);
 
     glUseProgram(compute_program);
-    glUniform4fv(1, BLOB_COUNT, blob_lerp);
     glDispatchCompute(BLOB_SDF_RES / BLOB_SDF_GROUPS,
                       BLOB_SDF_RES / BLOB_SDF_GROUPS,
                       BLOB_SDF_RES / BLOB_SDF_GROUPS);

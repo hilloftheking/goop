@@ -14,7 +14,7 @@
 // How weak attraction and movement must be before sleeping is allowed
 #define BLOB_SLEEP_THRESHOLD 0.008f
 
-#define BLOB_SDF_RES 128
+#define BLOB_SDF_RES 96
 #define BLOB_SDF_GROUPS 4
 
 typedef struct Blob {

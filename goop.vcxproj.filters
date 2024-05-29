@@ -49,7 +49,7 @@
     <None Include="shaders\frag.glsl">
       <Filter>Source Files</Filter>
     </None>
-    <None Include="shaders\compute.glsl">
+    <None Include="shaders\compute_sdf.glsl">
       <Filter>Source Files</Filter>
     </None>
   </ItemGroup>
