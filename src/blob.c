@@ -37,8 +37,15 @@ float blob_get_support_with(Blob* b, Blob* other) {
     return 0.0f;
   }
 
+  // More support when close together
   if (x > 0.0f) {
     x *= 0.1f;
   }
-  return fmaxf(0.0f, -1.0f * x * x + 0.33f);
+
+  // Less support when other blob is above
+  if (direction[1] <= 0.1f) {
+    x *= 1.4f;
+  }
+
+  return fmaxf(0.0f, -1.0f * x * x + 0.4f);
 }

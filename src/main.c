@@ -176,6 +176,15 @@ static void cursor_position_callback(GLFWwindow *window, double xpos,
   last_ypos = ypos;
 }
 
+static bool should_optimize_blobs = false;
+
+static void key_callback(GLFWwindow* window, int key, int scancode, int action,
+    int mods) {
+  if (key == GLFW_KEY_O && action == GLFW_PRESS) {
+    should_optimize_blobs = true;
+  }
+}
+
 int main() {
   if (!glfwInit())
     return -1;
@@ -200,7 +209,9 @@ int main() {
     glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
   else
     fprintf(stderr, "Raw mouse input not supported\n");
+
   glfwSetCursorPosCallback(window, cursor_position_callback);
+  glfwSetKeyCallback(window, key_callback);
 
   glfwMakeContextCurrent(window);
   glfwSwapInterval(SWAP_INTERVAL);
@@ -391,6 +402,28 @@ int main() {
           blobs[b].sleep_ticks = 0;
         }
       }
+    }
+
+    if (should_optimize_blobs) {
+      should_optimize_blobs = false;
+
+      for (int i = 1; i < BLOB_COUNT; i++) {
+        int j = i - 1;
+        while (j >= 0 && blobs[j + 1].pos[1] > blobs[j].pos[1]) {
+          vec3 temp;
+          vec3_dup(temp, blobs[j + 1].pos);
+          vec3_dup(blobs[j + 1].pos, blobs[j].pos);
+          vec3_dup(blobs[j].pos, temp);
+
+          int itemp = blobs[j + 1].sleep_ticks;
+          blobs[j + 1].sleep_ticks = blobs[j].sleep_ticks;
+          blobs[j].sleep_ticks = itemp;
+
+          j--;
+        }
+      }
+
+      printf("Optimized blobs\n");
     }
 
     // Lerp the positions of the blobs

@@ -19,8 +19,8 @@ typedef struct Blob {
   int sleep_ticks;
 } Blob;
 
-static vec3 blob_min_pos = {-20.0f, 0.0f, -20.0f};
-static vec3 blob_max_pos = {20.0f, 20.0f, 20.0f};
+static vec3 blob_min_pos = {-6.0f, 0.0f, -6.0f};
+static vec3 blob_max_pos = {6.0f, 20.0f, 6.0f};
 
 // How much force is needed to attract b to other
 void blob_get_attraction_to(vec3 r, Blob *b, Blob *other);
