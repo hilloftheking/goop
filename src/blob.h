@@ -2,7 +2,7 @@
 
 #include "linmath.h"
 
-#define BLOB_COUNT 5
+#define BLOB_COUNT 200
 #define BLOB_DESIRED_DISTANCE 0.4f
 #define BLOB_FALL_SPEED 0.5f
 
@@ -13,6 +13,9 @@
 
 // How weak attraction and movement must be before sleeping is allowed
 #define BLOB_SLEEP_THRESHOLD 0.008f
+
+#define BLOB_SDF_RES 128
+#define BLOB_SDF_GROUPS 4
 
 typedef struct Blob {
   vec3 pos;

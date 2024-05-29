@@ -230,6 +230,9 @@ int main() {
   GLuint shader_program = create_shader_program("shaders/vert.glsl", "shaders/frag.glsl");
   glUseProgram(shader_program);
 
+  GLint sdf_tex_uniform = glGetUniformLocation(shader_program, "sdf_tex");
+  glUniform1i(sdf_tex_uniform, 0);
+
   GLint cam_trans_uniform = glGetUniformLocation(shader_program, "cam_trans");
   GLint cam_fov_uniform = glGetUniformLocation(shader_program, "cam_fov");
   GLint cam_aspect_uniform = glGetUniformLocation(shader_program, "cam_aspect");
@@ -240,9 +243,6 @@ int main() {
   cam.rot[0] = 0.5f;
 
   GLint blobs_uniform = glGetUniformLocation(shader_program, "blobs");
-  GLint solids_uniform = glGetUniformLocation(shader_program, "solids");
-  GLint solid_pools_uniform =
-      glGetUniformLocation(shader_program, "solid_pools");
 
   Blob blobs[BLOB_COUNT];
   for (int i = 0; i < BLOB_COUNT; i++) {
@@ -260,6 +260,27 @@ int main() {
   GLint attrib_index = glGetAttribLocation(shader_program, "in_pos");
   glEnableVertexAttribArray(attrib_index);
   glVertexAttribPointer(attrib_index, 2, GL_FLOAT, GL_FALSE, 0, NULL);
+
+  GLuint sdf_tex;
+  glGenTextures(1, &sdf_tex);
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_3D, sdf_tex);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexImage3D(GL_TEXTURE_3D, 0, GL_R32F, BLOB_SDF_RES, BLOB_SDF_RES,
+               BLOB_SDF_RES, 0, GL_RED, GL_FLOAT, NULL);
+  glBindImageTexture(0, sdf_tex, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_R32F);
+
+  GLuint compute_program = create_compute_program("shaders/compute.glsl");
+  glUseProgram(compute_program);
+  glUniform1i(0, 0);
+  glUniform4fv(1, BLOB_COUNT, blobs[0].pos);
+  glDispatchCompute(BLOB_SDF_RES / BLOB_SDF_GROUPS,
+                    BLOB_SDF_RES / BLOB_SDF_GROUPS,
+                    BLOB_SDF_RES / BLOB_SDF_GROUPS);
 
   uint64_t timer_freq = glfwGetTimerFrequency();
   uint64_t prev_timer = glfwGetTimerValue();
@@ -440,9 +461,13 @@ int main() {
     }
 
     glUniform4fv(blobs_uniform, BLOB_COUNT, blob_lerp);
-  }
 
-  glDeleteProgram(shader_program);
+    glUseProgram(compute_program);
+    glUniform4fv(1, BLOB_COUNT, blob_lerp);
+    glDispatchCompute(BLOB_SDF_RES / BLOB_SDF_GROUPS,
+                      BLOB_SDF_RES / BLOB_SDF_GROUPS,
+                      BLOB_SDF_RES / BLOB_SDF_GROUPS);
+  }
 
   glfwTerminate();
   return 0;
