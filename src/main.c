@@ -280,7 +280,7 @@ int main() {
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexImage3D(GL_TEXTURE_3D, 0, GL_R32F, BLOB_SDF_RES, BLOB_SDF_RES,
                BLOB_SDF_RES, 0, GL_RED, GL_FLOAT, NULL);
-  glBindImageTexture(0, sdf_tex, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_R32F);
+  glBindImageTexture(0, sdf_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_R32F);
 
   GLuint blobs_tex;
   glGenTextures(1, &blobs_tex);
