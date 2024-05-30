@@ -6,7 +6,7 @@ layout(location = 0) in vec2 frag_pos;
 
 layout(location = 0) out vec4 out_color;
 
-layout(location = 0, binding = 0) uniform sampler3D sdf_tex;
+layout(binding = 0) uniform sampler3D sdf_tex;
 layout(location = 1) uniform mat4 cam_trans;
 layout(location = 2) uniform float cam_fov;
 layout(location = 3) uniform float cam_aspect;

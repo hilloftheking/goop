@@ -421,19 +421,19 @@ int main() {
       num_groups[i] = (int)ceilf(
           ((max_pos[i] - min_pos[i]) * (BLOB_SDF_RES / blob_sdf_size[i])) /
           (float)BLOB_SDF_LOCAL_GROUPS);
-
-      if (num_groups[i] > BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS) {
-        num_groups[i] = BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS;
+        
+      int max_groups = BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS;
+      if (num_groups[i] > max_groups - (int)min_pos[i]) {
+        num_groups[i] = max_groups - (int)min_pos[i];
       } else if (num_groups[i] < 0) {
         num_groups[i] = 0;
       }
     }
 
-    /*
     printf("(%d, %d, %d)  :  (%d, %d, %d)\n", (int)min_pos[0], (int)min_pos[1],
            (int)min_pos[2], num_groups[0], num_groups[1], num_groups[2]);
-           */
 
+    glActiveTexture(GL_TEXTURE1);
     glTexSubImage1D(GL_TEXTURE_1D, 0, 0, BLOB_COUNT, GL_RGBA, GL_FLOAT,
                     blob_lerp);
 

@@ -96,7 +96,7 @@
       <AdditionalDependencies>$(ProjectDir)lib\glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PreBuildEvent>
-      <Command>python $(ProjectDir)shaders\embed_shaders.py</Command>
+      <Command>py $(ProjectDir)shaders\embed_shaders.py</Command>
     </PreBuildEvent>
     <PreBuildEvent>
       <Message>Put minified shaders into source/header</Message>
@@ -120,7 +120,7 @@
       <AdditionalDependencies>$(ProjectDir)lib\glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PreBuildEvent>
-      <Command>python $(ProjectDir)shaders\embed_shaders.py</Command>
+      <Command>py $(ProjectDir)shaders\embed_shaders.py</Command>
     </PreBuildEvent>
     <PreBuildEvent>
       <Message>Put minified shaders into source/header</Message>
@@ -140,7 +140,7 @@
       <AdditionalDependencies>$(ProjectDir)lib\glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PreBuildEvent>
-      <Command>python $(ProjectDir)shaders\embed_shaders.py</Command>
+      <Command>py $(ProjectDir)shaders\embed_shaders.py</Command>
     </PreBuildEvent>
     <PreBuildEvent>
       <Message>Put minified shaders into source/header</Message>
@@ -164,7 +164,7 @@
       <AdditionalDependencies>$(ProjectDir)lib\glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PreBuildEvent>
-      <Command>python $(ProjectDir)shaders\embed_shaders.py</Command>
+      <Command>py $(ProjectDir)shaders\embed_shaders.py</Command>
     </PreBuildEvent>
     <PreBuildEvent>
       <Message>Put minified shaders into source/header</Message>
