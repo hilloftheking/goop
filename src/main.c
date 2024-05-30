@@ -1,51 +1,36 @@
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include <string.h>
 #define _USE_MATH_DEFINES
 #include <math.h>
 
 #include <glad/glad.h>
+
 #include <GLFW/glfw3.h>
+
 #include "linmath.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
 #include "blob.h"
-#include "solid.h"
 
-static GLuint compile_shader(const char *path, GLenum shader_type) {
-  FILE *f = fopen(path, "rb");
-  if (!f) {
-    // TODO: fallback shader
-    fprintf(stderr, "Failed to open file %s\n", path);
-    return 0;
-  }
+#include "shader_sources.h"
 
-  fseek(f, 0, SEEK_END);
-  int size = ftell(f);
-  fseek(f, 0, SEEK_SET);
-
-  if (size == 0) {
-    fprintf(stderr, "File %s is empty\n", path);
-    return 0;
-  }
-
-  char *content = malloc(size);
-  fread(content, 1, size, f);
-  fclose(f);
+static GLuint compile_shader(const char *source, GLenum shader_type) {
+  int size = strlen(source);
 
   GLuint shader = glCreateShader(shader_type);
-  glShaderSource(shader, 1, &content, &size);
+  glShaderSource(shader, 1, &source, &size);
   glCompileShader(shader);
-  free(content);
 
   int compile_status = 0;
   glGetShaderiv(shader, GL_COMPILE_STATUS, &compile_status);
 
   // Compilation failed
+  // TODO: fallback shader
   if (compile_status == GL_FALSE) {
     int log_length = 0;
     glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &log_length);
@@ -53,7 +38,7 @@ static GLuint compile_shader(const char *path, GLenum shader_type) {
     char *message = malloc(log_length);
     glGetShaderInfoLog(shader, log_length, NULL, message);
 
-    fprintf(stderr, "Shader compilation failed for %s: %s\n", path, message);
+    fprintf(stderr, "Shader compilation failed: %s\n", message);
     free(message);
 
     glDeleteShader(shader);
@@ -63,14 +48,14 @@ static GLuint compile_shader(const char *path, GLenum shader_type) {
   return shader;
 }
 
-static GLuint create_shader_program(const char *vert_shader_path,
-                                    const char *frag_shader_path) {
-  GLuint vert_shader = compile_shader(vert_shader_path, GL_VERTEX_SHADER);
+static GLuint create_shader_program(const char *vert_shader_src,
+                                    const char *frag_shader_src) {
+  GLuint vert_shader = compile_shader(vert_shader_src, GL_VERTEX_SHADER);
   if (!vert_shader) {
     // TODO: Better error handling
     return 0;
   }
-  GLuint frag_shader = compile_shader(frag_shader_path, GL_FRAGMENT_SHADER);
+  GLuint frag_shader = compile_shader(frag_shader_src, GL_FRAGMENT_SHADER);
   if (!frag_shader) {
     return 0;
   }
@@ -97,8 +82,7 @@ static GLuint create_shader_program(const char *vert_shader_path,
     char *message = malloc(log_length);
     glGetProgramInfoLog(shader_program, log_length, NULL, message);
 
-    fprintf(stderr, "Shader linking failed for %s and %s: %s\n",
-            vert_shader_path, frag_shader_path, message);
+    fprintf(stderr, "Shader linking: %s\n", message);
     free(message);
 
     glDeleteProgram(shader_program);
@@ -108,41 +92,40 @@ static GLuint create_shader_program(const char *vert_shader_path,
   return shader_program;
 }
 
-static GLuint create_compute_program(const char* shader_path) {
-    GLuint shader = compile_shader(shader_path, GL_COMPUTE_SHADER);
-    if (!shader) {
-        // TODO: Better error handling
-        return 0;
-    }
+static GLuint create_compute_program(const char *source) {
+  GLuint shader = compile_shader(source, GL_COMPUTE_SHADER);
+  if (!shader) {
+    // TODO: Better error handling
+    return 0;
+  }
 
-    GLuint shader_program = glCreateProgram();
-    glAttachShader(shader_program, shader);
-    // Shader objects only have to exist for this call
-    glLinkProgram(shader_program);
+  GLuint shader_program = glCreateProgram();
+  glAttachShader(shader_program, shader);
+  // Shader objects only have to exist for this call
+  glLinkProgram(shader_program);
 
-    glDetachShader(shader_program, shader);
-    glDeleteShader(shader);
+  glDetachShader(shader_program, shader);
+  glDeleteShader(shader);
 
-    int link_status = 0;
-    glGetProgramiv(shader_program, GL_LINK_STATUS, &link_status);
+  int link_status = 0;
+  glGetProgramiv(shader_program, GL_LINK_STATUS, &link_status);
 
-    // Linking failed
-    if (link_status == GL_FALSE) {
-        int log_length = 0;
-        glGetProgramiv(shader_program, GL_INFO_LOG_LENGTH, &log_length);
+  // Linking failed
+  if (link_status == GL_FALSE) {
+    int log_length = 0;
+    glGetProgramiv(shader_program, GL_INFO_LOG_LENGTH, &log_length);
 
-        char* message = malloc(log_length);
-        glGetProgramInfoLog(shader_program, log_length, NULL, message);
+    char *message = malloc(log_length);
+    glGetProgramInfoLog(shader_program, log_length, NULL, message);
 
-        fprintf(stderr, "Shader linking failed for %s: %s\n",
-            shader_path, message);
-        free(message);
+    fprintf(stderr, "Shader linking: %s\n", message);
+    free(message);
 
-        glDeleteProgram(shader_program);
-        return 0;
-    }
+    glDeleteProgram(shader_program);
+    return 0;
+  }
 
-    return shader_program;
+  return shader_program;
 }
 
 static float rand_float() { return ((float)rand() / (float)(RAND_MAX)); }
@@ -157,8 +140,6 @@ static struct {
 #define TICK_TIME 0.1
 #define CAM_SPEED 2.0f
 #define CAM_SENS 0.01f
-
-#define SWAP_INTERVAL 1
 
 static void cursor_position_callback(GLFWwindow *window, double xpos,
                                      double ypos) {
@@ -177,13 +158,38 @@ static void cursor_position_callback(GLFWwindow *window, double xpos,
   last_ypos = ypos;
 }
 
-static bool should_optimize_blobs = false;
+static bool blob_sim_running = false;
 
-static void key_callback(GLFWwindow* window, int key, int scancode, int action,
-    int mods) {
-  if (key == GLFW_KEY_O && action == GLFW_PRESS) {
-    should_optimize_blobs = true;
+// If true, then recalculate the entire SDF image this frame
+static bool compute_whole_sdf_this_frame = true;
+
+static bool vsync_enabled = true;
+
+static void key_callback(GLFWwindow *window, int key, int scancode, int action,
+                         int mods) {
+  if (action != GLFW_PRESS)
+    return;
+
+  switch (key) {
+  case GLFW_KEY_P:
+    blob_sim_running ^= true;
+    break;
+  case GLFW_KEY_R:
+    compute_whole_sdf_this_frame = true;
+    break;
+  case GLFW_KEY_V:
+    vsync_enabled ^= true;
+    glfwSwapInterval((int)vsync_enabled);
+    break;
   }
+}
+
+static void window_size_callback(GLFWwindow *window, int width, int height) {
+  // Need size in pixels, not screen coordinates
+  glfwGetFramebufferSize(window, &width, &height);
+  glViewport(0, 0, width, height);
+  // Hopefully the correct shader is being used kek
+  glUniform1f(3, (float)width / height);
 }
 
 int main() {
@@ -213,9 +219,10 @@ int main() {
 
   glfwSetCursorPosCallback(window, cursor_position_callback);
   glfwSetKeyCallback(window, key_callback);
+  glfwSetWindowSizeCallback(window, window_size_callback);
 
   glfwMakeContextCurrent(window);
-  glfwSwapInterval(SWAP_INTERVAL);
+  glfwSwapInterval((int)vsync_enabled);
 
   gladLoadGLLoader(glfwGetProcAddress);
 
@@ -228,17 +235,12 @@ int main() {
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
   glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
 
-  GLuint shader_program = create_shader_program("shaders/vert.glsl", "shaders/frag.glsl");
-  glUseProgram(shader_program);
+  GLuint raymarch_program =
+      create_shader_program(RAYMARCH_VERT_SRC, RAYMARCH_FRAG_SRC);
+  glUseProgram(raymarch_program);
 
-  GLint sdf_tex_uniform = glGetUniformLocation(shader_program, "sdf_tex");
-  glUniform1i(sdf_tex_uniform, 0);
-
-  GLint cam_trans_uniform = glGetUniformLocation(shader_program, "cam_trans");
-  GLint cam_fov_uniform = glGetUniformLocation(shader_program, "cam_fov");
-  GLint cam_aspect_uniform = glGetUniformLocation(shader_program, "cam_aspect");
-  glUniform1f(cam_fov_uniform, 60.0f);
-  glUniform1f(cam_aspect_uniform, 1.0f);
+  glUniform1f(2, 60.0f);
+  glUniform1f(3, 1.0f);
   cam.pos[1] = 3.0f;
   cam.pos[2] = -5.0f;
   cam.rot[0] = 0.5f;
@@ -252,15 +254,14 @@ int main() {
     b->sleep_ticks = 0;
   }
 
-  vec3 *prev_blobs_pos = calloc(BLOB_COUNT, sizeof(vec3));
+  vec3 *blobs_prev_pos = calloc(BLOB_COUNT, sizeof(vec3));
   vec4 *blob_lerp = calloc(BLOB_COUNT, sizeof(vec4));
 
   vec3 fall_order[] = {
       {0, -1, 0}, {1, -1, 0}, {-1, -1, 0}, {0, -1, 1}, {0, -1, -1}};
 
-  GLint attrib_index = glGetAttribLocation(shader_program, "in_pos");
-  glEnableVertexAttribArray(attrib_index);
-  glVertexAttribPointer(attrib_index, 2, GL_FLOAT, GL_FALSE, 0, NULL);
+  glEnableVertexAttribArray(0);
+  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, NULL);
 
   GLuint sdf_tex;
   glGenTextures(1, &sdf_tex);
@@ -286,7 +287,7 @@ int main() {
                NULL);
   glBindImageTexture(1, blobs_tex, 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA32F);
 
-  GLuint compute_program = create_compute_program("shaders/compute_sdf.glsl");
+  GLuint compute_program = create_compute_program(COMPUTE_SDF_COMP_SRC);
   glUseProgram(compute_program);
   glUniform1i(2, BLOB_COUNT);
 
@@ -298,8 +299,6 @@ int main() {
   double second_timer = 1.0;
 
   double tick_timer = 0.0;
-
-  bool running = false;
 
   while (!glfwWindowShouldClose(window)) {
     uint64_t timer_val = glfwGetTimerValue();
@@ -320,7 +319,7 @@ int main() {
 
     glClear(GL_COLOR_BUFFER_BIT);
 
-    glUseProgram(shader_program);
+    glUseProgram(raymarch_program);
     glBindVertexArray(vao);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
@@ -340,10 +339,6 @@ int main() {
     mat4x4_rotate_Y(cam_trans, cam_trans, cam.rot[1]);
     mat4x4_rotate_X(cam_trans, cam_trans, cam.rot[0]);
 
-    if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS) {
-      running = true;
-    }
-
     bool w_press = glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS;
     bool s_press = glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS;
     bool a_press = glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS;
@@ -362,117 +357,71 @@ int main() {
     cam_trans[3][1] = cam.pos[1];
     cam_trans[3][2] = cam.pos[2];
 
-    glUniformMatrix4fv(cam_trans_uniform, 1, GL_FALSE, cam_trans[0]);
-    int win_w, win_h;
-    glfwGetWindowSize(window, &win_w, &win_h);
-    glViewport(0, 0, win_w, win_h);
-    glUniform1f(cam_aspect_uniform, (float)win_w / win_h);
+    glUniformMatrix4fv(1, 1, GL_FALSE, cam_trans[0]);
 
     // Simulate blobs every tick
 
-    if (running)
+    if (blob_sim_running)
       tick_timer -= delta;
 
     if (tick_timer <= 0.0) {
       tick_timer = TICK_TIME;
 
-      for (int b = 0; b < BLOB_COUNT; b++) {
-        if (blobs[b].sleep_ticks >= BLOB_SLEEP_TICKS_REQUIRED) {
-          continue;
-        }
-
-        vec3_dup(prev_blobs_pos[b], blobs[b].pos);
-
-        vec3 velocity = {0};
-        float attraction_total_magnitude = 0.0f;
-        float anti_grav = 0.0f;
-
-        for (int ob = 0; ob < BLOB_COUNT; ob++) {
-          if (ob == b)
-            continue;
-
-          vec3 attraction;
-          blob_get_attraction_to(attraction, &blobs[b], &blobs[ob]);
-
-          float attraction_magnitude = vec3_len(attraction);
-          if (attraction_magnitude > BLOB_SLEEP_THRESHOLD) {
-            blobs[ob].sleep_ticks = 0;
-          }
-
-          attraction_total_magnitude += vec3_len(attraction);
-          vec3_add(velocity, velocity, attraction);
-
-          anti_grav += blob_get_support_with(&blobs[b], &blobs[ob]);
-        }
-
-        velocity[1] -= BLOB_FALL_SPEED * (1.0f - fminf(anti_grav, 1.0f));
-
-        vec3 pos_before;
-        vec3_dup(pos_before, blobs[b].pos);
-
-        vec3_add(blobs[b].pos, blobs[b].pos, velocity);
-
-        for (int i = 0; i < 3; i++) {
-          if (blobs[b].pos[i] < blob_min_pos[i]) {
-            blobs[b].pos[i] = blob_min_pos[i];
-          }
-          if (blobs[b].pos[i] > blob_max_pos[i]) {
-            blobs[b].pos[i] = blob_max_pos[i];
-          }
-        }
-
-        // If movement during this tick was under the sleep threshold, the sleep counter can be incremented
-        vec3 pos_diff;
-        vec3_sub(pos_diff, blobs[b].pos, pos_before);
-        float movement = vec3_len(pos_diff);
-        if (movement < BLOB_SLEEP_THRESHOLD) {
-          blobs[b].sleep_ticks++;
-        } else {
-          blobs[b].sleep_ticks = 0;
-        }
-      }
-    }
-
-    if (should_optimize_blobs) {
-      should_optimize_blobs = false;
-
-      for (int i = 1; i < BLOB_COUNT; i++) {
-        int j = i - 1;
-        while (j >= 0 && blobs[j + 1].pos[1] > blobs[j].pos[1]) {
-          vec3 temp;
-          vec3_dup(temp, blobs[j + 1].pos);
-          vec3_dup(blobs[j + 1].pos, blobs[j].pos);
-          vec3_dup(blobs[j].pos, temp);
-
-          int itemp = blobs[j + 1].sleep_ticks;
-          blobs[j + 1].sleep_ticks = blobs[j].sleep_ticks;
-          blobs[j].sleep_ticks = itemp;
-
-          j--;
-        }
-      }
-
-      printf("Optimized blobs\n");
+      simulate_blobs(blobs, BLOB_COUNT, blobs_prev_pos);
     }
 
     // Lerp the positions of the blobs
 
+    // Keep track of the minimum and maximum position of blobs so less of the
+    // SDF has to be updated
+    vec3 min_pos = {1000, 1000, 1000};
+    vec3 max_pos = {-1000, -1000, -1000};
+
     for (int i = 0; i < BLOB_COUNT; i++) {
       float *pos_lerp = blob_lerp[i];
       for (int x = 0; x < 3; x++) {
-        float diff = blobs[i].pos[x] - prev_blobs_pos[i][x];
-        pos_lerp[x] = prev_blobs_pos[i][x] +
+        float diff = blobs[i].pos[x] - blobs_prev_pos[i][x];
+        pos_lerp[x] = blobs_prev_pos[i][x] +
                       (diff * ((TICK_TIME - tick_timer) / TICK_TIME));
+
+        if (pos_lerp[x] < min_pos[x]) {
+          min_pos[x] = pos_lerp[x];
+        }
+        if (pos_lerp[x] > max_pos[x]) {
+          max_pos[x] = pos_lerp[x];
+        }
       }
+    }
+
+    int num_groups[3];
+
+    for (int i = 0; i < 3; i++) {
+      min_pos[i] = fmaxf(
+          0.0f, floorf(min_pos[i] - blob_sdf_start[i] - BLOB_SDF_MAX_DIST));
+      max_pos[i] = fmaxf(
+          0.0f, ceilf(max_pos[i] - blob_sdf_start[i] + BLOB_SDF_MAX_DIST));
+
+      num_groups[i] = (int)ceilf(
+          ((max_pos[i] - min_pos[i]) * (BLOB_SDF_RES / blob_sdf_size[i])) /
+          (float)BLOB_SDF_LOCAL_GROUPS);
+      num_groups[i] =
+          max(0, min(BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS, num_groups[i]));
     }
 
     glTexSubImage1D(GL_TEXTURE_1D, 0, 0, BLOB_COUNT, GL_RGBA, GL_FLOAT,
                     blob_lerp);
 
     glUseProgram(compute_program);
-    glDispatchCompute(BLOB_SDF_RES / BLOB_SDF_GROUPS,
-                      BLOB_SDF_RES / BLOB_SDF_GROUPS,
-                      BLOB_SDF_RES / BLOB_SDF_GROUPS);
+    if (compute_whole_sdf_this_frame) {
+      compute_whole_sdf_this_frame = false;
+      glUniform3i(3, 0, 0, 0);
+      glDispatchCompute(BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS,
+                        BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS,
+                        BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS);
+    } else {
+      glUniform3i(3, (int)min_pos[0], (int)min_pos[1], (int)min_pos[2]);
+      glDispatchCompute(num_groups[0], num_groups[1], num_groups[2]);
+    }
   }
 
   glfwTerminate();

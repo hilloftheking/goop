@@ -21,10 +21,10 @@
     <ClInclude Include="src\blob.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\solid.h">
+    <ClInclude Include="src\shader_sources.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\pool.h">
+    <ClInclude Include="src\blob_defines.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -38,18 +38,18 @@
     <ClCompile Include="src\blob.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\solid.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\pool.c">
+    <ClCompile Include="src\shader_sources.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="shaders\frag.glsl">
+    <None Include="shaders\compute_sdf.comp">
       <Filter>Source Files</Filter>
     </None>
-    <None Include="shaders\compute_sdf.glsl">
+    <None Include="shaders\raymarch.frag">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="shaders\raymarch.vert">
       <Filter>Source Files</Filter>
     </None>
   </ItemGroup>

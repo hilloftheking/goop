@@ -1,14 +1,15 @@
-#version 330 core
+#version 430 core
 
-in vec2 frag_pos;
+#include "../src/blob_defines.h"
 
-out vec4 out_color;
+layout(location = 0) in vec2 frag_pos;
 
-uniform mat4 cam_trans;
-uniform float cam_fov;
-uniform float cam_aspect;
+layout(location = 0) out vec4 out_color;
 
-#define BLOB_COLOR 1.0, 1.0, 0.8
+layout(location = 0, binding = 0) uniform sampler3D sdf_tex;
+layout(location = 1) uniform mat4 cam_trans;
+layout(location = 2) uniform float cam_fov;
+layout(location = 3) uniform float cam_aspect;
 
 #define MARCH_STEPS 128
 #define MARCH_INTERSECT 0.001
@@ -17,8 +18,6 @@ uniform float cam_aspect;
 
 #define BG_COLOR 0.05, 0.03, 0.1
 #define BRIGHTNESS 0.2
-
-uniform sampler3D sdf_tex;
 
 // Figure out the normal with a gradient
 vec3 get_normal_at(vec3 p) {
