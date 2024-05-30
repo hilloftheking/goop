@@ -13,7 +13,7 @@ layout(location = 3) uniform float cam_aspect;
 
 #define MARCH_STEPS 128
 #define MARCH_INTERSECT 0.001
-#define MARCH_MAX_DIST 100.0
+#define MARCH_MAX_DIST 40.0
 #define MARCH_NORM_STEP 0.2
 
 #define BG_COLOR 0.05, 0.03, 0.1
@@ -21,8 +21,8 @@ layout(location = 3) uniform float cam_aspect;
 
 // Figure out the normal with a gradient
 vec3 get_normal_at(vec3 p) {
-  const vec3 small_step = vec3(MARCH_NORM_STEP / 20.0, 0.0, 0.0);
-  vec3 uvw = (p + vec3(10, 0, 10)) / vec3(20);
+  const vec3 small_step = vec3(MARCH_NORM_STEP / vec3(BLOB_SDF_SIZE).x, 0.0, 0.0);
+  vec3 uvw = (p - vec3(BLOB_SDF_START)) / vec3(BLOB_SDF_SIZE);
 
   float gradient_x = texture(sdf_tex, uvw + small_step.xyy).r -
                      texture(sdf_tex, uvw - small_step.xyy).r;
@@ -44,7 +44,7 @@ vec3 ray_march(vec3 ro, vec3 rd) {
       break;
     }
 
-    float dist = texture(sdf_tex, (p + vec3(10, 0, 10)) / vec3(20)).r;
+    float dist = texture(sdf_tex, (p - vec3(BLOB_SDF_START)) / vec3(BLOB_SDF_SIZE)).r;
 
     if (dist <= MARCH_INTERSECT) {
       vec3 normal = get_normal_at(p);

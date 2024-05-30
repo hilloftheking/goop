@@ -20,7 +20,7 @@
 #include "shader_sources.h"
 
 static GLuint compile_shader(const char *source, GLenum shader_type) {
-  int size = strlen(source);
+  int size = (int)strlen(source);
 
   GLuint shader = glCreateShader(shader_type);
   glShaderSource(shader, 1, &source, &size);
@@ -128,6 +128,12 @@ static GLuint create_compute_program(const char *source) {
   return shader_program;
 }
 
+static void gl_debug_callback(GLenum source, GLenum type, GLuint id,
+                              GLenum severity, GLsizei length,
+                              const GLchar *message, const void *user_param) {
+  fprintf(stderr, "[GL DEBUG] %s\n", message);
+}
+
 static float rand_float() { return ((float)rand() / (float)(RAND_MAX)); }
 
 static vec2 verts[] = {{-1, 1}, {1, 1}, {-1, -1}, {1, -1}, {-1, -1}, {1, 1}};
@@ -147,11 +153,11 @@ static void cursor_position_callback(GLFWwindow *window, double xpos,
   static double last_ypos = 0.0;
 
   if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_1) == GLFW_PRESS) {
-    cam.rot[0] += (ypos - last_ypos) * CAM_SENS;
-    cam.rot[1] += (xpos - last_xpos) * CAM_SENS;
+    cam.rot[0] += (float)(ypos - last_ypos) * CAM_SENS;
+    cam.rot[1] += (float)(xpos - last_xpos) * CAM_SENS;
 
-    cam.rot[0] = fmodf(cam.rot[0], M_PI * 2.0f);
-    cam.rot[1] = fmodf(cam.rot[1], M_PI * 2.0f);
+    cam.rot[0] = fmodf(cam.rot[0], (float)M_PI * 2.0f);
+    cam.rot[1] = fmodf(cam.rot[1], (float)M_PI * 2.0f);
   }
 
   last_xpos = xpos;
@@ -224,7 +230,10 @@ int main() {
   glfwMakeContextCurrent(window);
   glfwSwapInterval((int)vsync_enabled);
 
-  gladLoadGLLoader(glfwGetProcAddress);
+  gladLoadGLLoader((void *)(const char *)glfwGetProcAddress);
+
+  glEnable(GL_DEBUG_OUTPUT);
+  glDebugMessageCallback(gl_debug_callback, NULL);
 
   GLuint vao;
   glGenVertexArrays(1, &vao);
@@ -256,9 +265,6 @@ int main() {
 
   vec3 *blobs_prev_pos = calloc(BLOB_COUNT, sizeof(vec3));
   vec4 *blob_lerp = calloc(BLOB_COUNT, sizeof(vec4));
-
-  vec3 fall_order[] = {
-      {0, -1, 0}, {1, -1, 0}, {-1, -1, 0}, {0, -1, 1}, {0, -1, -1}};
 
   glEnableVertexAttribArray(0);
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, NULL);
@@ -344,10 +350,10 @@ int main() {
     bool a_press = glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS;
     bool d_press = glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS;
     vec4 dir = {0};
-    dir[0] = (d_press - a_press);
-    dir[2] = (w_press - s_press);
+    dir[0] = (float)(d_press - a_press);
+    dir[2] = (float)(w_press - s_press);
     vec4_norm(dir, dir);
-    vec4_scale(dir, dir, CAM_SPEED * delta);
+    vec4_scale(dir, dir, CAM_SPEED * (float)delta);
 
     vec4 rel_move;
     mat4x4_mul_vec4(rel_move, cam_trans, dir);
@@ -377,12 +383,17 @@ int main() {
     vec3 min_pos = {1000, 1000, 1000};
     vec3 max_pos = {-1000, -1000, -1000};
 
+    float farthest_traveled = 0.0f;
+
     for (int i = 0; i < BLOB_COUNT; i++) {
       float *pos_lerp = blob_lerp[i];
+      vec3 traveled;
       for (int x = 0; x < 3; x++) {
         float diff = blobs[i].pos[x] - blobs_prev_pos[i][x];
-        pos_lerp[x] = blobs_prev_pos[i][x] +
-                      (diff * ((TICK_TIME - tick_timer) / TICK_TIME));
+        float diff_delta = diff * (float)((TICK_TIME - tick_timer) / TICK_TIME);
+
+        pos_lerp[x] = blobs_prev_pos[i][x] + diff_delta;
+        traveled[x] = diff_delta;
 
         if (pos_lerp[x] < min_pos[x]) {
           min_pos[x] = pos_lerp[x];
@@ -391,28 +402,45 @@ int main() {
           max_pos[x] = pos_lerp[x];
         }
       }
+
+      float dist = vec3_len(traveled);
+      if (dist > farthest_traveled) {
+        farthest_traveled = dist;
+      }
     }
 
-    int num_groups[3];
+    int num_groups[3] = {0};
 
     for (int i = 0; i < 3; i++) {
-      min_pos[i] = fmaxf(
-          0.0f, floorf(min_pos[i] - blob_sdf_start[i] - BLOB_SDF_MAX_DIST));
-      max_pos[i] = fmaxf(
-          0.0f, ceilf(max_pos[i] - blob_sdf_start[i] + BLOB_SDF_MAX_DIST));
+      min_pos[i] = fmaxf(0.0f, floorf(min_pos[i] - blob_sdf_start[i] -
+                                      BLOB_SDF_MAX_DIST - BLOB_RADIUS -
+                                      BLOB_SMOOTH - farthest_traveled));
+      max_pos[i] = ceilf(max_pos[i] - blob_sdf_start[i] + BLOB_SDF_MAX_DIST +
+                         BLOB_RADIUS + BLOB_SMOOTH + farthest_traveled + 1.0f);
 
       num_groups[i] = (int)ceilf(
           ((max_pos[i] - min_pos[i]) * (BLOB_SDF_RES / blob_sdf_size[i])) /
           (float)BLOB_SDF_LOCAL_GROUPS);
-      num_groups[i] =
-          max(0, min(BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS, num_groups[i]));
+
+      if (num_groups[i] > BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS) {
+        num_groups[i] = BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS;
+      } else if (num_groups[i] < 0) {
+        num_groups[i] = 0;
+      }
     }
+
+    /*
+    printf("(%d, %d, %d)  :  (%d, %d, %d)\n", (int)min_pos[0], (int)min_pos[1],
+           (int)min_pos[2], num_groups[0], num_groups[1], num_groups[2]);
+           */
 
     glTexSubImage1D(GL_TEXTURE_1D, 0, 0, BLOB_COUNT, GL_RGBA, GL_FLOAT,
                     blob_lerp);
 
     glUseProgram(compute_program);
     if (compute_whole_sdf_this_frame) {
+      puts("Recalculating SDF...");
+
       compute_whole_sdf_this_frame = false;
       glUniform3i(3, 0, 0, 0);
       glDispatchCompute(BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS,

@@ -1,6 +1,5 @@
-# This doesn't really compile the shaders, it applies optimizations using
-# glslc, puts them through spirv-cross to get them back to GLSL, minifies that,
-# then shoves them into headers
+# Compiles shaders to SPIR-V with optimizations, decompiles back to GLSL, and
+# embeds them into a C file with a corresponding header.
 
 # TODO: Automatically put uniform locations into C header/source
 

@@ -13,11 +13,12 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Shaders">
+      <UniqueIdentifier>{cabc87ec-ec9a-4995-b7cf-ae7f35a614e9}</UniqueIdentifier>
+      <Extensions>vert;frag;comp</Extensions>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="include\linmath.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\blob.h">
       <Filter>Source Files</Filter>
     </ClInclude>
@@ -32,25 +33,28 @@
     <ClCompile Include="src\main.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="lib\glad.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\blob.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\shader_sources.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\glad\glad.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="shaders\compute_sdf.comp">
-      <Filter>Source Files</Filter>
-    </None>
-    <None Include="shaders\raymarch.frag">
-      <Filter>Source Files</Filter>
-    </None>
-    <None Include="shaders\raymarch.vert">
-      <Filter>Source Files</Filter>
-    </None>
+    <CopyFileToFolders Include="shaders\compute_sdf.comp">
+      <Filter>Shaders</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="shaders\raymarch.frag">
+      <Filter>Shaders</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="shaders\raymarch.vert">
+      <Filter>Shaders</Filter>
+    </CopyFileToFolders>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="shaders\embed_shaders.py" />
   </ItemGroup>
 </Project>

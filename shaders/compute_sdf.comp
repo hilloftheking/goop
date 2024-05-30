@@ -2,7 +2,7 @@
 
 #include "../src/blob_defines.h"
 
-layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
+layout(local_size_x = BLOB_SDF_LOCAL_GROUPS, local_size_y = BLOB_SDF_LOCAL_GROUPS, local_size_z = BLOB_SDF_LOCAL_GROUPS) in;
 
 layout(r32f, location = 0, binding = 0) writeonly uniform image3D img_output;
 layout(rgba32f, location = 1, binding = 1) readonly uniform image1D blobs_tex;
