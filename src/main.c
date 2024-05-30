@@ -195,7 +195,7 @@ static void window_size_callback(GLFWwindow *window, int width, int height) {
   glfwGetFramebufferSize(window, &width, &height);
   glViewport(0, 0, width, height);
   // Hopefully the correct shader is being used kek
-  glUniform1f(3, (float)width / height);
+  glUniform1f(2, (float)width / height);
 }
 
 int main() {
@@ -248,8 +248,8 @@ int main() {
       create_shader_program(RAYMARCH_VERT_SRC, RAYMARCH_FRAG_SRC);
   glUseProgram(raymarch_program);
 
-  glUniform1f(2, 60.0f);
-  glUniform1f(3, 1.0f);
+  glUniform1f(1, 60.0f);
+  glUniform1f(2, 1.0f);
   cam.pos[1] = 3.0f;
   cam.pos[2] = -5.0f;
   cam.rot[0] = 0.5f;
@@ -295,7 +295,7 @@ int main() {
 
   GLuint compute_program = create_compute_program(COMPUTE_SDF_COMP_SRC);
   glUseProgram(compute_program);
-  glUniform1i(2, BLOB_COUNT);
+  glUniform1i(0, BLOB_COUNT);
 
   uint64_t timer_freq = glfwGetTimerFrequency();
   uint64_t prev_timer = glfwGetTimerValue();
@@ -363,7 +363,7 @@ int main() {
     cam_trans[3][1] = cam.pos[1];
     cam_trans[3][2] = cam.pos[2];
 
-    glUniformMatrix4fv(1, 1, GL_FALSE, cam_trans[0]);
+    glUniformMatrix4fv(0, 1, GL_FALSE, cam_trans[0]);
 
     // Simulate blobs every tick
 
@@ -442,12 +442,12 @@ int main() {
       puts("Recalculating SDF...");
 
       compute_whole_sdf_this_frame = false;
-      glUniform3i(3, 0, 0, 0);
+      glUniform3i(1, 0, 0, 0);
       glDispatchCompute(BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS,
                         BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS,
                         BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS);
     } else {
-      glUniform3i(3, (int)min_pos[0], (int)min_pos[1], (int)min_pos[2]);
+      glUniform3i(1, (int)min_pos[0], (int)min_pos[1], (int)min_pos[2]);
       glDispatchCompute(num_groups[0], num_groups[1], num_groups[2]);
     }
   }
