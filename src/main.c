@@ -234,6 +234,8 @@ int main() {
 
   glEnable(GL_DEBUG_OUTPUT);
   glDebugMessageCallback(gl_debug_callback, NULL);
+  glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE,
+                        GL_DEBUG_SEVERITY_NOTIFICATION, 0, NULL, GL_FALSE);
 
   GLuint vao;
   glGenVertexArrays(1, &vao);
@@ -283,6 +285,8 @@ int main() {
                BLOB_SDF_RES, 0, GL_RED, GL_FLOAT, NULL);
   glBindImageTexture(0, sdf_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_R32F);
 
+  // Blobs are represented in a texture because a buffer kills performance
+  // for some reason
   GLuint blobs_tex;
   glGenTextures(1, &blobs_tex);
   glActiveTexture(GL_TEXTURE1);
@@ -307,6 +311,8 @@ int main() {
   double tick_timer = 0.0;
 
   double blob_spawn_cd = 0.0;
+
+  BlobOt blob_ot = blob_ot_create();
 
   while (!glfwWindowShouldClose(window)) {
     uint64_t timer_val = glfwGetTimerValue();
@@ -408,6 +414,8 @@ int main() {
 
     float farthest_traveled = 0.0f;
 
+    blob_ot_reset(blob_ot);
+
     for (int i = 0; i < blob_count; i++) {
       float *pos_lerp = blob_lerp[i];
       vec3 traveled;
@@ -426,10 +434,18 @@ int main() {
         }
       }
 
+      blob_ot_insert(blob_ot, pos_lerp, i);
+
       float dist = vec3_len(traveled);
       if (dist > farthest_traveled) {
         farthest_traveled = dist;
       }
+    }
+
+    BlobOtNode *root = blob_ot + 0;
+    for (int i = 0; i < 8; i++) {
+      printf("Oct %d blobs: %d\n", i,
+             blob_ot[root->indices[i]].leaf_blob_count);
     }
 
     int num_groups[3] = {0};
