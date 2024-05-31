@@ -4,7 +4,8 @@
 
 #include "blob_defines.h"
 
-#define BLOB_COUNT 200
+#define BLOB_START_COUNT 200
+#define BLOB_MAX_COUNT 1024
 #define BLOB_DESIRED_DISTANCE 0.4f
 #define BLOB_FALL_SPEED 0.5f
 
@@ -15,6 +16,8 @@
 
 // How weak attraction and movement must be before sleeping is allowed
 #define BLOB_SLEEP_THRESHOLD 0.008f
+
+#define BLOB_SPAWN_CD 0.05
 
 typedef struct Blob {
   vec3 pos;

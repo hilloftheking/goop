@@ -15,7 +15,9 @@ float smin(float a, float b, float k) {
   return mix(b, a, h) - k * h * (1.0 - h);
 }
 
-float dist_sphere(vec3 c, float r, vec3 p) { return length(p - c) - r; }
+float dist_sphere(vec3 c, float r, vec3 p) {
+  return length(p - c) - r;
+}
 
 void main() {
   vec3 p =

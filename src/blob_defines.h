@@ -8,7 +8,7 @@
 
 #define BLOB_COLOR 1.0f, 1.0f, 0.8f
 
-#define BLOB_SDF_RES 32
+#define BLOB_SDF_RES 64
 #define BLOB_SDF_LOCAL_GROUPS 4
 #define BLOB_SDF_MAX_DIST 16.0f
 

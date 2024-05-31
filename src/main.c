@@ -144,7 +144,7 @@ static struct {
 } cam;
 
 #define TICK_TIME 0.1
-#define CAM_SPEED 2.0f
+#define CAM_SPEED 4.0f
 #define CAM_SENS 0.01f
 
 static void cursor_position_callback(GLFWwindow *window, double xpos,
@@ -254,8 +254,9 @@ int main() {
   cam.pos[2] = -5.0f;
   cam.rot[0] = 0.5f;
 
-  Blob *blobs = malloc(BLOB_COUNT * sizeof(Blob));
-  for (int i = 0; i < BLOB_COUNT; i++) {
+  int blob_count = BLOB_START_COUNT;
+  Blob *blobs = malloc(BLOB_MAX_COUNT * sizeof(Blob));
+  for (int i = 0; i < blob_count; i++) {
     Blob *b = &blobs[i];
     b->pos[0] = (rand_float() - 0.5f) * 5.0f;
     b->pos[1] = 4.0f + (rand_float() * 6.0f);
@@ -263,8 +264,8 @@ int main() {
     b->sleep_ticks = 0;
   }
 
-  vec3 *blobs_prev_pos = calloc(BLOB_COUNT, sizeof(vec3));
-  vec4 *blob_lerp = calloc(BLOB_COUNT, sizeof(vec4));
+  vec3 *blobs_prev_pos = calloc(BLOB_MAX_COUNT, sizeof(vec3));
+  vec4 *blob_lerp = calloc(BLOB_MAX_COUNT, sizeof(vec4));
 
   glEnableVertexAttribArray(0);
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, NULL);
@@ -289,13 +290,12 @@ int main() {
   glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
   glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-  glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA32F, BLOB_COUNT, 0, GL_RGBA, GL_FLOAT,
-               NULL);
+  glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA32F, BLOB_MAX_COUNT, 0, GL_RGBA,
+               GL_FLOAT, NULL);
   glBindImageTexture(1, blobs_tex, 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA32F);
 
   GLuint compute_program = create_compute_program(COMPUTE_SDF_COMP_SRC);
   glUseProgram(compute_program);
-  glUniform1i(0, BLOB_COUNT);
 
   uint64_t timer_freq = glfwGetTimerFrequency();
   uint64_t prev_timer = glfwGetTimerValue();
@@ -305,6 +305,8 @@ int main() {
   double second_timer = 1.0;
 
   double tick_timer = 0.0;
+
+  double blob_spawn_cd = 0.0;
 
   while (!glfwWindowShouldClose(window)) {
     uint64_t timer_val = glfwGetTimerValue();
@@ -365,6 +367,27 @@ int main() {
 
     glUniformMatrix4fv(0, 1, GL_FALSE, cam_trans[0]);
 
+    // Hold space to spawn more blobs
+
+    if (blob_spawn_cd > 0.0) {
+      blob_spawn_cd -= delta;
+    }
+
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS &&
+        blob_spawn_cd <= 0.0 && blob_count < BLOB_MAX_COUNT) {
+      blob_spawn_cd = BLOB_SPAWN_CD;
+
+      float *pos = blobs[blob_count].pos;
+      vec3_dup(pos, cam_trans[2]);
+      vec3_scale(pos, pos, 2.0f);
+      vec3_add(pos, pos, cam_trans[3]);
+      blobs[blob_count].sleep_ticks = 0;
+
+      vec3_dup(blobs_prev_pos[blob_count], pos);
+
+      blob_count++;
+    }
+
     // Simulate blobs every tick
 
     if (blob_sim_running)
@@ -373,7 +396,7 @@ int main() {
     if (tick_timer <= 0.0) {
       tick_timer = TICK_TIME;
 
-      simulate_blobs(blobs, BLOB_COUNT, blobs_prev_pos);
+      simulate_blobs(blobs, blob_count, blobs_prev_pos);
     }
 
     // Lerp the positions of the blobs
@@ -385,7 +408,7 @@ int main() {
 
     float farthest_traveled = 0.0f;
 
-    for (int i = 0; i < BLOB_COUNT; i++) {
+    for (int i = 0; i < blob_count; i++) {
       float *pos_lerp = blob_lerp[i];
       vec3 traveled;
       for (int x = 0; x < 3; x++) {
@@ -431,10 +454,11 @@ int main() {
     }
 
     glActiveTexture(GL_TEXTURE1);
-    glTexSubImage1D(GL_TEXTURE_1D, 0, 0, BLOB_COUNT, GL_RGBA, GL_FLOAT,
+    glTexSubImage1D(GL_TEXTURE_1D, 0, 0, blob_count, GL_RGBA, GL_FLOAT,
                     blob_lerp);
 
     glUseProgram(compute_program);
+    glUniform1i(0, blob_count);
     if (compute_whole_sdf_this_frame) {
       puts("Recalculating SDF...");
 

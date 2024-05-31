@@ -51,7 +51,7 @@ float blob_get_support_with(Blob* b, Blob* other) {
 }
 
 void simulate_blobs(Blob* blobs, int amount, vec3 *blobs_prev_pos) {
-  for (int b = 0; b < BLOB_COUNT; b++) {
+  for (int b = 0; b < amount; b++) {
     if (blobs[b].sleep_ticks >= BLOB_SLEEP_TICKS_REQUIRED) {
       continue;
     }
@@ -62,7 +62,7 @@ void simulate_blobs(Blob* blobs, int amount, vec3 *blobs_prev_pos) {
     float attraction_total_magnitude = 0.0f;
     float anti_grav = 0.0f;
 
-    for (int ob = 0; ob < BLOB_COUNT; ob++) {
+    for (int ob = 0; ob < amount; ob++) {
       if (ob == b)
         continue;
 
