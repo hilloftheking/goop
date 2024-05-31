@@ -1,4 +1,5 @@
 #include <math.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -126,15 +127,29 @@ int blob_ot_get_alloc_size() {
 }
 
 static void setup_test_octree(BlobOt blob_ot) {
-  BlobOtNode *root = blob_ot + 0;
-  root->leaf_blob_count = -1;
+  BlobOtNode *first = blob_ot + 0;
+  first->leaf_blob_count = -1;
 
   int current_idx = 9;
-  for (int j = 0; j < 8; j++) {
-    BlobOtNode *node = blob_ot + current_idx;
-    node->leaf_blob_count = 0;
-    root->indices[j] = current_idx;
-    current_idx += 1 + BLOB_OT_LEAF_MAX_BLOB_COUNT;
+  for (int i = 0; i < 8; i++) {
+    BlobOtNode *second = blob_ot + current_idx;
+    second->leaf_blob_count = -1;
+    first->indices[i] = current_idx;
+    current_idx += 9;
+
+    for (int j = 0; j < 8; j++) {
+      BlobOtNode *third = blob_ot + current_idx;
+      third->leaf_blob_count = -1;
+      second->indices[j] = current_idx;
+      current_idx += 9;
+
+      for (int k = 0; k < 8; k++) {
+        BlobOtNode *leaf = blob_ot + current_idx;
+        leaf->leaf_blob_count = 0;
+        third->indices[k] = current_idx;
+        current_idx += 1 + BLOB_OT_LEAF_MAX_BLOB_COUNT;
+      }
+    }
   }
 }
 
@@ -157,15 +172,11 @@ static vec3 ot_quadrants[8] = {{0.5f, 0.5f, 0.5f},   {0.5f, 0.5f, -0.5f},
                                {-0.5f, -0.5f, 0.5f}, {-0.5f, -0.5f, -0.5f}};
 
 static float dist_cube(vec3 c, float s, vec3 p) {
-  float max_dist = fabsf(p[0] - c[0]) - s;
+  vec3 d;
   for (int i = 0; i < 3; i++) {
-    float dist = fabsf(p[i] - c[i]) - s;
-    if (dist > max_dist) {
-      max_dist = dist;
-    }
+    d[i] = fmaxf(0.0f, fabsf(p[i] - c[i]) - s * 0.5f);
   }
-
-  return max_dist;
+  return vec3_len(d);
 }
 
 static void insert_into_nodes(BlobOt blob_ot, BlobOtNode *node, vec3 node_pos,
@@ -175,6 +186,7 @@ static void insert_into_nodes(BlobOt blob_ot, BlobOtNode *node, vec3 node_pos,
     for (int i = 0; i < 8; i++) {
       vec3 child_pos;
       vec3_mul(child_pos, node_size, ot_quadrants[i]);
+      vec3_scale(child_pos, child_pos, 0.5f);
       vec3_add(child_pos, node_pos, child_pos);
       vec3 child_size;
       vec3_scale(child_size, node_size, 0.5f);
@@ -190,7 +202,11 @@ static void insert_into_nodes(BlobOt blob_ot, BlobOtNode *node, vec3 node_pos,
   } else {
     // This is a leaf node, but we already know we should go in it
     if (node->leaf_blob_count >= BLOB_OT_LEAF_MAX_BLOB_COUNT) {
-      //fprintf(stderr, "Leaf node is full!\n");
+      static bool printed_warning = false;
+      if (!printed_warning) {
+        printed_warning = true;
+        fprintf(stderr, "Leaf node is full!\n");
+      }
       return;
     }
 

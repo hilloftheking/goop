@@ -4,6 +4,10 @@
 
 layout(local_size_x = BLOB_SDF_LOCAL_GROUPS, local_size_y = BLOB_SDF_LOCAL_GROUPS, local_size_z = BLOB_SDF_LOCAL_GROUPS) in;
 
+layout(std430, binding = 0) restrict readonly buffer BlobOctree {
+  int[] blob_ot;
+};
+
 layout(r32f, binding = 0) writeonly uniform image3D img_output;
 layout(rgba32f, binding = 1) readonly uniform image1D blobs_tex;
 
@@ -19,19 +23,59 @@ float dist_sphere(vec3 c, float r, vec3 p) {
   return length(p - c) - r;
 }
 
+float dist_cube(vec3 c, float s, vec3 p) {
+  vec3 d = abs(p - c) - vec3(s * 0.5);
+  return length(max(d, 0.0));
+}
+
 void main() {
   vec3 p =
-      (vec3(start_pos) + vec3(gl_GlobalInvocationID)) * (vec3(BLOB_SDF_SIZE) / BLOB_SDF_RES) +
+      (vec3(start_pos) + vec3(gl_GlobalInvocationID) + vec3(0.5)) * (vec3(BLOB_SDF_SIZE) / BLOB_SDF_RES) +
       vec3(BLOB_SDF_START);
+  
+  const vec3 ot_quadrants[8] = {vec3(0.5f, 0.5f, 0.5f),   vec3(0.5f, 0.5f, -0.5f),
+                               vec3(0.5f, -0.5f, 0.5f),  vec3(0.5f, -0.5f, -0.5f),
+                               vec3(-0.5f, 0.5f, 0.5f),  vec3(-0.5f, 0.5f, -0.5f),
+                               vec3(-0.5f, -0.5f, 0.5f), vec3(-0.5f, -0.5f, -0.5f)};
+  
+  vec3 node_pos = vec3(BLOB_SDF_START) + vec3(BLOB_SDF_SIZE) * 0.5;
+  float node_size = vec3(BLOB_SDF_SIZE).x;
+  int node_idx = 0;
+  int node_leaf_blob_count = blob_ot[node_idx];
+  while (node_leaf_blob_count == -1) {
+    bool found_intersection = false;
 
-  float value = dist_sphere(imageLoad(blobs_tex, 0).xyz, BLOB_RADIUS, p);
-  for (int i = 1; i < blob_count; i++) {
+    for (int i = 0; i < 8; i++) {
+      vec3 child_pos = node_pos + vec3(node_size) * ot_quadrants[i] * 0.5;
+      float child_size = node_size * 0.5;
+
+      if (dist_cube(child_pos, child_size, p) <= 0.0) {
+        node_pos = child_pos;
+        node_size = child_size;
+        node_idx = blob_ot[node_idx + 1 + i];
+        node_leaf_blob_count = blob_ot[node_idx];
+        found_intersection = true;
+        break;
+      }
+    }
+
+    if (!found_intersection) {
+      break;
+    }
+  }
+
+  float value = 1000.0;
+  for (int i = 0; i < node_leaf_blob_count; i++) {
+    int blob_idx = blob_ot[node_idx + 1 + i];
     value =
-        smin(value, dist_sphere(imageLoad(blobs_tex, i).xyz, BLOB_RADIUS, p),
+        smin(value, dist_sphere(imageLoad(blobs_tex, blob_idx).xyz, BLOB_RADIUS, p),
              BLOB_SMOOTH);
   }
 
+  value = min(value, dist_cube(node_pos, node_size * 0.25, p));
   value = min(BLOB_SDF_MAX_DIST, value);
+
+  //float value = dist_cube(node_pos, node_size * 0.25, p);
 
   imageStore(img_output, start_pos + ivec3(gl_GlobalInvocationID.xyz),
              vec4(value, 0, 0, 0));

@@ -17,7 +17,7 @@ layout(location = 2) uniform float cam_aspect;
 #define MARCH_MAX_DIST 40.0
 #define MARCH_NORM_STEP 0.2
 
-#define BG_COLOR 0.05, 0.03, 0.1
+#define BG_COLOR 0.1, 0.06, 0.2
 #define BRIGHTNESS 0.2
 
 // Figure out the normal with a gradient
@@ -49,8 +49,8 @@ vec2 intersect_aabb(vec3 ro, vec3 rd, vec3 bmin, vec3 bmax) {
 vec3 ray_march(vec3 ro, vec3 rd) {
   vec2 near_far = intersect_aabb(ro, rd, vec3(BLOB_SDF_START), vec3(BLOB_SDF_SIZE) + vec3(BLOB_SDF_START));
   if (near_far[0] > near_far[1] || near_far[1] < 0.0) {
-    return vec3(1.0, 0.0, 0.0);
-    return vec3(BG_COLOR);
+    return vec3(0.0, 0.0, 0.0);
+    //return vec3(BG_COLOR);
   }
 
   float traveled = max(0.0, near_far[0]);

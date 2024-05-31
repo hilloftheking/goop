@@ -298,6 +298,13 @@ int main() {
                GL_FLOAT, NULL);
   glBindImageTexture(1, blobs_tex, 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA32F);
 
+  int blob_ot_size_bytes = blob_ot_get_alloc_size();
+  GLuint blob_ot_buff;
+  glGenBuffers(1, &blob_ot_buff);
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, blob_ot_buff);
+  glBufferData(GL_SHADER_STORAGE_BUFFER, blob_ot_size_bytes, NULL,
+               GL_DYNAMIC_DRAW);
+
   GLuint compute_program = create_compute_program(COMPUTE_SDF_COMP_SRC);
   glUseProgram(compute_program);
 
@@ -335,6 +342,7 @@ int main() {
 
     glUseProgram(raymarch_program);
     glBindVertexArray(vao);
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
     glfwSwapBuffers(window);
@@ -442,11 +450,15 @@ int main() {
       }
     }
 
+    /*
     BlobOtNode *root = blob_ot + 0;
     for (int i = 0; i < 8; i++) {
-      printf("Oct %d blobs: %d\n", i,
-             blob_ot[root->indices[i]].leaf_blob_count);
+      for (int j = 0; j < 8; j++) {
+        printf("Oct %d.%d blobs: %d\n", i, j,
+               blob_ot[blob_ot[root->indices[i]].indices[j]].leaf_blob_count);
+      }
     }
+    */
 
     int num_groups[3] = {0};
 
@@ -473,10 +485,14 @@ int main() {
     glTexSubImage1D(GL_TEXTURE_1D, 0, 0, blob_count, GL_RGBA, GL_FLOAT,
                     blob_lerp);
 
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, blob_ot_buff);
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, blob_ot_size_bytes, blob_ot);
+
     glUseProgram(compute_program);
     glUniform1i(0, blob_count);
+    //compute_whole_sdf_this_frame = true;
     if (compute_whole_sdf_this_frame) {
-      puts("Recalculating SDF...");
+      //puts("Recalculating SDF...");
 
       compute_whole_sdf_this_frame = false;
       glUniform3i(1, 0, 0, 0);
