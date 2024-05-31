@@ -35,15 +35,28 @@ vec3 get_normal_at(vec3 p) {
   return normalize(vec3(gradient_x, gradient_y, gradient_z));
 }
 
+vec2 intersect_aabb(vec3 ro, vec3 rd, vec3 bmin, vec3 bmax) {
+    vec3 tmin = (bmin - ro) / rd;
+    vec3 tmax = (bmax - ro) / rd;
+    vec3 t1 = min(tmin, tmax);
+    vec3 t2 = max(tmin, tmax);
+    float tnear = max(max(t1.x, t1.y), t1.z);
+    float tfar = min(min(t2.x, t2.y), t2.z);
+    return vec2(tnear, tfar);
+}
+
 // Returns color
 vec3 ray_march(vec3 ro, vec3 rd) {
-  float traveled = 0.0;
+  vec2 near_far = intersect_aabb(ro, rd, vec3(BLOB_SDF_START), vec3(BLOB_SDF_SIZE) + vec3(BLOB_SDF_START));
+  if (near_far[0] > near_far[1] || near_far[1] < 0.0) {
+    return vec3(1.0, 0.0, 0.0);
+    return vec3(BG_COLOR);
+  }
+
+  float traveled = max(0.0, near_far[0]);
+
   for (int i = 0; i < MARCH_STEPS; i++) {
     vec3 p = ro + rd * traveled;
-
-    if (p.y <= 0.0) {
-      break;
-    }
 
     float dist = texture(sdf_tex, (p - vec3(BLOB_SDF_START)) / vec3(BLOB_SDF_SIZE)).r;
 
@@ -60,6 +73,10 @@ vec3 ray_march(vec3 ro, vec3 rd) {
     traveled += dist;
 
     if (traveled >= MARCH_MAX_DIST) {
+      break;
+    }
+
+    if (traveled >= near_far[1]) {
       break;
     }
   }

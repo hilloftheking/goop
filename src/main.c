@@ -430,9 +430,6 @@ int main() {
       }
     }
 
-    printf("(%d, %d, %d)  :  (%d, %d, %d)\n", (int)min_pos[0], (int)min_pos[1],
-           (int)min_pos[2], num_groups[0], num_groups[1], num_groups[2]);
-
     glActiveTexture(GL_TEXTURE1);
     glTexSubImage1D(GL_TEXTURE_1D, 0, 0, BLOB_COUNT, GL_RGBA, GL_FLOAT,
                     blob_lerp);

@@ -12,7 +12,7 @@ HEADER_OUTPUT = "../src/shader_sources.h"
 TEMP_FILE_NAME = ".temp"
 
 GLSLC_EXE = "glslc"
-GLSLC_ARGS = ["--target-env=opengl", "-O"]
+GLSLC_ARGS = ["--target-env=opengl", "-O", "-Werror"]
 
 SPIRV_CROSS_EXE = "spirv-cross"
 SPIRV_CROSS_ARGS = ["--version", "430", "--no-es"]

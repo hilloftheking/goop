@@ -21,8 +21,8 @@ typedef struct Blob {
   int sleep_ticks;
 } Blob;
 
-static vec3 blob_min_pos = {-10.0f, 0.0f, -10.0f};
-static vec3 blob_max_pos = {10.0f, 20.0f, 10.0f};
+static vec3 blob_min_pos = {-8.0f, 0.0f, -8.0f};
+static vec3 blob_max_pos = {8.0f, 16.0f, 8.0f};
 
 static vec3 blob_sdf_size = {BLOB_SDF_SIZE};
 static vec3 blob_sdf_start = {BLOB_SDF_START};
