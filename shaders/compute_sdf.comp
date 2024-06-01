@@ -12,7 +12,7 @@ layout(r32f, binding = 0) writeonly uniform image3D img_output;
 layout(rgba32f, binding = 1) readonly uniform image1D blobs_tex;
 
 layout(location = 0) uniform int blob_count;
-layout(location = 1) uniform ivec3 start_pos;
+layout(location = 1) uniform ivec3 invocation_offset;
 
 float smin(float a, float b, float k) {
   float h = clamp(0.5 + 0.5 * (b - a) / k, 0., 1.);
@@ -30,7 +30,7 @@ float dist_cube(vec3 c, float s, vec3 p) {
 
 void main() {
   vec3 p =
-      (vec3(start_pos) + vec3(gl_GlobalInvocationID) + vec3(0.5)) * (vec3(BLOB_SDF_SIZE) / BLOB_SDF_RES) +
+      (vec3(invocation_offset) + vec3(gl_GlobalInvocationID) + vec3(0.5)) * (vec3(BLOB_SDF_SIZE) / BLOB_SDF_RES) +
       vec3(BLOB_SDF_START);
   
   const vec3 ot_quadrants[8] = {vec3(0.5f, 0.5f, 0.5f),   vec3(0.5f, 0.5f, -0.5f),
@@ -72,11 +72,11 @@ void main() {
              BLOB_SMOOTH);
   }
 
-  value = min(value, dist_cube(node_pos, node_size * 0.25, p));
+  //value = min(value, dist_cube(node_pos, node_size * 0.25, p));
   value = min(BLOB_SDF_MAX_DIST, value);
 
   //float value = dist_cube(node_pos, node_size * 0.25, p);
 
-  imageStore(img_output, start_pos + ivec3(gl_GlobalInvocationID.xyz),
+  imageStore(img_output, invocation_offset + ivec3(gl_GlobalInvocationID.xyz),
              vec4(value, 0, 0, 0));
 }

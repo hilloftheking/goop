@@ -299,9 +299,9 @@ int main() {
   glBindImageTexture(1, blobs_tex, 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA32F);
 
   int blob_ot_size_bytes = blob_ot_get_alloc_size();
-  GLuint blob_ot_buff;
-  glGenBuffers(1, &blob_ot_buff);
-  glBindBuffer(GL_SHADER_STORAGE_BUFFER, blob_ot_buff);
+  GLuint blob_ot_ssbo;
+  glGenBuffers(1, &blob_ot_ssbo);
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, blob_ot_ssbo);
   glBufferData(GL_SHADER_STORAGE_BUFFER, blob_ot_size_bytes, NULL,
                GL_DYNAMIC_DRAW);
 
@@ -393,7 +393,7 @@ int main() {
 
       float *pos = blobs[blob_count].pos;
       vec3_dup(pos, cam_trans[2]);
-      vec3_scale(pos, pos, 2.0f);
+      vec3_scale(pos, pos, 4.0f);
       vec3_add(pos, pos, cam_trans[3]);
       blobs[blob_count].sleep_ticks = 0;
 
@@ -417,14 +417,15 @@ int main() {
 
     // Keep track of the minimum and maximum position of blobs so less of the
     // SDF has to be updated
-    vec3 min_pos = {1000, 1000, 1000};
-    vec3 max_pos = {-1000, -1000, -1000};
+    vec3 area_min = {1000, 1000, 1000};
+    vec3 area_max = {-1000, -1000, -1000};
 
     float farthest_traveled = 0.0f;
 
     blob_ot_reset(blob_ot);
 
-    for (int i = 0; i < blob_count; i++) {
+    // Loop backwards so that new blobs are prioritized in the octree
+    for (int i = blob_count - 1; i >= 0; i--) {
       float *pos_lerp = blob_lerp[i];
       vec3 traveled;
       for (int x = 0; x < 3; x++) {
@@ -434,11 +435,11 @@ int main() {
         pos_lerp[x] = blobs_prev_pos[i][x] + diff_delta;
         traveled[x] = diff_delta;
 
-        if (pos_lerp[x] < min_pos[x]) {
-          min_pos[x] = pos_lerp[x];
+        if (pos_lerp[x] < area_min[x]) {
+          area_min[x] = pos_lerp[x];
         }
-        if (pos_lerp[x] > max_pos[x]) {
-          max_pos[x] = pos_lerp[x];
+        if (pos_lerp[x] > area_max[x]) {
+          area_max[x] = pos_lerp[x];
         }
       }
 
@@ -463,44 +464,50 @@ int main() {
     int num_groups[3] = {0};
 
     for (int i = 0; i < 3; i++) {
-      min_pos[i] = fmaxf(0.0f, floorf(min_pos[i] - blob_sdf_start[i] -
+      area_min[i] = fmaxf(0.0f, floorf(area_min[i] - blob_sdf_start[i] -
                                       BLOB_SDF_MAX_DIST - BLOB_RADIUS -
                                       BLOB_SMOOTH - farthest_traveled));
-      max_pos[i] = ceilf(max_pos[i] - blob_sdf_start[i] + BLOB_SDF_MAX_DIST +
+      area_max[i] = ceilf(area_max[i] - blob_sdf_start[i] + BLOB_SDF_MAX_DIST +
                          BLOB_RADIUS + BLOB_SMOOTH + farthest_traveled + 1.0f);
 
       num_groups[i] = (int)ceilf(
-          ((max_pos[i] - min_pos[i]) * (BLOB_SDF_RES / blob_sdf_size[i])) /
+          ((area_max[i] - area_min[i]) * (BLOB_SDF_RES / blob_sdf_size[i])) /
           (float)BLOB_SDF_LOCAL_GROUPS);
         
       int max_groups = BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS;
-      if (num_groups[i] > max_groups - (int)min_pos[i]) {
-        num_groups[i] = max_groups - (int)min_pos[i];
-      } else if (num_groups[i] < 0) {
+      if (num_groups[i] < 0) {
         num_groups[i] = 0;
+      } else if (num_groups[i] > max_groups - area_min[i]) {
+        num_groups[i] = max_groups - area_min[i];
       }
     }
+
+    /*
+    printf("(%d, %d, %d) : (%d, %d, %d)\n", invocation_offset[0],
+           invocation_offset[1], invocation_offset[2], num_groups[0],
+           num_groups[1], num_groups[2]);
+           */
 
     glActiveTexture(GL_TEXTURE1);
     glTexSubImage1D(GL_TEXTURE_1D, 0, 0, blob_count, GL_RGBA, GL_FLOAT,
                     blob_lerp);
 
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, blob_ot_buff);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, blob_ot_ssbo);
     glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, blob_ot_size_bytes, blob_ot);
 
     glUseProgram(compute_program);
     glUniform1i(0, blob_count);
     //compute_whole_sdf_this_frame = true;
     if (compute_whole_sdf_this_frame) {
-      //puts("Recalculating SDF...");
-
+      puts("Recalculating SDF...");
       compute_whole_sdf_this_frame = false;
+
       glUniform3i(1, 0, 0, 0);
       glDispatchCompute(BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS,
                         BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS,
                         BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS);
     } else {
-      glUniform3i(1, (int)min_pos[0], (int)min_pos[1], (int)min_pos[2]);
+      glUniform3i(1, (int)area_min[0], (int)area_min[1], (int)area_min[2]);
       glDispatchCompute(num_groups[0], num_groups[1], num_groups[2]);
     }
   }

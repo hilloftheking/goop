@@ -25,7 +25,7 @@ typedef struct Blob {
 } Blob;
 
 #define BLOB_OT_MAX_SUBDIVISIONS 3
-#define BLOB_OT_LEAF_MAX_BLOB_COUNT 96
+#define BLOB_OT_LEAF_MAX_BLOB_COUNT 128
 
 typedef struct BlobOtNode {
   // Blob count if this node is a leaf. Otherwise, it is -1

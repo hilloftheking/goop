@@ -216,7 +216,9 @@ static void insert_into_nodes(BlobOt blob_ot, BlobOtNode *node, vec3 node_pos,
 
 void blob_ot_insert(BlobOt blob_ot, vec3 blob_pos, int blob_idx) {
   BlobOtNode *root = blob_ot + 0;
-  vec3 root_pos = {0.0f, 8.0f, 0.0f};
+  vec3 root_pos = {BLOB_SDF_SIZE};
+  vec3_scale(root_pos, root_pos, 0.5f);
+  vec3_add(root_pos, root_pos, blob_sdf_start);
   vec3 root_size = {BLOB_SDF_SIZE};
   insert_into_nodes(blob_ot, root, root_pos, root_size, blob_pos, blob_idx);
 }

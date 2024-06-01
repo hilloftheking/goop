@@ -17,7 +17,7 @@ layout(location = 2) uniform float cam_aspect;
 #define MARCH_MAX_DIST 40.0
 #define MARCH_NORM_STEP 0.2
 
-#define BG_COLOR 0.1, 0.06, 0.2
+#define BG_COLOR 0.12, 0.04, 0.14
 #define BRIGHTNESS 0.2
 
 // Figure out the normal with a gradient
