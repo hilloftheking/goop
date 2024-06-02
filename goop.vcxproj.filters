@@ -28,6 +28,9 @@
     <ClInclude Include="src\blob_defines.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\blob_render.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.c">
@@ -40,6 +43,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\glad\glad.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\blob_render.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

@@ -173,10 +173,12 @@
   <ItemGroup>
     <ClInclude Include="src\blob.h" />
     <ClInclude Include="src\blob_defines.h" />
+    <ClInclude Include="src\blob_render.h" />
     <ClInclude Include="src\shader_sources.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\blob.c" />
+    <ClCompile Include="src\blob_render.c" />
     <ClCompile Include="src\glad\glad.c" />
     <ClCompile Include="src\main.c" />
     <ClCompile Include="src\shader_sources.c" />

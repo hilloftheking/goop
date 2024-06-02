@@ -9,6 +9,8 @@
 #define BLOB_DESIRED_DISTANCE 0.4f
 #define BLOB_FALL_SPEED 0.5f
 
+#define BLOB_TICK_TIME 0.1
+
 #define BLOB_SLEEP_ENABLED
 
 // How many ticks until a blob can go to sleep
@@ -23,6 +25,13 @@ typedef struct Blob {
   vec3 pos;
   int sleep_ticks;
 } Blob;
+
+typedef struct BlobSimulation {
+  int blob_count;
+  Blob *blobs;
+  vec3 *blobs_prev_pos;
+  double tick_timer;
+} BlobSimulation;
 
 #define BLOB_OT_MAX_SUBDIVISIONS 3
 #define BLOB_OT_LEAF_MAX_BLOB_COUNT 128
@@ -49,8 +58,12 @@ void blob_get_attraction_to(vec3 r, Blob *b, Blob *other);
 // How much anti gravitational force is applied to b from other
 float blob_get_support_with(Blob *b, Blob *other);
 
-// Simulate 1 tick for amount blobs
-void simulate_blobs(Blob *blobs, int amount, vec3 *blobs_prev_pos);
+void blob_create(BlobSimulation *bs, const vec3 pos);
+
+void blob_simulation_create(BlobSimulation *bs);
+void blob_simulation_destroy(BlobSimulation *bs);
+
+void blob_simulate(BlobSimulation *bs, double delta);
 
 // Returns how many bytes are needed to fit the worst case octree
 int blob_ot_get_alloc_size();

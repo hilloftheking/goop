@@ -53,56 +53,99 @@ float blob_get_support_with(Blob* b, Blob* other) {
   return fmaxf(0.0f, -1.0f * x * x + 0.4f);
 }
 
-void simulate_blobs(Blob* blobs, int amount, vec3 *blobs_prev_pos) {
-  for (int b = 0; b < amount; b++) {
-    if (blobs[b].sleep_ticks >= BLOB_SLEEP_TICKS_REQUIRED) {
+void blob_create(BlobSimulation *bs, const vec3 pos) {
+  if (bs->blob_count >= BLOB_MAX_COUNT) {
+    fprintf(stderr, "Blob max count reached\n");
+    return;
+  }
+
+  Blob *b = &bs->blobs[bs->blob_count];
+  vec3_dup(b->pos, pos);
+  vec3_dup(bs->blobs_prev_pos[bs->blob_count], pos);
+  b->sleep_ticks = 0;
+
+  bs->blob_count++;
+}
+
+static float rand_float() { return ((float)rand() / (float)(RAND_MAX)); }
+
+void blob_simulation_create(BlobSimulation* bs) {
+  bs->blob_count = 0;
+  bs->blobs = malloc(BLOB_MAX_COUNT * sizeof(*bs->blobs));
+  bs->blobs_prev_pos = malloc(BLOB_MAX_COUNT * sizeof(*bs->blobs_prev_pos));
+  bs->tick_timer = 0.0;
+
+  for (int i = 0; i < BLOB_START_COUNT; i++) {
+    vec3 pos = {(rand_float() - 0.5f) * 5.0f, 4.0f + (rand_float() * 6.0f),
+                (rand_float() - 0.5f) * 5.0f};
+    blob_create(bs, pos);
+  }
+}
+
+void blob_simulation_destroy(BlobSimulation *bs) {
+  bs->blob_count = 0;
+  free(bs->blobs);
+  bs->blobs = NULL;
+  free(bs->blobs_prev_pos);
+  bs->blobs_prev_pos = NULL;
+  bs->tick_timer = 0.0;
+}
+
+void blob_simulate(BlobSimulation *bs, double delta) {
+  bs->tick_timer -= delta;
+
+  if (bs->tick_timer > 0.0) {
+    return;
+  }
+  bs->tick_timer = BLOB_TICK_TIME;
+
+  for (int b = 0; b < bs->blob_count; b++) {
+    if (bs->blobs[b].sleep_ticks >= BLOB_SLEEP_TICKS_REQUIRED) {
       continue;
     }
 
-    vec3_dup(blobs_prev_pos[b], blobs[b].pos);
+    vec3_dup(bs->blobs_prev_pos[b], bs->blobs[b].pos);
 
     vec3 velocity = {0};
-    float attraction_total_magnitude = 0.0f;
     float anti_grav = 0.0f;
 
-    for (int ob = 0; ob < amount; ob++) {
+    for (int ob = 0; ob < bs->blob_count; ob++) {
       if (ob == b)
         continue;
 
       vec3 attraction;
-      blob_get_attraction_to(attraction, &blobs[b], &blobs[ob]);
+      blob_get_attraction_to(attraction, &bs->blobs[b], &bs->blobs[ob]);
 
       float attraction_magnitude = vec3_len(attraction);
       if (attraction_magnitude > BLOB_SLEEP_THRESHOLD) {
-        blobs[ob].sleep_ticks = 0;
+        bs->blobs[ob].sleep_ticks = 0;
       }
 
-      attraction_total_magnitude += vec3_len(attraction);
       vec3_add(velocity, velocity, attraction);
 
-      anti_grav += blob_get_support_with(&blobs[b], &blobs[ob]);
+      anti_grav += blob_get_support_with(&bs->blobs[b], &bs->blobs[ob]);
     }
 
     velocity[1] -= BLOB_FALL_SPEED * (1.0f - fminf(anti_grav, 1.0f));
 
     vec3 pos_before;
-    vec3_dup(pos_before, blobs[b].pos);
+    vec3_dup(pos_before, bs->blobs[b].pos);
 
-    vec3_add(blobs[b].pos, blobs[b].pos, velocity);
+    vec3_add(bs->blobs[b].pos, bs->blobs[b].pos, velocity);
 
-    vec3_max(blobs[b].pos, blobs[b].pos, blob_min_pos);
-    vec3_min(blobs[b].pos, blobs[b].pos, blob_max_pos);
+    vec3_max(bs->blobs[b].pos, bs->blobs[b].pos, blob_min_pos);
+    vec3_min(bs->blobs[b].pos, bs->blobs[b].pos, blob_max_pos);
 
     // If movement during this tick was under the sleep threshold, the sleep
     // counter can be incremented
     vec3 pos_diff;
-    vec3_sub(pos_diff, blobs[b].pos, pos_before);
+    vec3_sub(pos_diff, bs->blobs[b].pos, pos_before);
 #ifdef BLOB_SLEEP_ENABLED
     float movement = vec3_len(pos_diff);
     if (movement < BLOB_SLEEP_THRESHOLD) {
-      blobs[b].sleep_ticks++;
+      bs->blobs[b].sleep_ticks++;
     } else {
-      blobs[b].sleep_ticks = 0;
+      bs->blobs[b].sleep_ticks = 0;
     }
 #endif
   }
