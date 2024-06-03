@@ -146,9 +146,9 @@ void blob_renderer_create(BlobRenderer* br) {
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexImage3D(GL_TEXTURE_3D, 0, GL_R32F, BLOB_SDF_RES, BLOB_SDF_RES,
-               BLOB_SDF_RES, 0, GL_RED, GL_FLOAT, NULL);
-  glBindImageTexture(0, br->sdf_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_R32F);
+  glTexImage3D(GL_TEXTURE_3D, 0, GL_RG32F, BLOB_SDF_RES, BLOB_SDF_RES,
+               BLOB_SDF_RES, 0, GL_RG, GL_FLOAT, NULL);
+  glBindImageTexture(0, br->sdf_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RG32F);
 
   glGenTextures(1, &br->blobs_tex);
   glActiveTexture(GL_TEXTURE1);
@@ -210,6 +210,8 @@ void blob_render(BlobRenderer* br, const BlobSimulation* bs) {
       }
     }
 
+    pos_lerp[3] = (float)bs->blobs[i].sleep_ticks;
+
     blob_ot_insert(br->blob_ot, pos_lerp, i);
 
     float dist = vec3_len(traveled);
@@ -264,18 +266,17 @@ void blob_render(BlobRenderer* br, const BlobSimulation* bs) {
                   br->blob_ot);
 
   glUseProgram(br->compute_program);
-  glUniform1i(0, bs->blob_count);
   // compute_whole_sdf_this_frame = true;
   if (br->compute_whole_sdf_this_frame) {
     puts("Recalculating SDF...");
     br->compute_whole_sdf_this_frame = false;
 
-    glUniform3i(1, 0, 0, 0);
+    glUniform3i(0, 0, 0, 0);
     glDispatchCompute(BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS,
                       BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS,
                       BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS);
   } else {
-    glUniform3i(1, (int)area_min[0], (int)area_min[1], (int)area_min[2]);
+    glUniform3i(0, (int)area_min[0], (int)area_min[1], (int)area_min[2]);
     glDispatchCompute(num_groups[0], num_groups[1], num_groups[2]);
   }
 

@@ -21,16 +21,18 @@ layout(location = 2) uniform float cam_aspect;
 #define BRIGHTNESS 0.2
 
 // Figure out the normal with a gradient
-vec3 get_normal_at(vec3 p) {
+vec3 get_normal_at(vec3 p, bool is_solid) {
   const vec3 small_step = vec3(MARCH_NORM_STEP / vec3(BLOB_SDF_SIZE).x, 0.0, 0.0);
   vec3 uvw = (p - vec3(BLOB_SDF_START)) / vec3(BLOB_SDF_SIZE);
 
-  float gradient_x = texture(sdf_tex, uvw + small_step.xyy).r -
-                     texture(sdf_tex, uvw - small_step.xyy).r;
-  float gradient_y = texture(sdf_tex, uvw + small_step.yxy).r -
-                     texture(sdf_tex, uvw - small_step.yxy).r;
-  float gradient_z = texture(sdf_tex, uvw + small_step.yyx).r -
-                     texture(sdf_tex, uvw - small_step.yyx).r;
+  int i = !is_solid ? 0 : 1;
+
+  float gradient_x = texture(sdf_tex, uvw + small_step.xyy)[i] -
+                     texture(sdf_tex, uvw - small_step.xyy)[i];
+  float gradient_y = texture(sdf_tex, uvw + small_step.yxy)[i] -
+                     texture(sdf_tex, uvw - small_step.yxy)[i];
+  float gradient_z = texture(sdf_tex, uvw + small_step.yyx)[i] -
+                     texture(sdf_tex, uvw - small_step.yyx)[i];
 
   return normalize(vec3(gradient_x, gradient_y, gradient_z));
 }
@@ -58,16 +60,28 @@ vec3 ray_march(vec3 ro, vec3 rd) {
   for (int i = 0; i < MARCH_STEPS; i++) {
     vec3 p = ro + rd * traveled;
 
-    float dist = texture(sdf_tex, (p - vec3(BLOB_SDF_START)) / vec3(BLOB_SDF_SIZE)).r;
+    vec2 dists = texture(sdf_tex, (p - vec3(BLOB_SDF_START)) / vec3(BLOB_SDF_SIZE)).rg;
+    float dist = dists[0];
+    bool is_solid = false;
+    if (dists[1] < dists[0]) {
+      dist = dists[1];
+      is_solid = true;
+    }
 
     if (dist <= MARCH_INTERSECT) {
-      vec3 normal = get_normal_at(p);
+      // TODO: Getting the normal is kind of expensive
+      // Maybe it could be possible to have a low quality normal in the SDF
+      vec3 normal = get_normal_at(p, is_solid);
       const vec3 light_direction = -normalize(vec3(2.0, -5.0, 3.0));
 
       float diffuse_intensity =
           mix(max(0.0, dot(normal, light_direction)), 1.0, BRIGHTNESS);
-
-      return vec3(BLOB_COLOR) * diffuse_intensity;
+      
+      if (!is_solid) {
+        return vec3(BLOB_COLOR) * diffuse_intensity;
+      } else {
+        return vec3(BLOB_SOLID_COLOR) * diffuse_intensity;
+      }
     }
 
     traveled += dist;

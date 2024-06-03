@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdbool.h>
+
 #include "linmath.h"
 
 #include "blob_defines.h"
@@ -23,7 +25,9 @@
 
 typedef struct Blob {
   vec3 pos;
+  // -1 if the blob is solid
   int sleep_ticks;
+  // TODO: enum for blob type
 } Blob;
 
 typedef struct BlobSimulation {
@@ -58,7 +62,11 @@ void blob_get_attraction_to(vec3 r, Blob *b, Blob *other);
 // How much anti gravitational force is applied to b from other
 float blob_get_support_with(Blob *b, Blob *other);
 
-void blob_create(BlobSimulation *bs, const vec3 pos);
+// Returns true if a blob is solid
+bool blob_is_solid(Blob *b);
+
+// Creates a blob if possible and adds it to the simulation
+void blob_create(BlobSimulation *bs, const vec3 pos, bool is_solid);
 
 void blob_simulation_create(BlobSimulation *bs);
 void blob_simulation_destroy(BlobSimulation *bs);

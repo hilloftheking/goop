@@ -53,7 +53,9 @@ float blob_get_support_with(Blob* b, Blob* other) {
   return fmaxf(0.0f, -1.0f * x * x + 0.4f);
 }
 
-void blob_create(BlobSimulation *bs, const vec3 pos) {
+bool blob_is_solid(Blob *b) { return b->sleep_ticks == -1; }
+
+void blob_create(BlobSimulation *bs, const vec3 pos, bool is_solid) {
   if (bs->blob_count >= BLOB_MAX_COUNT) {
     fprintf(stderr, "Blob max count reached\n");
     return;
@@ -62,7 +64,10 @@ void blob_create(BlobSimulation *bs, const vec3 pos) {
   Blob *b = &bs->blobs[bs->blob_count];
   vec3_dup(b->pos, pos);
   vec3_dup(bs->blobs_prev_pos[bs->blob_count], pos);
-  b->sleep_ticks = 0;
+  if (!is_solid)
+    b->sleep_ticks = 0;
+  else
+    b->sleep_ticks = -1;
 
   bs->blob_count++;
 }
@@ -78,7 +83,7 @@ void blob_simulation_create(BlobSimulation* bs) {
   for (int i = 0; i < BLOB_START_COUNT; i++) {
     vec3 pos = {(rand_float() - 0.5f) * 5.0f, 4.0f + (rand_float() * 6.0f),
                 (rand_float() - 0.5f) * 5.0f};
-    blob_create(bs, pos);
+    blob_create(bs, pos, i % 2 /* alternate between solid and liquid */);
   }
 }
 
@@ -100,6 +105,9 @@ void blob_simulate(BlobSimulation *bs, double delta) {
   bs->tick_timer = BLOB_TICK_TIME;
 
   for (int b = 0; b < bs->blob_count; b++) {
+    if (blob_is_solid(&bs->blobs[b])) {
+      continue;
+    }
     if (bs->blobs[b].sleep_ticks >= BLOB_SLEEP_TICKS_REQUIRED) {
       continue;
     }
@@ -111,6 +119,8 @@ void blob_simulate(BlobSimulation *bs, double delta) {
 
     for (int ob = 0; ob < bs->blob_count; ob++) {
       if (ob == b)
+        continue;
+      if (blob_is_solid(&bs->blobs[ob]))
         continue;
 
       vec3 attraction;

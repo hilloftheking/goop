@@ -206,7 +206,7 @@ int main() {
       vec3 pos;
       vec3_scale(pos, cam_trans[2], 4.0f);
       vec3_add(pos, pos, cam_trans[3]);
-      blob_create(&blob_simulation, pos);
+      blob_create(&blob_simulation, pos, false);
     }
 
     // Simulate blobs
