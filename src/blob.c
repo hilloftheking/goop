@@ -120,12 +120,13 @@ void blob_simulate(BlobSimulation *bs, double delta) {
     for (int ob = 0; ob < bs->blob_count; ob++) {
       if (ob == b)
         continue;
+
       if (blob_is_solid(&bs->blobs[ob]))
         continue;
-
+      
       vec3 attraction;
       blob_get_attraction_to(attraction, &bs->blobs[b], &bs->blobs[ob]);
-
+      
       float attraction_magnitude = vec3_len(attraction);
       if (attraction_magnitude > BLOB_SLEEP_THRESHOLD) {
         bs->blobs[ob].sleep_ticks = 0;
@@ -138,10 +139,42 @@ void blob_simulate(BlobSimulation *bs, double delta) {
 
     velocity[1] -= BLOB_FALL_SPEED * (1.0f - fminf(anti_grav, 1.0f));
 
+    // Now position + velocity will be the new position before dealing with
+    // solid blobs
+
+    vec3 pos_pre_collide;
+    vec3_add(pos_pre_collide, bs->blobs[b].pos, velocity);
+
+    // The biggest position correction will be used from the solid blobs
+    float max_push_len = 0.0f;
+    vec3 max_push = {0.0f};
+    for (int ob = 0; ob < bs->blob_count; ob++) {
+      if (ob == b)
+        continue;
+
+      if (!blob_is_solid(&bs->blobs[ob]))
+        continue;
+
+      vec3 push_dir;
+      vec3_sub(push_dir, bs->blobs[b].pos, bs->blobs[ob].pos);
+      float dist = vec3_len(push_dir);
+      float push_len = BLOB_RADIUS * 2.0f - dist;
+      if (push_len <= 0.0f) {
+        continue;
+      }
+      vec3_scale(push_dir, push_dir, push_len / dist);
+
+      if (push_len > max_push_len) {
+        max_push_len = push_len;
+        vec3_dup(max_push, push_dir);
+      }
+    }
+
     vec3 pos_before;
     vec3_dup(pos_before, bs->blobs[b].pos);
 
     vec3_add(bs->blobs[b].pos, bs->blobs[b].pos, velocity);
+    vec3_add(bs->blobs[b].pos, bs->blobs[b].pos, max_push);
 
     vec3_max(bs->blobs[b].pos, bs->blobs[b].pos, blob_min_pos);
     vec3_min(bs->blobs[b].pos, bs->blobs[b].pos, blob_max_pos);
