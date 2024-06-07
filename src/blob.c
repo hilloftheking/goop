@@ -96,6 +96,23 @@ void blob_simulation_destroy(BlobSimulation *bs) {
   bs->tick_timer = 0.0;
 }
 
+static float clampf(float x, float a, float b) {
+  return x > a ? x < b ? x : b : a;
+}
+
+static float mixf(float x, float y, float a) { return x * (1.0f - a) + y * a; }
+
+static float sminf(float a, float b, float k) {
+  float h = clampf(0.5f + 0.5f * (b - a) / k, 0.0f, 1.0f);
+  return mixf(b, a, h) - k * h * (1.0f - h);
+}
+
+static float dist_sphere(vec3 c, float r, vec3 p) {
+  vec3 d;
+  vec3_sub(d, p, c);
+  return vec3_len(d) - r;
+}
+
 void blob_simulate(BlobSimulation *bs, double delta) {
   bs->tick_timer -= delta;
 
@@ -142,39 +159,50 @@ void blob_simulate(BlobSimulation *bs, double delta) {
     // Now position + velocity will be the new position before dealing with
     // solid blobs
 
-    vec3 pos_pre_collide;
-    vec3_add(pos_pre_collide, bs->blobs[b].pos, velocity);
-
-    // The biggest position correction will be used from the solid blobs
-    float max_push_len = 0.0f;
-    vec3 max_push = {0.0f};
-    for (int ob = 0; ob < bs->blob_count; ob++) {
-      if (ob == b)
-        continue;
-
-      if (!blob_is_solid(&bs->blobs[ob]))
-        continue;
-
-      vec3 push_dir;
-      vec3_sub(push_dir, bs->blobs[b].pos, bs->blobs[ob].pos);
-      float dist = vec3_len(push_dir);
-      float push_len = BLOB_RADIUS * 2.0f - dist;
-      if (push_len <= 0.0f) {
-        continue;
-      }
-      vec3_scale(push_dir, push_dir, push_len / dist);
-
-      if (push_len > max_push_len) {
-        max_push_len = push_len;
-        vec3_dup(max_push, push_dir);
-      }
-    }
-
-    vec3 pos_before;
-    vec3_dup(pos_before, bs->blobs[b].pos);
+    vec3 pos_old;
+    vec3_dup(pos_old, bs->blobs[b].pos);
 
     vec3_add(bs->blobs[b].pos, bs->blobs[b].pos, velocity);
-    vec3_add(bs->blobs[b].pos, bs->blobs[b].pos, max_push);
+
+    {
+      float min_dist = 10000.0f;
+
+      // Use smin to figure out if this blob is touching smoothed solid blobs
+
+      for (int ob = 0; ob < bs->blob_count; ob++) {
+        if (ob == b || !blob_is_solid(&bs->blobs[ob]))
+          continue;
+
+        min_dist =
+            sminf(min_dist,
+                  dist_sphere(bs->blobs[ob].pos, BLOB_RADIUS, bs->blobs[b].pos),
+                  BLOB_SMOOTH);
+      }
+
+      // Is this blob inside of a solid blob?
+      if (min_dist < BLOB_RADIUS) {
+        // Now we need to figure out the normal of the solid blobs at this point
+        // for the direction to push this blob away
+
+        vec3 normal = {0.0f};
+        for (int ob = 0; ob < bs->blob_count; ob++) {
+          if (ob == b || !blob_is_solid(&bs->blobs[ob]))
+            continue;
+
+          vec3 dir;
+          vec3_sub(dir, bs->blobs[b].pos, bs->blobs[ob].pos);
+          float influence =
+              fmaxf(0.0f, BLOB_RADIUS * 2.0f + BLOB_SMOOTH - vec3_len(dir));
+          vec3_norm(dir, dir);
+          vec3_scale(dir, dir, influence);
+          vec3_add(normal, normal, dir);
+        }
+
+        vec3_norm(normal, normal);
+        vec3_scale(normal, normal, BLOB_RADIUS - min_dist);
+        vec3_add(bs->blobs[b].pos, bs->blobs[b].pos, normal);
+      }
+    }
 
     vec3_max(bs->blobs[b].pos, bs->blobs[b].pos, blob_min_pos);
     vec3_min(bs->blobs[b].pos, bs->blobs[b].pos, blob_max_pos);
@@ -182,7 +210,7 @@ void blob_simulate(BlobSimulation *bs, double delta) {
     // If movement during this tick was under the sleep threshold, the sleep
     // counter can be incremented
     vec3 pos_diff;
-    vec3_sub(pos_diff, bs->blobs[b].pos, pos_before);
+    vec3_sub(pos_diff, bs->blobs[b].pos, pos_old);
 #ifdef BLOB_SLEEP_ENABLED
     float movement = vec3_len(pos_diff);
     if (movement < BLOB_SLEEP_THRESHOLD) {
