@@ -68,7 +68,7 @@ void main() {
     int blob_idx = blob_ot[node_idx + 1 + i];
     vec4 blob = imageLoad(blobs_tex, blob_idx);
     // Use second component of values if blob is solid
-    int is_solid = int(blob.w == -1.0);
+    int is_solid = int(blob.w == 1.0);
 
     values[is_solid] = smin(values[is_solid], dist_sphere(blob.xyz, BLOB_RADIUS, p), BLOB_SMOOTH);
   }

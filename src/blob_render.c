@@ -194,12 +194,11 @@ void blob_render(BlobRenderer* br, const BlobSimulation* bs) {
     float *pos_lerp = br->blobs_lerped[i];
     vec3 traveled;
     for (int x = 0; x < 3; x++) {
-      float diff = bs->blobs[i].pos[x] -
-                   bs->blobs_prev_pos[i][x];
+      float diff = bs->blobs[i].pos[x] - bs->blobs[i].prev_pos[x];
       float diff_delta =
           diff * (float)((BLOB_TICK_TIME - bs->tick_timer) / BLOB_TICK_TIME);
 
-      pos_lerp[x] = bs->blobs_prev_pos[i][x] + diff_delta;
+      pos_lerp[x] = bs->blobs[i].prev_pos[x] + diff_delta;
       traveled[x] = diff_delta;
 
       if (pos_lerp[x] < area_min[x]) {
@@ -210,7 +209,7 @@ void blob_render(BlobRenderer* br, const BlobSimulation* bs) {
       }
     }
 
-    pos_lerp[3] = (float)bs->blobs[i].sleep_ticks;
+    pos_lerp[3] = (float)(bs->blobs[i].type);
 
     blob_ot_insert(br->blob_ot, pos_lerp, i);
 
@@ -247,7 +246,7 @@ void blob_render(BlobRenderer* br, const BlobSimulation* bs) {
     if (num_groups[i] < 0) {
       num_groups[i] = 0;
     } else if (num_groups[i] > max_groups - area_min[i]) {
-      num_groups[i] = max_groups - area_min[i];
+      num_groups[i] = (int)(max_groups - area_min[i]);
     }
   }
 
@@ -266,9 +265,10 @@ void blob_render(BlobRenderer* br, const BlobSimulation* bs) {
                   br->blob_ot);
 
   glUseProgram(br->compute_program);
-  // compute_whole_sdf_this_frame = true;
+  // TODO: Additional logic for blob characters is required to do partial SDF
+  br->compute_whole_sdf_this_frame = true;
   if (br->compute_whole_sdf_this_frame) {
-    puts("Recalculating SDF...");
+    //puts("Recalculating SDF...");
     br->compute_whole_sdf_this_frame = false;
 
     glUniform3i(0, 0, 0, 0);

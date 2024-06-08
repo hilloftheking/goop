@@ -124,6 +124,12 @@ int main() {
   BlobSimulation blob_simulation;
   blob_simulation_create(&blob_simulation);
 
+  {
+    vec3 pos = {0};
+    blob_create(&blob_simulation, pos, BLOB_CHAR);
+  }
+  Blob *blob_char = &blob_simulation.blobs[BLOB_START_COUNT];
+
   BlobRenderer blob_renderer;
   blob_renderer_create(&blob_renderer);
   cb_data.br = &blob_renderer;
@@ -206,13 +212,20 @@ int main() {
       vec3 pos;
       vec3_scale(pos, cam_trans[2], 4.0f);
       vec3_add(pos, pos, cam_trans[3]);
-      blob_create(&blob_simulation, pos, false);
+      blob_create(&blob_simulation, pos, BLOB_LIQUID);
     }
 
     // Simulate blobs
 
     if (blob_sim_running)
       blob_simulate(&blob_simulation, delta);
+
+    // Blob character in front of camera
+
+    vec3 char_pos;
+    vec3_scale(char_pos, cam_trans[2], 4.0f);
+    vec3_add(char_pos, char_pos, cam_trans[3]);
+    blob_char_set_pos(&blob_simulation, blob_char, char_pos);
 
     // Render blobs
 

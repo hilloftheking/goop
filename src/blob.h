@@ -23,17 +23,20 @@
 
 #define BLOB_SPAWN_CD 0.05
 
+typedef enum BlobType { BLOB_LIQUID, BLOB_SOLID, BLOB_CHAR } BlobType;
+
 typedef struct Blob {
   vec3 pos;
-  // -1 if the blob is solid
-  int sleep_ticks;
-  // TODO: enum for blob type
+  vec3 prev_pos; // For interpolation
+  BlobType type;
+  union {
+    int liquid_sleep_ticks;
+  };
 } Blob;
 
 typedef struct BlobSimulation {
   int blob_count;
   Blob *blobs;
-  vec3 *blobs_prev_pos;
   double tick_timer;
 } BlobSimulation;
 
@@ -66,12 +69,20 @@ float blob_get_support_with(Blob *b, Blob *other);
 bool blob_is_solid(Blob *b);
 
 // Creates a blob if possible and adds it to the simulation
-void blob_create(BlobSimulation *bs, const vec3 pos, bool is_solid);
+void blob_create(BlobSimulation *bs, const vec3 pos, BlobType type);
 
 void blob_simulation_create(BlobSimulation *bs);
 void blob_simulation_destroy(BlobSimulation *bs);
 
 void blob_simulate(BlobSimulation *bs, double delta);
+
+// Returns correction vector to separate a blob at pos from solids
+void blob_get_correction_from_solids(vec3 correction, BlobSimulation *bs,
+                                     const vec3 pos, float radius,
+                                     bool ignore_chars);
+
+// Sets position of a blob character and does correction against solids
+void blob_char_set_pos(BlobSimulation *bs, Blob *b, vec3 pos);
 
 // Returns how many bytes are needed to fit the worst case octree
 int blob_ot_get_alloc_size();
