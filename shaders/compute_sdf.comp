@@ -4,12 +4,15 @@
 
 layout(local_size_x = BLOB_SDF_LOCAL_GROUPS, local_size_y = BLOB_SDF_LOCAL_GROUPS, local_size_z = BLOB_SDF_LOCAL_GROUPS) in;
 
-layout(std430, binding = 0) restrict readonly buffer BlobOctree {
+layout(std430, binding = 0) restrict readonly buffer Blobs {
+  vec4[] blobs;
+};
+
+layout(std430, binding = 1) restrict readonly buffer BlobOctree {
   int[] blob_ot;
 };
 
 layout(rg32f, binding = 0) writeonly uniform image3D img_output;
-layout(rgba32f, binding = 1) readonly uniform image1D blobs_tex;
 
 layout(location = 0) uniform ivec3 invocation_offset;
 
@@ -66,7 +69,7 @@ void main() {
   vec2 values = vec2(1000.0);
   for (int i = 0; i < node_leaf_blob_count; i++) {
     int blob_idx = blob_ot[node_idx + 1 + i];
-    vec4 blob = imageLoad(blobs_tex, blob_idx);
+    vec4 blob = blobs[blob_idx];
     // Use second component of values if blob is solid
     int is_solid = int(blob.w == 1.0);
 

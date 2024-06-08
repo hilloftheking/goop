@@ -150,16 +150,11 @@ void blob_renderer_create(BlobRenderer* br) {
                BLOB_SDF_RES, 0, GL_RG, GL_FLOAT, NULL);
   glBindImageTexture(0, br->sdf_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RG32F);
 
-  glGenTextures(1, &br->blobs_tex);
-  glActiveTexture(GL_TEXTURE1);
-  glBindTexture(GL_TEXTURE_1D, br->blobs_tex);
-  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-  glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA32F, BLOB_MAX_COUNT, 0, GL_RGBA,
-               GL_FLOAT, NULL);
-  glBindImageTexture(1, br->blobs_tex, 0, GL_FALSE, 0, GL_READ_ONLY,
-                     GL_RGBA32F);
+  br->blobs_ssbo_size_bytes = sizeof(vec4) * BLOB_MAX_COUNT;
+  glGenBuffers(1, &br->blobs_ssbo);
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, br->blobs_ssbo);
+  glBufferData(GL_SHADER_STORAGE_BUFFER, br->blobs_ssbo_size_bytes, NULL,
+               GL_DYNAMIC_DRAW);
 
   br->blob_ot_ssbo_size_bytes = blob_ot_get_alloc_size();
   glGenBuffers(1, &br->blob_ot_ssbo);
@@ -256,11 +251,11 @@ void blob_render(BlobRenderer* br, const BlobSimulation* bs) {
          num_groups[1], num_groups[2]);
          */
 
-  glActiveTexture(GL_TEXTURE1);
-  glTexSubImage1D(GL_TEXTURE_1D, 0, 0, bs->blob_count, GL_RGBA, GL_FLOAT,
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, br->blobs_ssbo);
+  glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, br->blobs_ssbo_size_bytes,
                   br->blobs_lerped);
 
-  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, br->blob_ot_ssbo);
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, br->blob_ot_ssbo);
   glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, br->blob_ot_ssbo_size_bytes,
                   br->blob_ot);
 
