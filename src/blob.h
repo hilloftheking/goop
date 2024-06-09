@@ -13,7 +13,8 @@
 
 #define BLOB_TICK_TIME 0.1
 
-#define BLOB_SLEEP_ENABLED
+// TODO: Wake up sleeping blobs when blob character is near
+//#define BLOB_SLEEP_ENABLED
 
 // How many ticks until a blob can go to sleep
 #define BLOB_SLEEP_TICKS_REQUIRED 10

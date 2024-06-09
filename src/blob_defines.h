@@ -6,8 +6,9 @@
 #define BLOB_RADIUS 0.5f
 #define BLOB_SMOOTH 0.8f
 
-#define BLOB_COLOR 0.41f, 0.04f, 0.06f
-#define BLOB_SOLID_COLOR 0.8f, 0.8f, 0.7f
+#define LIQUID_COLOR 0.41f, 0.04f, 0.06f
+#define SOLID_COLOR 0.8f, 0.8f, 0.7f
+#define CHAR_COLOR 0.1f, 0.8f, 0.1f
 
 #define BLOB_SDF_RES 128
 #define BLOB_SDF_LOCAL_GROUPS 4

@@ -20,12 +20,18 @@ layout(location = 2) uniform float cam_aspect;
 #define BG_COLOR 0.3, 0.3, 0.3
 #define BRIGHTNESS 0.2
 
+vec3 colors[] = {
+  vec3(LIQUID_COLOR),
+  vec3(SOLID_COLOR),
+  vec3(CHAR_COLOR)
+};
+
 // Figure out the normal with a gradient
-vec3 get_normal_at(vec3 p, bool is_solid) {
+vec3 get_normal_at(vec3 p, int dist_idx) {
   const vec3 small_step = vec3(MARCH_NORM_STEP / vec3(BLOB_SDF_SIZE).x, 0.0, 0.0);
   vec3 uvw = (p - vec3(BLOB_SDF_START)) / vec3(BLOB_SDF_SIZE);
 
-  int i = !is_solid ? 0 : 1;
+  int i = dist_idx;
 
   float gradient_x = texture(sdf_tex, uvw + small_step.xyy)[i] -
                      texture(sdf_tex, uvw - small_step.xyy)[i];
@@ -60,28 +66,26 @@ vec3 ray_march(vec3 ro, vec3 rd) {
   for (int i = 0; i < MARCH_STEPS; i++) {
     vec3 p = ro + rd * traveled;
 
-    vec2 dists = texture(sdf_tex, (p - vec3(BLOB_SDF_START)) / vec3(BLOB_SDF_SIZE)).rg;
+    vec3 dists = texture(sdf_tex, (p - vec3(BLOB_SDF_START)) / vec3(BLOB_SDF_SIZE)).rgb;
     float dist = dists[0];
-    bool is_solid = false;
-    if (dists[1] < dists[0]) {
-      dist = dists[1];
-      is_solid = true;
+    int cmin = 0;
+    for (int i = 1; i < 3; i++) {
+      if (dists[i] < dist) {
+        cmin = i;
+        dist = dists[i];
+      }
     }
 
     if (dist <= MARCH_INTERSECT) {
       // TODO: Getting the normal is kind of expensive
       // Maybe it could be possible to have a low quality normal in the SDF
-      vec3 normal = get_normal_at(p, is_solid);
+      vec3 normal = get_normal_at(p, cmin);
       const vec3 light_direction = -normalize(vec3(2.0, -5.0, 3.0));
 
       float diffuse_intensity =
           mix(max(0.0, dot(normal, light_direction)), 1.0, BRIGHTNESS);
       
-      if (!is_solid) {
-        return vec3(BLOB_COLOR) * diffuse_intensity;
-      } else {
-        return vec3(BLOB_SOLID_COLOR) * diffuse_intensity;
-      }
+      return colors[cmin] * diffuse_intensity;
     }
 
     traveled += dist;
