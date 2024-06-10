@@ -21,13 +21,10 @@ static void gl_debug_callback(GLenum source, GLenum type, GLuint id,
   fprintf(stderr, "[GL DEBUG] %s\n", message);
 }
 
-#define CAM_SPEED 4.0f
+#define PLR_SPEED 4.0f
 #define CAM_SENS 0.01f
 
-static struct {
-  vec3 pos;
-  vec2 rot;
-} cam;
+static vec2 cam_rot;
 
 static struct {
   BlobRenderer *br;
@@ -39,11 +36,11 @@ static void cursor_position_callback(GLFWwindow *window, double xpos,
   static double last_ypos = 0.0;
 
   if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_1) == GLFW_PRESS) {
-    cam.rot[0] += (float)(ypos - last_ypos) * CAM_SENS;
-    cam.rot[1] += (float)(xpos - last_xpos) * CAM_SENS;
+    cam_rot[0] += (float)(ypos - last_ypos) * CAM_SENS;
+    cam_rot[1] += (float)(xpos - last_xpos) * CAM_SENS;
 
-    cam.rot[0] = fmodf(cam.rot[0], (float)M_PI * 2.0f);
-    cam.rot[1] = fmodf(cam.rot[1], (float)M_PI * 2.0f);
+    cam_rot[0] = fmodf(cam_rot[0], (float)M_PI * 2.0f);
+    cam_rot[1] = fmodf(cam_rot[1], (float)M_PI * 2.0f);
   }
 
   last_xpos = xpos;
@@ -114,7 +111,7 @@ int main() {
   glfwMakeContextCurrent(window);
   glfwSwapInterval((int)vsync_enabled);
 
-  gladLoadGLLoader((void *)(const char *)glfwGetProcAddress);
+  gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 
   glEnable(GL_DEBUG_OUTPUT);
   glDebugMessageCallback(gl_debug_callback, NULL);
@@ -124,19 +121,14 @@ int main() {
   BlobSimulation blob_simulation;
   blob_simulation_create(&blob_simulation);
 
-  {
-    vec3 pos = {0};
-    blob_create(&blob_simulation, pos, BLOB_CHAR);
-  }
+  blob_create(&blob_simulation, (vec3){0, 3, -5}, BLOB_CHAR);
   Blob *blob_char = &blob_simulation.blobs[BLOB_START_COUNT];
 
   BlobRenderer blob_renderer;
   blob_renderer_create(&blob_renderer);
   cb_data.br = &blob_renderer;
 
-  cam.pos[1] = 3.0f;
-  cam.pos[2] = -5.0f;
-  cam.rot[0] = 0.5f;
+  cam_rot[0] = 0.5f;
 
   uint64_t timer_freq = glfwGetTimerFrequency();
   uint64_t prev_timer = glfwGetTimerValue();
@@ -171,31 +163,14 @@ int main() {
     else
       glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 
-    mat4x4 cam_trans = {{1.0f, 0.0f, 0.0f, 0.0f},
-                        {0.0f, 1.0f, 0.0f, 0.0f},
-                        {0.0f, 0.0f, 1.0f, 0.0f},
-                        {0.0f, 0.0f, 0.0f, 1.0f}};
+    mat4x4 cam_trans;
+    mat4x4_identity(cam_trans);
 
-    mat4x4_rotate_Y(cam_trans, cam_trans, cam.rot[1]);
-    mat4x4_rotate_X(cam_trans, cam_trans, cam.rot[0]);
+    mat4x4_rotate_Y(cam_trans, cam_trans, cam_rot[1]);
+    mat4x4_rotate_X(cam_trans, cam_trans, cam_rot[0]);
 
-    bool w_press = glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS;
-    bool s_press = glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS;
-    bool a_press = glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS;
-    bool d_press = glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS;
-    vec4 dir = {0};
-    dir[0] = (float)(d_press - a_press);
-    dir[2] = (float)(w_press - s_press);
-    vec4_norm(dir, dir);
-    vec4_scale(dir, dir, CAM_SPEED * (float)delta);
-
-    vec4 rel_move;
-    mat4x4_mul_vec4(rel_move, cam_trans, dir);
-    vec3_add(cam.pos, cam.pos, rel_move);
-
-    cam_trans[3][0] = cam.pos[0];
-    cam_trans[3][1] = cam.pos[1];
-    cam_trans[3][2] = cam.pos[2];
+    vec3_scale(cam_trans[3], cam_trans[2], -3.0f);
+    vec3_add(cam_trans[3], cam_trans[3], blob_char->pos);
 
     mat4x4_dup(blob_renderer.cam_trans, cam_trans);
 
@@ -220,12 +195,23 @@ int main() {
     if (blob_sim_running)
       blob_simulate(&blob_simulation, delta);
 
-    // Blob character in front of camera
+    // Blob character that can be moved
 
-    vec3 char_pos;
-    vec3_scale(char_pos, cam_trans[2], 4.0f);
-    vec3_add(char_pos, char_pos, cam_trans[3]);
-    blob_char_set_pos(&blob_simulation, blob_char, char_pos);
+    bool w_press = glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS;
+    bool s_press = glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS;
+    bool a_press = glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS;
+    bool d_press = glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS;
+    vec4 dir = {0};
+    dir[0] = (float)(d_press - a_press);
+    dir[2] = (float)(w_press - s_press);
+    vec4_norm(dir, dir);
+    vec4_scale(dir, dir, PLR_SPEED * (float)delta);
+
+    vec4 rel_move;
+    mat4x4_mul_vec4(rel_move, cam_trans, dir);
+
+    //blob_char_set_pos(&blob_simulation, blob_char, blob_char->pos);
+    blob_char_move(&blob_simulation, blob_char, rel_move);
 
     // Render blobs
 

@@ -233,11 +233,15 @@ void blob_get_correction_from_solids(vec3 correction, BlobSimulation *bs,
   }
 }
 
-void blob_char_set_pos(BlobSimulation *bs, Blob *b, vec3 pos) {
+void blob_char_move(BlobSimulation *bs, Blob *b, vec3 move) {
+  vec3 pos;
+  vec3_add(pos, b->pos, move);
   vec3 correction;
   blob_get_correction_from_solids(correction, bs, pos, BLOB_RADIUS, true);
-  vec3_add(b->pos, pos, correction);
-  vec3_dup(b->prev_pos, b->pos);
+  if (vec3_len(correction) == 0.0f) {
+    vec3_dup(b->pos, pos);
+    vec3_dup(b->prev_pos, pos);
+  }
 }
 
 int blob_ot_get_alloc_size() {

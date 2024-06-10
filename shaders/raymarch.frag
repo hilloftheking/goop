@@ -80,12 +80,18 @@ vec3 ray_march(vec3 ro, vec3 rd) {
       // TODO: Getting the normal is kind of expensive
       // Maybe it could be possible to have a low quality normal in the SDF
       vec3 normal = get_normal_at(p, cmin);
-      const vec3 light_direction = -normalize(vec3(2.0, -5.0, 3.0));
 
-      float diffuse_intensity =
-          mix(max(0.0, dot(normal, light_direction)), 1.0, BRIGHTNESS);
+      const vec3 light0_dir = -normalize(vec3(2.0, -5.0, 3.0));
+
+      const vec3 light1_dir = -normalize(vec3(-1.0, 5.0, -1.0));
+      const vec3 light1_col = vec3(0.05, 0.05, 0.08);
+
+      float light0_val =
+          mix(max(0.0, dot(normal, light0_dir)), 1.0, BRIGHTNESS);
+      float light1_val =
+          mix(max(0.0, dot(normal, light1_dir)), 1.0, BRIGHTNESS);
       
-      return colors[cmin] * diffuse_intensity;
+      return colors[cmin] * light0_val + light1_col * light1_val;
     }
 
     traveled += dist;
