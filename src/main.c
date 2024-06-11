@@ -189,7 +189,7 @@ int main() {
       blob_spawn_cd = BLOB_SPAWN_CD;
 
       vec3 pos;
-      vec3_scale(pos, cam_trans[2], 4.0f);
+      vec3_scale(pos, cam_trans[2], -4.0f);
       vec3_add(pos, pos, cam_trans[3]);
       blob_create(&blob_simulation, pos, BLOB_LIQUID);
     }

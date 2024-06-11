@@ -16,8 +16,14 @@ layout(rgba32f, binding = 0) writeonly uniform image3D img_output;
 
 layout(location = 0) uniform ivec3 invocation_offset;
 
+vec3 colors[] = {
+  vec3(BLOB_COL_LIQUID),
+  vec3(BLOB_COL_SOLID),
+  vec3(BLOB_COL_CHAR)
+};
+
 float smin(float a, float b, float k) {
-  float h = clamp(0.5 + 0.5 * (b - a) / k, 0., 1.);
+  float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
   return mix(b, a, h) - k * h * (1.0 - h);
 }
 
@@ -66,18 +72,23 @@ void main() {
     }
   }
 
-  vec3 values = vec3(1000.0);
+  float value = 1000.0;
+  vec3 color = vec3(0.0);
+
   for (int i = 0; i < node_leaf_blob_count; i++) {
     int blob_idx = blob_ot[node_idx + 1 + i];
     vec4 blob = blobs[blob_idx];
-    int dist_idx = int(blob.w);
 
-    values[dist_idx] = smin(values[dist_idx], dist_sphere(blob.xyz, BLOB_RADIUS, p), BLOB_SMOOTH);
+    float d = dist_sphere(blob.xyz, BLOB_RADIUS, p);
+    float old_val = value;
+    value = smin(value, d, BLOB_SMOOTH);
+
+    float diff = old_val - value;
+    color = mix(color, colors[int(blob.a)], clamp(diff / BLOB_COLOR_BLEND, 0.0, 1.0));
   }
 
-  values = min(vec3(BLOB_SDF_MAX_DIST), values);
-  //values[1] = min(values[1], dist_cube(node_pos, node_size * 0.25, p));
+  value = min(BLOB_SDF_MAX_DIST, value);
 
   imageStore(img_output, invocation_offset + ivec3(gl_GlobalInvocationID.xyz),
-             vec4(values, 0));
+             vec4(color, value));
 }

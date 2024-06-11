@@ -18,25 +18,17 @@ layout(location = 3) uniform vec3 cam_pos;
 #define BG_COLOR 0.3, 0.3, 0.3
 #define BRIGHTNESS 0.2
 
-vec3 colors[] = {
-  vec3(LIQUID_COLOR),
-  vec3(SOLID_COLOR),
-  vec3(CHAR_COLOR)
-};
-
 // Figure out the normal with a gradient
-vec3 get_normal_at(vec3 p, int dist_idx) {
+vec3 get_normal_at(vec3 p) {
   const vec3 small_step = vec3(MARCH_NORM_STEP / vec3(BLOB_SDF_SIZE).x, 0.0, 0.0);
   vec3 uvw = (p - vec3(BLOB_SDF_START)) / vec3(BLOB_SDF_SIZE);
 
-  int i = dist_idx;
-
-  float gradient_x = texture(sdf_tex, uvw + small_step.xyy)[i] -
-                     texture(sdf_tex, uvw - small_step.xyy)[i];
-  float gradient_y = texture(sdf_tex, uvw + small_step.yxy)[i] -
-                     texture(sdf_tex, uvw - small_step.yxy)[i];
-  float gradient_z = texture(sdf_tex, uvw + small_step.yyx)[i] -
-                     texture(sdf_tex, uvw - small_step.yyx)[i];
+  float gradient_x = texture(sdf_tex, uvw + small_step.xyy).a -
+                     texture(sdf_tex, uvw - small_step.xyy).a;
+  float gradient_y = texture(sdf_tex, uvw + small_step.yxy).a -
+                     texture(sdf_tex, uvw - small_step.yxy).a;
+  float gradient_z = texture(sdf_tex, uvw + small_step.yyx).a -
+                     texture(sdf_tex, uvw - small_step.yyx).a;
 
   return normalize(vec3(gradient_x, gradient_y, gradient_z));
 }
@@ -54,7 +46,7 @@ vec2 intersect_aabb(vec3 ro, vec3 rd, vec3 bmin, vec3 bmax) {
 // Returns color
 vec3 ray_march(vec3 ro, vec3 rd) {
   vec2 near_far = intersect_aabb(ro, rd, vec3(BLOB_SDF_START), vec3(BLOB_SDF_SIZE) + vec3(BLOB_SDF_START));
-  if (near_far[0] > near_far[1] || near_far[1] < 0.05) {
+  if (near_far[1] < 0.00) {
     return vec3(0.0, 0.0, 0.0);
   }
 
@@ -63,20 +55,13 @@ vec3 ray_march(vec3 ro, vec3 rd) {
   for (int i = 0; i < MARCH_STEPS; i++) {
     vec3 p = ro + rd * traveled;
 
-    vec3 dists = texture(sdf_tex, (p - vec3(BLOB_SDF_START)) / vec3(BLOB_SDF_SIZE)).rgb;
-    float dist = dists[0];
-    int cmin = 0;
-    for (int i = 1; i < 3; i++) {
-      if (dists[i] < dist) {
-        cmin = i;
-        dist = dists[i];
-      }
-    }
+    vec4 dat = texture(sdf_tex, (p - vec3(BLOB_SDF_START)) / vec3(BLOB_SDF_SIZE));
+    float dist = dat.a;
 
     if (dist <= MARCH_INTERSECT) {
       // TODO: Getting the normal is kind of expensive
       // Maybe it could be possible to have a low quality normal in the SDF
-      vec3 normal = get_normal_at(p, cmin);
+      vec3 normal = get_normal_at(p);
 
       const vec3 light0_dir = -normalize(vec3(2.0, -5.0, 3.0));
 
@@ -88,16 +73,12 @@ vec3 ray_march(vec3 ro, vec3 rd) {
       float light1_val =
           mix(max(0.0, dot(normal, light1_dir)), 1.0, BRIGHTNESS);
       
-      return colors[cmin] * light0_val + light1_col * light1_val;
+      return dat.rgb * light0_val + light1_col * light1_val;
     }
 
     traveled += dist;
 
-    if (traveled >= MARCH_MAX_DIST) {
-      break;
-    }
-
-    if (traveled >= near_far[1]) {
+    if (traveled >= MARCH_MAX_DIST || traveled >= near_far[1]) {
       break;
     }
   }
