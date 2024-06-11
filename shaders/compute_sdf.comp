@@ -12,7 +12,7 @@ layout(std430, binding = 1) restrict readonly buffer BlobOctree {
   int[] blob_ot;
 };
 
-layout(rgba32f, binding = 0) writeonly uniform image3D img_output;
+layout(rgba8, binding = 0) writeonly uniform image3D img_output;
 
 layout(location = 0) uniform ivec3 invocation_offset;
 
@@ -87,8 +87,10 @@ void main() {
     color = mix(color, colors[int(blob.a)], clamp(diff / BLOB_COLOR_BLEND, 0.0, 1.0));
   }
 
-  value = min(BLOB_SDF_MAX_DIST, value);
+  //value = min(BLOB_SDF_MAX_DIST, value);
+
+  value = clamp(value, -0.5, BLOB_SDF_MAX_DIST);
 
   imageStore(img_output, invocation_offset + ivec3(gl_GlobalInvocationID.xyz),
-             vec4(color, value));
+             vec4(color, (value + 0.5) / (BLOB_SDF_MAX_DIST + 0.5)));
 }

@@ -56,7 +56,7 @@ vec3 ray_march(vec3 ro, vec3 rd) {
     vec3 p = ro + rd * traveled;
 
     vec4 dat = texture(sdf_tex, (p - vec3(BLOB_SDF_START)) / vec3(BLOB_SDF_SIZE));
-    float dist = dat.a;
+    float dist = (dat.a * (BLOB_SDF_MAX_DIST + 0.5)) - 0.5;
 
     if (dist <= MARCH_INTERSECT) {
       // TODO: Getting the normal is kind of expensive
@@ -91,4 +91,5 @@ void main() {
   vec3 rd = normalize(world_pos - ro);
 
   out_color = vec4(ray_march(ro, rd), 1.0);
+  //out_color = texture(sdf_tex, vec3(0.5));
 }
