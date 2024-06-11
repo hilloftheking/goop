@@ -54,11 +54,11 @@ typedef struct BlobOtNode {
 
 typedef BlobOtNode *BlobOt;
 
-static vec3 blob_min_pos = {-8.0f, 0.0f, -8.0f};
-static vec3 blob_max_pos = {8.0f, 16.0f, 8.0f};
+static const vec3 blob_min_pos = {-8.0f, 0.0f, -8.0f};
+static const vec3 blob_max_pos = {8.0f, 16.0f, 8.0f};
 
-static vec3 blob_sdf_size = {BLOB_SDF_SIZE};
-static vec3 blob_sdf_start = {BLOB_SDF_START};
+static const vec3 blob_sdf_size = {BLOB_SDF_SIZE};
+static const vec3 blob_sdf_start = {BLOB_SDF_START};
 
 // How much force is needed to attract b to other
 void blob_get_attraction_to(vec3 r, Blob *b, Blob *other);

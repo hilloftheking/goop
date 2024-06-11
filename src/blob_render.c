@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 
 #include <glad/glad.h>
@@ -116,7 +117,13 @@ static GLuint create_compute_program(const char *source) {
   return shader_program;
 }
 
-static vec2 verts[] = {{-1, 1}, {1, 1}, {-1, -1}, {1, -1}, {-1, -1}, {1, 1}};
+static vec3 cube_verts[] = {{0.5f, 0.5f, -0.5f},  {0.5f, -0.5f, -0.5f},
+                            {0.5f, 0.5f, 0.5f},   {0.5f, -0.5f, 0.5f},
+                            {-0.5f, 0.5f, -0.5f}, {-0.5f, -0.5f, -0.5f},
+                            {-0.5f, 0.5f, 0.5f},  {-0.5f, -0.5f, 0.5f}};
+static uint8_t cube_indices[] = {4, 2, 0, 2, 7, 3, 6, 5, 7, 1, 7, 5,
+                                 0, 3, 1, 4, 1, 5, 4, 6, 2, 2, 6, 7,
+                                 6, 4, 5, 1, 3, 7, 0, 2, 3, 4, 0, 1};
 
 void blob_renderer_create(BlobRenderer* br) {
   glGenVertexArrays(1, &br->vao);
@@ -124,17 +131,19 @@ void blob_renderer_create(BlobRenderer* br) {
 
   glGenBuffers(1, &br->vbo);
   glBindBuffer(GL_ARRAY_BUFFER, br->vbo);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(cube_verts), cube_verts, GL_STATIC_DRAW);
+
+  glGenBuffers(1, &br->ibo);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, br->ibo);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cube_indices), cube_indices,
+               GL_STATIC_DRAW);
 
   br->raymarch_program =
       create_shader_program(RAYMARCH_VERT_SRC, RAYMARCH_FRAG_SRC);
   glUseProgram(br->raymarch_program);
 
-  glUniform1f(1, 60.0f);
-  glUniform1f(2, 1.0f);
-
   glEnableVertexAttribArray(0);
-  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, NULL);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
 
   br->compute_program = create_compute_program(COMPUTE_SDF_COMP_SRC);
 
@@ -276,10 +285,29 @@ void blob_render(BlobRenderer* br, const BlobSimulation* bs) {
   }
 
   glUseProgram(br->raymarch_program);
-  glUniformMatrix4fv(0, 1, GL_FALSE, br->cam_trans[0]);
-  glUniform1f(2, br->aspect_ratio);
+
+  mat4x4 model_mat;
+  mat4x4_identity(model_mat);
+  mat4x4_scale(model_mat, model_mat, blob_sdf_size[0]);
+  for (int i = 0; i < 3; i++) {
+    model_mat[3][i] = blob_sdf_size[i] * 0.5f + blob_sdf_start[i];
+  }
+  model_mat[3][3] = 1.0f;
+
+  mat4x4 view_mat;
+  mat4x4_invert(view_mat, br->cam_trans);
+
+  mat4x4 proj_mat;
+  mat4x4_perspective(proj_mat, 60.0f * (3.14159f / 180.0f), br->aspect_ratio,
+                     0.1f, 100.0f);
+
+  glUniformMatrix4fv(0, 1, GL_FALSE, model_mat[0]);
+  glUniformMatrix4fv(1, 1, GL_FALSE, view_mat[0]);
+  glUniformMatrix4fv(2, 1, GL_FALSE, proj_mat[0]);
+  glUniform3fv(3, 1, br->cam_trans[3]);
 
   glBindVertexArray(br->vao);
   glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-  glDrawArrays(GL_TRIANGLES, 0, 6);
+  glDrawElements(GL_TRIANGLES, sizeof(cube_indices) / sizeof(*cube_indices),
+                 GL_UNSIGNED_BYTE, NULL);
 }

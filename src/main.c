@@ -36,8 +36,8 @@ static void cursor_position_callback(GLFWwindow *window, double xpos,
   static double last_ypos = 0.0;
 
   if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_1) == GLFW_PRESS) {
-    cam_rot[0] += (float)(ypos - last_ypos) * CAM_SENS;
-    cam_rot[1] += (float)(xpos - last_xpos) * CAM_SENS;
+    cam_rot[0] -= (float)(ypos - last_ypos) * CAM_SENS;
+    cam_rot[1] -= (float)(xpos - last_xpos) * CAM_SENS;
 
     cam_rot[0] = fmodf(cam_rot[0], (float)M_PI * 2.0f);
     cam_rot[1] = fmodf(cam_rot[1], (float)M_PI * 2.0f);
@@ -118,6 +118,11 @@ int main() {
   glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE,
                         GL_DEBUG_SEVERITY_NOTIFICATION, 0, NULL, GL_FALSE);
 
+  // Only back faces are rendered so that the camera can be inside of a bounding cube
+  glEnable(GL_CULL_FACE);
+  glFrontFace(GL_CCW);
+  glCullFace(GL_FRONT);
+
   BlobSimulation blob_simulation;
   blob_simulation_create(&blob_simulation);
 
@@ -129,6 +134,7 @@ int main() {
   cb_data.br = &blob_renderer;
 
   cam_rot[0] = 0.5f;
+  cam_rot[1] = (float)M_PI;
 
   uint64_t timer_freq = glfwGetTimerFrequency();
   uint64_t prev_timer = glfwGetTimerValue();
@@ -163,16 +169,14 @@ int main() {
     else
       glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 
-    mat4x4 cam_trans;
+    vec4 *cam_trans = blob_renderer.cam_trans;
     mat4x4_identity(cam_trans);
 
     mat4x4_rotate_Y(cam_trans, cam_trans, cam_rot[1]);
     mat4x4_rotate_X(cam_trans, cam_trans, cam_rot[0]);
 
-    vec3_scale(cam_trans[3], cam_trans[2], -3.0f);
+    vec3_scale(cam_trans[3], cam_trans[2], 3.0f);
     vec3_add(cam_trans[3], cam_trans[3], blob_char->pos);
-
-    mat4x4_dup(blob_renderer.cam_trans, cam_trans);
 
     // Hold space to spawn more blobs
 
@@ -203,14 +207,13 @@ int main() {
     bool d_press = glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS;
     vec4 dir = {0};
     dir[0] = (float)(d_press - a_press);
-    dir[2] = (float)(w_press - s_press);
+    dir[2] = (float)(s_press - w_press);
     vec4_norm(dir, dir);
     vec4_scale(dir, dir, PLR_SPEED * (float)delta);
 
     vec4 rel_move;
     mat4x4_mul_vec4(rel_move, cam_trans, dir);
 
-    //blob_char_set_pos(&blob_simulation, blob_char, blob_char->pos);
     blob_char_move(&blob_simulation, blob_char, rel_move);
 
     // Render blobs

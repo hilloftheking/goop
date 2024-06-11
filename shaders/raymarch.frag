@@ -2,15 +2,13 @@
 
 #include "../src/blob_defines.h"
 
-layout(location = 0) in vec2 frag_pos;
+layout(location = 0) in vec3 world_pos;
 
 layout(location = 0) out vec4 out_color;
 
 layout(binding = 0) uniform sampler3D sdf_tex;
 
-layout(location = 0) uniform mat4 cam_trans;
-layout(location = 1) uniform float cam_fov;
-layout(location = 2) uniform float cam_aspect;
+layout(location = 3) uniform vec3 cam_pos;
 
 #define MARCH_STEPS 128
 #define MARCH_INTERSECT 0.001
@@ -56,9 +54,8 @@ vec2 intersect_aabb(vec3 ro, vec3 rd, vec3 bmin, vec3 bmax) {
 // Returns color
 vec3 ray_march(vec3 ro, vec3 rd) {
   vec2 near_far = intersect_aabb(ro, rd, vec3(BLOB_SDF_START), vec3(BLOB_SDF_SIZE) + vec3(BLOB_SDF_START));
-  if (near_far[0] > near_far[1] || near_far[1] < 0.0) {
+  if (near_far[0] > near_far[1] || near_far[1] < 0.05) {
     return vec3(0.0, 0.0, 0.0);
-    //return vec3(BG_COLOR);
   }
 
   float traveled = max(0.0, near_far[0]);
@@ -109,17 +106,8 @@ vec3 ray_march(vec3 ro, vec3 rd) {
 }
 
 void main() {
-  vec3 ro = vec3(cam_trans[3]);
-
-  mat4 rot_mat = cam_trans;
-  rot_mat[3] = vec4(0, 0, 0, 1);
-
-  mat4 dir_mat = mat4(1.0);
-  vec2 ray_offsets = frag_pos;
-  ray_offsets.x *= cam_aspect;
-  dir_mat[3] = vec4(ray_offsets * tan(radians(cam_fov) / 2.0), 1.0, 0.0);
-
-  vec3 rd = normalize(vec3((rot_mat * dir_mat)[3]));
+  vec3 ro = cam_pos;
+  vec3 rd = normalize(world_pos - ro);
 
   out_color = vec4(ray_march(ro, rd), 1.0);
 }
