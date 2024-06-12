@@ -56,22 +56,44 @@ float blob_get_support_with(Blob *b, Blob *other) {
 
 bool blob_is_solid(Blob *b) { return b->type == BLOB_SOLID; }
 
-void blob_create(BlobSimulation *bs, const vec3 pos, BlobType type) {
+Blob *blob_create(BlobSimulation *bs, BlobType type, float radius,
+                  const vec3 pos, int mat_idx) {
   if (bs->blob_count >= BLOB_MAX_COUNT) {
     fprintf(stderr, "Blob max count reached\n");
-    return;
+    return NULL;
   }
 
   Blob *b = &bs->blobs[bs->blob_count];
+  b->type = type;
+  b->radius = radius;
   vec3_dup(b->pos, pos);
   vec3_dup(b->prev_pos, pos);
+  b->mat_idx = mat_idx;
 
-  b->type = type;
   if (type == BLOB_LIQUID) {
     b->liquid_sleep_ticks = 0;
   }
 
   bs->blob_count++;
+
+  return b;
+}
+
+BlobChar* blob_char_create(BlobSimulation* bs, float radius, const vec3 pos,
+    int mat_idx) {
+  if (bs->blob_char_count >= BLOB_CHAR_MAX_COUNT) {
+    fprintf(stderr, "Blob character max count reached\n");
+    return NULL;
+  }
+
+  BlobChar *b = &bs->blob_chars[bs->blob_char_count];
+  b->radius = radius;
+  vec3_dup(b->pos, pos);
+  b->mat_idx = mat_idx;
+
+  bs->blob_char_count++;
+
+  return b;
 }
 
 static float rand_float() { return ((float)rand() / (float)(RAND_MAX)); }
@@ -79,12 +101,15 @@ static float rand_float() { return ((float)rand() / (float)(RAND_MAX)); }
 void blob_simulation_create(BlobSimulation *bs) {
   bs->blob_count = 0;
   bs->blobs = malloc(BLOB_MAX_COUNT * sizeof(*bs->blobs));
+  bs->blob_char_count = 0;
+  bs->blob_chars = malloc(BLOB_CHAR_MAX_COUNT * sizeof(*bs->blob_chars));
   bs->tick_timer = 0.0;
 
   for (int i = 0; i < BLOB_START_COUNT; i++) {
     vec3 pos = {(rand_float() - 0.5f) * 5.0f, 4.0f + (rand_float() * 6.0f),
                 (rand_float() - 0.5f) * 5.0f};
-    blob_create(bs, pos, i % 2 /* alternate between solid and liquid */);
+    blob_create(bs, i % 2 /* alternate between solid and liquid */, 0.5f, pos,
+                i % 2);
   }
 }
 
@@ -92,24 +117,12 @@ void blob_simulation_destroy(BlobSimulation *bs) {
   bs->blob_count = 0;
   free(bs->blobs);
   bs->blobs = NULL;
+
+  bs->blob_char_count = 0;
+  free(bs->blob_chars);
+  bs->blob_chars = NULL;
+
   bs->tick_timer = 0.0;
-}
-
-static float clampf(float x, float a, float b) {
-  return x > a ? x < b ? x : b : a;
-}
-
-static float mixf(float x, float y, float a) { return x * (1.0f - a) + y * a; }
-
-static float sminf(float a, float b, float k) {
-  float h = clampf(0.5f + 0.5f * (b - a) / k, 0.0f, 1.0f);
-  return mixf(b, a, h) - k * h * (1.0f - h);
-}
-
-static float dist_sphere(const vec3 c, float r, const vec3 p) {
-  vec3 d;
-  vec3_sub(d, p, c);
-  return vec3_len(d) - r;
 }
 
 void blob_simulate(BlobSimulation *bs, double delta) {
@@ -121,8 +134,6 @@ void blob_simulate(BlobSimulation *bs, double delta) {
 
   for (int b = 0; b < bs->blob_count; b++) {
     if (blob_is_solid(&bs->blobs[b]))
-      continue;
-    if (bs->blobs[b].type == BLOB_CHAR)
       continue;
     if (bs->blobs[b].type == BLOB_LIQUID &&
         bs->blobs[b].liquid_sleep_ticks >= BLOB_SLEEP_TICKS_REQUIRED)
@@ -166,7 +177,7 @@ void blob_simulate(BlobSimulation *bs, double delta) {
 
     vec3 correction;
     blob_get_correction_from_solids(correction, bs, bs->blobs[b].pos,
-                                    BLOB_RADIUS, false);
+                                    bs->blobs[b].radius);
     vec3_add(bs->blobs[b].pos, bs->blobs[b].pos, correction);
 
     vec3_max(bs->blobs[b].pos, bs->blobs[b].pos, blob_min_pos);
@@ -189,9 +200,25 @@ void blob_simulate(BlobSimulation *bs, double delta) {
   }
 }
 
+static float clampf(float x, float a, float b) {
+  return x > a ? x < b ? x : b : a;
+}
+
+static float mixf(float x, float y, float a) { return x * (1.0f - a) + y * a; }
+
+static float sminf(float a, float b, float k) {
+  float h = clampf(0.5f + 0.5f * (b - a) / k, 0.0f, 1.0f);
+  return mixf(b, a, h) - k * h * (1.0f - h);
+}
+
+static float dist_sphere(const vec3 c, float r, const vec3 p) {
+  vec3 d;
+  vec3_sub(d, p, c);
+  return vec3_len(d) - r;
+}
+
 void blob_get_correction_from_solids(vec3 correction, BlobSimulation *bs,
-                                     const vec3 pos, float radius,
-                                     bool ignore_chars) {
+                                     const vec3 pos, float radius) {
   correction[0] = 0.0f;
   correction[1] = 0.0f;
   correction[2] = 0.0f;
@@ -201,46 +228,44 @@ void blob_get_correction_from_solids(vec3 correction, BlobSimulation *bs,
   // Use smin to figure out if this blob is touching smoothed solid blobs
 
   for (int ob = 0; ob < bs->blob_count; ob++) {
-    if (bs->blobs[ob].type == BLOB_LIQUID ||
-        (bs->blobs[ob].type == BLOB_CHAR && ignore_chars))
+    if (bs->blobs[ob].type == BLOB_LIQUID)
       continue;
 
-    min_dist = sminf(min_dist, dist_sphere(bs->blobs[ob].pos, BLOB_RADIUS, pos),
+    min_dist = sminf(min_dist,
+                     dist_sphere(bs->blobs[ob].pos, bs->blobs[ob].radius, pos),
                      BLOB_SMOOTH);
   }
 
   // Is this blob inside of a solid blob?
-  if (min_dist < BLOB_RADIUS) {
+  if (min_dist < radius) {
     // Now we need to figure out the normal of the solid blobs at this point
     // for the direction to push this blob away
 
     for (int ob = 0; ob < bs->blob_count; ob++) {
-      if (bs->blobs[ob].type == BLOB_LIQUID ||
-          (bs->blobs[ob].type == BLOB_CHAR && ignore_chars))
+      if (bs->blobs[ob].type == BLOB_LIQUID)
         continue;
 
       vec3 dir;
       vec3_sub(dir, pos, bs->blobs[ob].pos);
-      float influence =
-          fmaxf(0.0f, radius + BLOB_RADIUS + BLOB_SMOOTH - vec3_len(dir));
+      float influence = fmaxf(0.0f, radius + bs->blobs[ob].radius +
+                                        BLOB_SMOOTH - vec3_len(dir));
       vec3_norm(dir, dir);
       vec3_scale(dir, dir, influence);
       vec3_add(correction, correction, dir);
     }
 
     vec3_norm(correction, correction);
-    vec3_scale(correction, correction, BLOB_RADIUS - min_dist);
+    vec3_scale(correction, correction, radius - min_dist);
   }
 }
 
-void blob_char_move(BlobSimulation *bs, Blob *b, vec3 move) {
+void blob_char_move(BlobSimulation *bs, BlobChar *b, vec3 move) {
   vec3 pos;
   vec3_add(pos, b->pos, move);
   vec3 correction;
-  blob_get_correction_from_solids(correction, bs, pos, BLOB_RADIUS, true);
+  blob_get_correction_from_solids(correction, bs, pos, b->radius);
   if (vec3_len(correction) == 0.0f) {
     vec3_dup(b->pos, pos);
-    vec3_dup(b->prev_pos, pos);
   }
 }
 
@@ -325,8 +350,8 @@ static void insert_into_nodes(BlobOt blob_ot, BlobOtNode *node, vec3 node_pos,
       vec3 child_size;
       vec3_scale(child_size, node_size, 0.5f);
 
-      float dist = dist_cube(child_pos, child_size[0], blob_pos) - BLOB_RADIUS -
-                   BLOB_SMOOTH - BLOB_SDF_MAX_DIST;
+      float dist = dist_cube(child_pos, child_size[0], blob_pos) -
+                   BLOB_MAX_RADIUS - BLOB_SMOOTH - BLOB_SDF_MAX_DIST;
 
       if (dist <= 0.0f) {
         insert_into_nodes(blob_ot, blob_ot + node->indices[i], child_pos,

@@ -13,14 +13,14 @@ layout(location = 3) uniform vec3 cam_pos;
 #define MARCH_STEPS 128
 #define MARCH_INTERSECT 0.001
 #define MARCH_MAX_DIST 40.0
-#define MARCH_NORM_STEP 0.2
+#define MARCH_NORM_STEP 0.01
 
 #define BG_COLOR 0.3, 0.3, 0.3
 #define BRIGHTNESS 0.2
 
 // Figure out the normal with a gradient
 vec3 get_normal_at(vec3 p) {
-  const vec3 small_step = vec3(MARCH_NORM_STEP / vec3(BLOB_SDF_SIZE).x, 0.0, 0.0);
+  const vec3 small_step = vec3(MARCH_NORM_STEP, 0.0, 0.0);
   vec3 uvw = (p - vec3(BLOB_SDF_START)) / vec3(BLOB_SDF_SIZE);
 
   float gradient_x = texture(sdf_tex, uvw + small_step.xyy).a -

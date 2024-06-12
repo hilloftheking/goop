@@ -159,6 +159,19 @@ void blob_renderer_create(BlobRenderer* br) {
                BLOB_SDF_RES, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
   glBindImageTexture(0, br->sdf_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA8);
 
+  glGenTextures(1, &br->sdf_char_tex);
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_3D, br->sdf_char_tex);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA8, BLOB_SDF_RES, BLOB_SDF_RES,
+               BLOB_SDF_RES, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+  glBindImageTexture(0, br->sdf_char_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY,
+                     GL_RGBA8);
+
   br->blobs_ssbo_size_bytes = sizeof(vec4) * BLOB_MAX_COUNT;
   glGenBuffers(1, &br->blobs_ssbo);
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, br->blobs_ssbo);
@@ -175,8 +188,6 @@ void blob_renderer_create(BlobRenderer* br) {
 
   br->blob_ot = blob_ot_create();
   br->blobs_lerped = malloc(BLOB_MAX_COUNT * sizeof(*br->blobs_lerped));
-
-  br->compute_whole_sdf_this_frame = true;
 }
 
 void blob_renderer_destroy(BlobRenderer* br) {
@@ -184,81 +195,23 @@ void blob_renderer_destroy(BlobRenderer* br) {
 }
 
 void blob_render(BlobRenderer* br, const BlobSimulation* bs) {
-  // Keep track of the minimum and maximum position of blobs so less of the
-  // SDF has to be updated
-  vec3 area_min = {1000, 1000, 1000};
-  vec3 area_max = {-1000, -1000, -1000};
-
-  float farthest_traveled = 0.0f;
-
   blob_ot_reset(br->blob_ot);
 
   // Loop backwards so that new blobs are prioritized in the octree
   for (int i = bs->blob_count - 1; i >= 0; i--) {
     float *pos_lerp = br->blobs_lerped[i];
-    vec3 traveled;
     for (int x = 0; x < 3; x++) {
       float diff = bs->blobs[i].pos[x] - bs->blobs[i].prev_pos[x];
       float diff_delta =
           diff * (float)((BLOB_TICK_TIME - bs->tick_timer) / BLOB_TICK_TIME);
 
       pos_lerp[x] = bs->blobs[i].prev_pos[x] + diff_delta;
-      traveled[x] = diff_delta;
-
-      if (pos_lerp[x] < area_min[x]) {
-        area_min[x] = pos_lerp[x];
-      }
-      if (pos_lerp[x] > area_max[x]) {
-        area_max[x] = pos_lerp[x];
-      }
     }
 
-    pos_lerp[3] = (float)(bs->blobs[i].type);
+    pos_lerp[3] = (float)(bs->blobs[i].mat_idx);
 
     blob_ot_insert(br->blob_ot, pos_lerp, i);
-
-    float dist = vec3_len(traveled);
-    if (dist > farthest_traveled) {
-      farthest_traveled = dist;
-    }
   }
-
-  /*
-  BlobOtNode *root = blob_ot + 0;
-  for (int i = 0; i < 8; i++) {
-    for (int j = 0; j < 8; j++) {
-      printf("Oct %d.%d blobs: %d\n", i, j,
-             blob_ot[blob_ot[root->indices[i]].indices[j]].leaf_blob_count);
-    }
-  }
-  */
-
-  int num_groups[3] = {0};
-
-  for (int i = 0; i < 3; i++) {
-    area_min[i] =
-        fmaxf(0.0f, floorf(area_min[i] - blob_sdf_start[i] - BLOB_SDF_MAX_DIST -
-                           BLOB_RADIUS - BLOB_SMOOTH - farthest_traveled));
-    area_max[i] = ceilf(area_max[i] - blob_sdf_start[i] + BLOB_SDF_MAX_DIST +
-                        BLOB_RADIUS + BLOB_SMOOTH + farthest_traveled + 1.0f);
-
-    num_groups[i] = (int)ceilf(
-        ((area_max[i] - area_min[i]) * (BLOB_SDF_RES / blob_sdf_size[i])) /
-        (float)BLOB_SDF_LOCAL_GROUPS);
-
-    int max_groups = BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS;
-    if (num_groups[i] < 0) {
-      num_groups[i] = 0;
-    } else if (num_groups[i] > max_groups - area_min[i]) {
-      num_groups[i] = (int)(max_groups - area_min[i]);
-    }
-  }
-
-  /*
-  printf("(%d, %d, %d) : (%d, %d, %d)\n", invocation_offset[0],
-         invocation_offset[1], invocation_offset[2], num_groups[0],
-         num_groups[1], num_groups[2]);
-         */
 
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, br->blobs_ssbo);
   glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, br->blobs_ssbo_size_bytes,
@@ -268,21 +221,36 @@ void blob_render(BlobRenderer* br, const BlobSimulation* bs) {
   glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, br->blob_ot_ssbo_size_bytes,
                   br->blob_ot);
 
+  glBindImageTexture(0, br->sdf_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA8);
   glUseProgram(br->compute_program);
-  // TODO: Additional logic for blob characters is required to do partial SDF
-  br->compute_whole_sdf_this_frame = true;
-  if (br->compute_whole_sdf_this_frame) {
-    //puts("Recalculating SDF...");
-    br->compute_whole_sdf_this_frame = false;
+  glUniform1i(0, -1); // Use the octree
+  glUniform3fv(1, 1, blob_sdf_size);
+  glUniform3fv(2, 1, blob_sdf_start);
+  glDispatchCompute(BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS,
+                    BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS,
+                    BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS);
 
-    glUniform3i(0, 0, 0, 0);
-    glDispatchCompute(BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS,
-                      BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS,
-                      BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS);
-  } else {
-    glUniform3i(0, (int)area_min[0], (int)area_min[1], (int)area_min[2]);
-    glDispatchCompute(num_groups[0], num_groups[1], num_groups[2]);
-  }
+  vec4 blob_char_v4;
+  vec3_dup(blob_char_v4, bs->blob_chars[0].pos);
+  blob_char_v4[3] = bs->blob_chars[0].mat_idx;
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, br->blobs_ssbo);
+  glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(blob_char_v4),
+                  blob_char_v4);
+  glBindImageTexture(0, br->sdf_char_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY,
+                     GL_RGBA8);
+  glUniform1i(0, bs->blob_char_count);
+  vec3 size = {2, 2, 2};
+  glUniform3fv(1, 1, size);
+  vec3 start_pos;
+  vec3_scale(start_pos, size, 0.5f);
+  vec3_sub(start_pos, blob_char_v4, start_pos);
+  glUniform3fv(2, 1, start_pos);
+  glDispatchCompute(BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS,
+                    BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS,
+                    BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS);
+
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_3D, br->sdf_tex);
 
   glUseProgram(br->raymarch_program);
 

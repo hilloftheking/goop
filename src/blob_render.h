@@ -9,7 +9,7 @@ typedef BlobOtNode *BlobOt;
 
 typedef struct BlobRenderer {
   unsigned int vao, vbo, ibo, raymarch_program, compute_program, sdf_tex,
-      blobs_ssbo, blob_ot_ssbo;
+      sdf_char_tex, blobs_ssbo, blob_ot_ssbo;
   int blobs_ssbo_size_bytes, blob_ot_ssbo_size_bytes;
 
   mat4x4 cam_trans;
@@ -17,9 +17,6 @@ typedef struct BlobRenderer {
 
   BlobOt blob_ot;
   vec4 *blobs_lerped;
-
-  // If true, then recalculate the entire SDF image this frame
-  bool compute_whole_sdf_this_frame;
 } BlobRenderer;
 
 typedef struct BlobSimulation BlobSimulation;

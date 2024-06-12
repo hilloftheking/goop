@@ -59,10 +59,6 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action,
   case GLFW_KEY_P:
     blob_sim_running ^= true;
     break;
-  case GLFW_KEY_R:
-    if (cb_data.br)
-      cb_data.br->compute_whole_sdf_this_frame = true;
-    break;
   case GLFW_KEY_V:
     vsync_enabled ^= true;
     glfwSwapInterval((int)vsync_enabled);
@@ -126,8 +122,7 @@ int main() {
   BlobSimulation blob_simulation;
   blob_simulation_create(&blob_simulation);
 
-  blob_create(&blob_simulation, (vec3){0, 3, -5}, BLOB_CHAR);
-  Blob *blob_char = &blob_simulation.blobs[BLOB_START_COUNT];
+  BlobChar *blob_char = blob_char_create(&blob_simulation, 0.5f, (vec3){0, 3, -5}, 2);
 
   BlobRenderer blob_renderer;
   blob_renderer_create(&blob_renderer);
@@ -191,7 +186,7 @@ int main() {
       vec3 pos;
       vec3_scale(pos, cam_trans[2], -4.0f);
       vec3_add(pos, pos, cam_trans[3]);
-      blob_create(&blob_simulation, pos, BLOB_LIQUID);
+      blob_create(&blob_simulation, BLOB_LIQUID, 0.5f, pos, BLOB_LIQUID);
     }
 
     // Simulate blobs

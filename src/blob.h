@@ -8,6 +8,7 @@
 
 #define BLOB_START_COUNT 128
 #define BLOB_MAX_COUNT 1024
+#define BLOB_CHAR_MAX_COUNT 64
 #define BLOB_DESIRED_DISTANCE 0.4f
 #define BLOB_FALL_SPEED 0.5f
 
@@ -24,20 +25,31 @@
 
 #define BLOB_SPAWN_CD 0.05
 
-typedef enum BlobType { BLOB_LIQUID, BLOB_SOLID, BLOB_CHAR } BlobType;
+typedef enum BlobType { BLOB_LIQUID = 0, BLOB_SOLID = 1 } BlobType;
 
 typedef struct Blob {
+  BlobType type;
+  float radius;
   vec3 pos;
   vec3 prev_pos; // For interpolation
-  BlobType type;
+  int mat_idx;
   union {
     int liquid_sleep_ticks;
   };
 } Blob;
 
+// A blob that is moved manually
+typedef struct BlobChar {
+  float radius;
+  vec3 pos;
+  int mat_idx;
+} BlobChar;
+
 typedef struct BlobSimulation {
   int blob_count;
   Blob *blobs;
+  int blob_char_count;
+  BlobChar *blob_chars;
   double tick_timer;
 } BlobSimulation;
 
@@ -70,7 +82,12 @@ float blob_get_support_with(Blob *b, Blob *other);
 bool blob_is_solid(Blob *b);
 
 // Creates a blob if possible and adds it to the simulation
-void blob_create(BlobSimulation *bs, const vec3 pos, BlobType type);
+Blob *blob_create(BlobSimulation *bs, BlobType type, float radius,
+                 const vec3 pos, int mat_idx);
+
+// Creates a blob character if possible and adds it to the simulation
+BlobChar *blob_char_create(BlobSimulation *bs, float radius, const vec3 pos,
+                           int mat_idx);
 
 void blob_simulation_create(BlobSimulation *bs);
 void blob_simulation_destroy(BlobSimulation *bs);
@@ -79,11 +96,10 @@ void blob_simulate(BlobSimulation *bs, double delta);
 
 // Returns correction vector to separate a blob at pos from solids
 void blob_get_correction_from_solids(vec3 correction, BlobSimulation *bs,
-                                     const vec3 pos, float radius,
-                                     bool ignore_chars);
+                                     const vec3 pos, float radius);
 
 // Attempts to move a blob character and does correction against solids
-void blob_char_move(BlobSimulation *bs, Blob *b, vec3 move);
+void blob_char_move(BlobSimulation *bs, BlobChar *b, vec3 move);
 
 // Returns how many bytes are needed to fit the worst case octree
 int blob_ot_get_alloc_size();
