@@ -208,7 +208,9 @@ void blob_render(BlobRenderer* br, const BlobSimulation* bs) {
       pos_lerp[x] = bs->blobs[i].prev_pos[x] + diff_delta;
     }
 
-    pos_lerp[3] = (float)(bs->blobs[i].mat_idx);
+    pos_lerp[3] =
+        (float)((int)(bs->blobs[i].radius * BLOB_RADIUS_MULT) * BLOB_MAT_COUNT +
+                bs->blobs[i].mat_idx);
 
     blob_ot_insert(br->blob_ot, pos_lerp, i);
   }
@@ -230,20 +232,23 @@ void blob_render(BlobRenderer* br, const BlobSimulation* bs) {
                     BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS,
                     BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS);
 
-  vec4 blob_char_v4;
-  vec3_dup(blob_char_v4, bs->blob_chars[0].pos);
-  blob_char_v4[3] = bs->blob_chars[0].mat_idx;
+  vec4 blob_char_v4[BLOB_CHAR_MAX_COUNT];
+  for (int i = 0; i < bs->blob_char_count; i++) {
+    vec3_dup(blob_char_v4[i], bs->blob_chars[i].pos);
+    blob_char_v4[i][3] =
+        (float)((int)(bs->blob_chars[i].radius * BLOB_RADIUS_MULT) *
+                    BLOB_MAT_COUNT +
+                bs->blob_chars[i].mat_idx);
+  }
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, br->blobs_ssbo);
   glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(blob_char_v4),
                   blob_char_v4);
   glBindImageTexture(0, br->sdf_char_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY,
                      GL_RGBA8);
   glUniform1i(0, bs->blob_char_count);
-  vec3 size = {2, 2, 2};
+  vec3 size = {6, 6, 6};
   glUniform3fv(1, 1, size);
-  vec3 start_pos;
-  vec3_scale(start_pos, size, 0.5f);
-  vec3_sub(start_pos, blob_char_v4, start_pos);
+  vec3 start_pos = {-3, 0, -3};
   glUniform3fv(2, 1, start_pos);
   glDispatchCompute(BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS,
                     BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS,
@@ -283,7 +288,8 @@ void blob_render(BlobRenderer* br, const BlobSimulation* bs) {
   glBindTexture(GL_TEXTURE_3D, br->sdf_char_tex);
   mat4x4_identity(model_mat);
   mat4x4_scale(model_mat, model_mat, size[0]);
-  vec3_dup(model_mat[3], blob_char_v4);
+  vec3_scale(model_mat[3], size, 0.5f);
+  vec3_add(model_mat[3], model_mat[3], start_pos);
   model_mat[3][3] = 1.0f;
   glUniformMatrix4fv(0, 1, GL_FALSE, model_mat[0]);
   glUniform1f(4, 1.0f / size[0]);

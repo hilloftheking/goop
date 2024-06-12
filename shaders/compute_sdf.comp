@@ -18,7 +18,7 @@ layout(location = 0) uniform int blob_count; // If this is -1, an octree is used
 layout(location = 1) uniform vec3 sdf_size;
 layout(location = 2) uniform vec3 sdf_start;
 
-vec3 colors[] = {
+vec3 colors[BLOB_MAT_COUNT] = {
   vec3(BLOB_COL_LIQUID),
   vec3(BLOB_COL_SOLID),
   vec3(0.850, 0.767, 0.136), // yellow
@@ -102,16 +102,19 @@ void main() {
       blob = blobs[i];
     }
 
-    float d = dist_sphere(blob.xyz, BLOB_MAX_RADIUS, p); // TODO: use the actual radius
+    int mat_idx = int(blob.a) % BLOB_MAT_COUNT;
+    float radius = (int(blob.a) / BLOB_MAT_COUNT) / float(BLOB_RADIUS_MULT);
+
+    float d = dist_sphere(blob.xyz, radius, p);
     float old_val = value;
     value = smin(value, d, BLOB_SMOOTH);
 
     float diff = old_val - value;
-    color = mix(color, colors[int(blob.a)], clamp(diff / BLOB_COLOR_BLEND, 0.0, 1.0));
+    color = mix(color, colors[mat_idx], clamp(diff / BLOB_COLOR_BLEND, 0.0, 1.0));
   }
 
   value = clamp(value, -0.5, BLOB_SDF_MAX_DIST);
 
   imageStore(img_output, ivec3(gl_GlobalInvocationID.xyz),
-             vec4(color, (value + 0.5) / (BLOB_SDF_MAX_DIST + 0.5)));
+             vec4(color, 1.0 - (value + 0.5) / (BLOB_SDF_MAX_DIST + 0.5)));
 }
