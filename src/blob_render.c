@@ -269,13 +269,24 @@ void blob_render(BlobRenderer* br, const BlobSimulation* bs) {
   mat4x4_perspective(proj_mat, 60.0f * (3.14159f / 180.0f), br->aspect_ratio,
                      0.1f, 100.0f);
 
+  glBindVertexArray(br->vao);
+  glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
   glUniformMatrix4fv(0, 1, GL_FALSE, model_mat[0]);
   glUniformMatrix4fv(1, 1, GL_FALSE, view_mat[0]);
   glUniformMatrix4fv(2, 1, GL_FALSE, proj_mat[0]);
   glUniform3fv(3, 1, br->cam_trans[3]);
+  glUniform1f(4, 1.0f / blob_sdf_size[0]);
+  glDrawElements(GL_TRIANGLES, sizeof(cube_indices) / sizeof(*cube_indices),
+                 GL_UNSIGNED_BYTE, NULL);
 
-  glBindVertexArray(br->vao);
-  glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+  glBindTexture(GL_TEXTURE_3D, br->sdf_char_tex);
+  mat4x4_identity(model_mat);
+  mat4x4_scale(model_mat, model_mat, size[0]);
+  vec3_dup(model_mat[3], blob_char_v4);
+  model_mat[3][3] = 1.0f;
+  glUniformMatrix4fv(0, 1, GL_FALSE, model_mat[0]);
+  glUniform1f(4, 1.0f / size[0]);
   glDrawElements(GL_TRIANGLES, sizeof(cube_indices) / sizeof(*cube_indices),
                  GL_UNSIGNED_BYTE, NULL);
 }

@@ -2,26 +2,27 @@
 
 #include "../src/blob_defines.h"
 
-layout(location = 0) in vec3 world_pos;
+layout(location = 0) in vec3 local_pos;
 
 layout(location = 0) out vec4 out_color;
 
 layout(binding = 0) uniform sampler3D sdf_tex;
 
+layout(location = 0) uniform mat4 model_mat;
 layout(location = 3) uniform vec3 cam_pos;
+layout(location = 4) uniform float dist_scale;
 
 #define MARCH_STEPS 128
 #define MARCH_INTERSECT 0.001
 #define MARCH_MAX_DIST 40.0
-#define MARCH_NORM_STEP 0.01
+#define MARCH_NORM_STEP 0.2
 
-#define BG_COLOR 0.3, 0.3, 0.3
 #define BRIGHTNESS 0.2
 
 // Figure out the normal with a gradient
 vec3 get_normal_at(vec3 p) {
-  const vec3 small_step = vec3(MARCH_NORM_STEP, 0.0, 0.0);
-  vec3 uvw = (p - vec3(BLOB_SDF_START)) / vec3(BLOB_SDF_SIZE);
+  const vec3 small_step = vec3(MARCH_NORM_STEP * dist_scale, 0.0, 0.0);
+  vec3 uvw = p + vec3(0.5);
 
   float gradient_x = texture(sdf_tex, uvw + small_step.xyy).a -
                      texture(sdf_tex, uvw - small_step.xyy).a;
@@ -45,7 +46,7 @@ vec2 intersect_aabb(vec3 ro, vec3 rd, vec3 bmin, vec3 bmax) {
 
 // Returns color
 vec3 ray_march(vec3 ro, vec3 rd) {
-  vec2 near_far = intersect_aabb(ro, rd, vec3(BLOB_SDF_START), vec3(BLOB_SDF_SIZE) + vec3(BLOB_SDF_START));
+  vec2 near_far = intersect_aabb(ro, rd, vec3(-0.5), vec3(0.5));
   if (near_far[1] < 0.00) {
     return vec3(0.0, 0.0, 0.0);
   }
@@ -55,8 +56,8 @@ vec3 ray_march(vec3 ro, vec3 rd) {
   for (int i = 0; i < MARCH_STEPS; i++) {
     vec3 p = ro + rd * traveled;
 
-    vec4 dat = texture(sdf_tex, (p - vec3(BLOB_SDF_START)) / vec3(BLOB_SDF_SIZE));
-    float dist = (dat.a * (BLOB_SDF_MAX_DIST + 0.5)) - 0.5;
+    vec4 dat = texture(sdf_tex, p + vec3(0.5));
+    float dist = ((dat.a * (BLOB_SDF_MAX_DIST + 0.5)) - 0.5) * dist_scale;
 
     if (dist <= MARCH_INTERSECT) {
       // TODO: Getting the normal is kind of expensive
@@ -83,13 +84,14 @@ vec3 ray_march(vec3 ro, vec3 rd) {
     }
   }
 
-  return vec3(BG_COLOR);
+  discard;
 }
 
 void main() {
-  vec3 ro = cam_pos;
-  vec3 rd = normalize(world_pos - ro);
+  vec3 cam_mdl_pos = (inverse(model_mat) * vec4(cam_pos, 1.0)).xyz;
+
+  vec3 ro = cam_mdl_pos;
+  vec3 rd = normalize(local_pos - ro);
 
   out_color = vec4(ray_march(ro, rd), 1.0);
-  //out_color = texture(sdf_tex, vec3(0.5));
 }
