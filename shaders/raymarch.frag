@@ -9,8 +9,11 @@ layout(location = 0) out vec4 out_color;
 layout(binding = 0) uniform sampler3D sdf_tex;
 
 layout(location = 0) uniform mat4 model_mat;
+layout(location = 1) uniform mat4 view_mat;
+layout(location = 2) uniform mat4 proj_mat;
 layout(location = 3) uniform vec3 cam_pos;
 layout(location = 4) uniform float dist_scale;
+layout(location = 5) uniform float sdf_max_dist;
 
 #define MARCH_STEPS 128
 #define MARCH_INTERSECT 0.001
@@ -34,6 +37,17 @@ vec3 get_normal_at(vec3 p) {
   return -normalize(vec3(gradient_x, gradient_y, gradient_z));
 }
 
+// Returns depth at local position within model
+float get_depth_at(vec3 p) {
+  // Just going to assume this will always be the case
+  const float dnear = 0.0;
+  const float dfar = 1.0;
+
+  vec4 clip_pos = proj_mat * view_mat * model_mat * vec4(p, 1.0);
+  float ndc_depth = clip_pos.z / clip_pos.w;
+  return (((dfar - dnear) * ndc_depth) + dnear + dfar) / 2.0;
+}
+
 vec2 intersect_aabb(vec3 ro, vec3 rd, vec3 bmin, vec3 bmax) {
     vec3 tmin = (bmin - ro) / rd;
     vec3 tmax = (bmax - ro) / rd;
@@ -44,13 +58,9 @@ vec2 intersect_aabb(vec3 ro, vec3 rd, vec3 bmin, vec3 bmax) {
     return vec2(tnear, tfar);
 }
 
-// Returns color
-vec3 ray_march(vec3 ro, vec3 rd) {
+// Returns color and distance. Or it discards the pixel
+vec4 ray_march(vec3 ro, vec3 rd) {
   vec2 near_far = intersect_aabb(ro, rd, vec3(-0.5), vec3(0.5));
-  if (near_far[1] < 0.00) {
-    // This shouldn't happen
-    return vec3(1.0, 0.0, 0.0);
-  }
 
   float traveled = max(0.0, near_far[0]);
 
@@ -58,7 +68,7 @@ vec3 ray_march(vec3 ro, vec3 rd) {
     vec3 p = ro + rd * traveled;
 
     vec4 dat = texture(sdf_tex, p + vec3(0.5));
-    float dist = (((1.0 - dat.a) * (BLOB_SDF_MAX_DIST + 0.5)) - 0.5) * dist_scale;
+    float dist = (((1.0 - dat.a) * (sdf_max_dist - BLOB_SDF_MIN_DIST)) + BLOB_SDF_MIN_DIST) * dist_scale;
 
     if (dist <= MARCH_INTERSECT) {
       // TODO: Getting the normal is kind of expensive
@@ -76,7 +86,9 @@ vec3 ray_march(vec3 ro, vec3 rd) {
       float light1_val =
           mix(max(0.0, dot(normal, light1_dir)), 1.0, BRIGHTNESS);
       
-      return dat.rgb * light0_col * light0_val + dat.rgb * light1_col * light1_val;
+      vec3 color = dat.rgb * light0_col * light0_val + dat.rgb * light1_col * light1_val;
+
+      return vec4(color, traveled);
     }
 
     traveled += dist;
@@ -95,5 +107,8 @@ void main() {
   vec3 ro = cam_mdl_pos;
   vec3 rd = normalize(local_pos - ro);
 
-  out_color = vec4(ray_march(ro, rd), 1.0);
+  vec4 result = ray_march(ro, rd);
+
+  out_color = vec4(result.rgb, 1.0);
+  gl_FragDepth = get_depth_at(ro + rd * result.a);
 }

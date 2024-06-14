@@ -12,11 +12,13 @@ layout(std430, binding = 1) restrict readonly buffer BlobOctree {
   int blob_ot[];
 };
 
-layout(rgba8, binding = 0) writeonly uniform image3D img_output;
+layout(rgba32f, binding = 0) writeonly uniform image3D img_output;
 
 layout(location = 0) uniform int blob_count; // If this is -1, an octree is used
 layout(location = 1) uniform vec3 sdf_size;
 layout(location = 2) uniform vec3 sdf_start;
+layout(location = 3) uniform float sdf_max_dist;
+layout(location = 4) uniform float blob_smooth;
 
 vec3 colors[BLOB_MAT_COUNT] = {
   vec3(BLOB_COL_LIQUID),
@@ -84,6 +86,8 @@ void main() {
   }
 
   float value = 1000.0;
+
+  float color_total_influence = 0.0;
   vec3 color = vec3(0.0);
 
   int count;
@@ -106,15 +110,18 @@ void main() {
     float radius = (int(blob.a) / BLOB_MAT_COUNT) / float(BLOB_RADIUS_MULT);
 
     float d = dist_sphere(blob.xyz, radius, p);
-    float old_val = value;
-    value = smin(value, d, BLOB_SMOOTH);
+    value = smin(value, d, blob_smooth);
 
-    float diff = old_val - value;
-    color = mix(color, colors[mat_idx], clamp(diff / BLOB_COLOR_BLEND, 0.0, 1.0));
+    // TODO: this will break if a bunch of blobs are stacked
+    float color_influence = clamp(blob_smooth - d, 0.0, 1.0);
+    color_influence *= color_influence;
+    color_total_influence += color_influence;
+    color += colors[mat_idx] * color_influence;
   }
 
-  value = clamp(value, -0.5, BLOB_SDF_MAX_DIST);
+  value = clamp(value, BLOB_SDF_MIN_DIST, sdf_max_dist);
+  color /= color_total_influence;
 
   imageStore(img_output, ivec3(gl_GlobalInvocationID.xyz),
-             vec4(color, 1.0 - (value + 0.5) / (BLOB_SDF_MAX_DIST + 0.5)));
+             vec4(color, 1.0 - (value - BLOB_SDF_MIN_DIST) / (sdf_max_dist - BLOB_SDF_MIN_DIST)));
 }

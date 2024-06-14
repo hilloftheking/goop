@@ -75,25 +75,28 @@ static void window_size_callback(GLFWwindow *window, int width, int height) {
   }
 }
 
+static void glfw_fatal_error() {
+  const char *err_desc;
+  glfwGetError(&err_desc);
+  fprintf(stderr, "[GLFW fatal] %s\n", err_desc);
+  glfwTerminate();
+  exit(-1);
+}
+
 int main() {
   if (!glfwInit())
-    return -1;
+    glfw_fatal_error();
 
   // OpenGL 4.3 for compute shaders
 
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+  glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
 
   GLFWwindow *window = glfwCreateWindow(512, 512, "goop", NULL, NULL);
-  if (!window) {
-    const char *err_desc;
-    glfwGetError(&err_desc);
-    fprintf(stderr, "Failed to create window: %s\n", err_desc);
-
-    glfwTerminate();
-    return -1;
-  }
+  if (!window)
+    glfw_fatal_error();
 
   if (glfwRawMouseMotionSupported())
     glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
@@ -119,6 +122,9 @@ int main() {
   glFrontFace(GL_CCW);
   glCullFace(GL_FRONT);
 
+  glEnable(GL_DEPTH_TEST);
+  glDepthRange(0.0, 1.0);
+
   BlobSimulation blob_simulation;
   blob_simulation_create(&blob_simulation);
 
@@ -127,9 +133,9 @@ int main() {
     vec3 pos;
     int mat_idx;
   } duck_data[] = {
-      {0.3f, {0, 2.2f, -1.0f}, 3},    {0.7f, {0, 2.6f, -0.2f}, 2},
+      {0.7f, {0, 2.6f, -0.2f}, 2},    {0.3f, {0, 2.2f, -1.0f}, 3},
       {1.0f, {0, 1.0f, 0}, 2},        {0.8f, {0, 1.0f, 1.2f}, 2},
-      {0.1f, {0.6f, 2.9f, -0.8f}, 4}, {0.1f, {-0.6f, 2.9f, -0.8f}, 4}};
+      {0.1f, {0.5f, 2.9f, -0.6f}, 4}, {0.1f, {-0.5f, 2.9f, -0.6f}, 4}};
 
   BlobChar *duck_head;
   for (int i = 5; i >= 0; i--) {
@@ -167,7 +173,7 @@ int main() {
     }
 
     char win_title[100];
-    snprintf(win_title, sizeof(win_title), "%d fps  -  %lf ms", fps, delta);
+    snprintf(win_title, sizeof(win_title), "%d fps  -  %lf ms", fps, delta * 1000.0);
     glfwSetWindowTitle(window, win_title);
 
     glfwPollEvents();
@@ -228,7 +234,7 @@ int main() {
 
     // Render blobs
 
-    glClear(GL_COLOR_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     blob_render(&blob_renderer, &blob_simulation);
     glfwSwapBuffers(window);
   }

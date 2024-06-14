@@ -157,7 +157,6 @@ void blob_renderer_create(BlobRenderer* br) {
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA8, BLOB_SDF_RES, BLOB_SDF_RES,
                BLOB_SDF_RES, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-  glBindImageTexture(0, br->sdf_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA8);
 
   glGenTextures(1, &br->sdf_char_tex);
   glActiveTexture(GL_TEXTURE0);
@@ -169,8 +168,6 @@ void blob_renderer_create(BlobRenderer* br) {
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA8, BLOB_SDF_RES, BLOB_SDF_RES,
                BLOB_SDF_RES, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-  glBindImageTexture(0, br->sdf_char_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY,
-                     GL_RGBA8);
 
   br->blobs_ssbo_size_bytes = sizeof(vec4) * BLOB_MAX_COUNT;
   glGenBuffers(1, &br->blobs_ssbo);
@@ -228,6 +225,8 @@ void blob_render(BlobRenderer* br, const BlobSimulation* bs) {
   glUniform1i(0, -1); // Use the octree
   glUniform3fv(1, 1, blob_sdf_size);
   glUniform3fv(2, 1, blob_sdf_start);
+  glUniform1f(3, BLOB_SDF_MAX_DIST);
+  glUniform1f(4, BLOB_SMOOTH);
   glDispatchCompute(BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS,
                     BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS,
                     BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS);
@@ -250,6 +249,8 @@ void blob_render(BlobRenderer* br, const BlobSimulation* bs) {
   glUniform3fv(1, 1, size);
   vec3 start_pos = {-3, 0, -3};
   glUniform3fv(2, 1, start_pos);
+  glUniform1f(3, BLOB_CHAR_SDF_MAX_DIST);
+  glUniform1f(4, BLOB_CHAR_SMOOTH);
   glDispatchCompute(BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS,
                     BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS,
                     BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS);
@@ -282,6 +283,7 @@ void blob_render(BlobRenderer* br, const BlobSimulation* bs) {
   glUniformMatrix4fv(2, 1, GL_FALSE, proj_mat[0]);
   glUniform3fv(3, 1, br->cam_trans[3]);
   glUniform1f(4, 1.0f / blob_sdf_size[0]);
+  glUniform1f(5, BLOB_SDF_MAX_DIST);
   glDrawElements(GL_TRIANGLES, sizeof(cube_indices) / sizeof(*cube_indices),
                  GL_UNSIGNED_BYTE, NULL);
 
@@ -293,6 +295,7 @@ void blob_render(BlobRenderer* br, const BlobSimulation* bs) {
   model_mat[3][3] = 1.0f;
   glUniformMatrix4fv(0, 1, GL_FALSE, model_mat[0]);
   glUniform1f(4, 1.0f / size[0]);
+  glUniform1f(5, BLOB_CHAR_SDF_MAX_DIST);
   glDrawElements(GL_TRIANGLES, sizeof(cube_indices) / sizeof(*cube_indices),
                  GL_UNSIGNED_BYTE, NULL);
 }
