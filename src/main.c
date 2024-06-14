@@ -15,6 +15,8 @@
 #include "blob.h"
 #include "blob_render.h"
 
+#define ARR_SIZE(a) (sizeof(a) / sizeof(*a))
+
 static void gl_debug_callback(GLenum source, GLenum type, GLuint id,
                               GLenum severity, GLsizei length,
                               const GLchar *message, const void *user_param) {
@@ -128,19 +130,25 @@ int main() {
   BlobSimulation blob_simulation;
   blob_simulation_create(&blob_simulation);
 
+  // Create duck out of BlobChars
+
   struct {
     float radius;
     vec3 pos;
     int mat_idx;
   } duck_data[] = {
-      {0.7f, {0, 2.6f, -0.2f}, 2},    {0.3f, {0, 2.2f, -1.0f}, 3},
-      {1.0f, {0, 1.0f, 0}, 2},        {0.8f, {0, 1.0f, 1.2f}, 2},
-      {0.1f, {0.5f, 2.9f, -0.6f}, 4}, {0.1f, {-0.5f, 2.9f, -0.6f}, 4}};
+      {0.35f, {0, 1.3f, -0.1f}, 2},    {0.15f, {0, 1.1f, -0.5f}, 3},
+      {0.5f, {0, 0.5f, 0}, 2},        {0.4f, {0, 0.5f, 0.4f}, 2},
+      {0.05f, {0.25f, 1.45f, -0.3f}, 4}, {0.05f, {-0.25f, 1.45f, -0.3f}, 4}};
 
-  BlobChar *duck_head;
-  for (int i = 5; i >= 0; i--) {
-    duck_head = blob_char_create(&blob_simulation, duck_data[i].radius,
-                                 duck_data[i].pos, duck_data[i].mat_idx);
+  BlobChar *duck_blobs[ARR_SIZE(duck_data)];
+  vec4 duck_offsets[ARR_SIZE(duck_data)];
+
+  for (int i = ARR_SIZE(duck_data) - 1; i >= 0; i--) {
+    duck_blobs[i] = blob_char_create(&blob_simulation, duck_data[i].radius,
+                                     duck_data[i].pos, duck_data[i].mat_idx);
+    vec3_sub(duck_offsets[i], duck_data[i].pos, duck_data[0].pos);
+    duck_offsets[i][3] = 0.0f;
   }
 
   BlobRenderer blob_renderer;
@@ -190,7 +198,7 @@ int main() {
     mat4x4_rotate_X(cam_trans, cam_trans, cam_rot[0]);
 
     vec3_scale(cam_trans[3], cam_trans[2], 5.0f);
-    vec3_add(cam_trans[3], cam_trans[3], duck_head->pos);
+    vec3_add(cam_trans[3], cam_trans[3], duck_blobs[0]->pos);
 
     // Hold space to spawn more blobs
 
@@ -213,8 +221,7 @@ int main() {
     if (blob_sim_running)
       blob_simulate(&blob_simulation, delta);
 
-    /*
-    // Blob character that can be moved
+    // Move duck with WASD
 
     bool w_press = glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS;
     bool s_press = glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS;
@@ -223,14 +230,45 @@ int main() {
     vec4 dir = {0};
     dir[0] = (float)(d_press - a_press);
     dir[2] = (float)(s_press - w_press);
-    vec4_norm(dir, dir);
-    vec4_scale(dir, dir, PLR_SPEED * (float)delta);
+    if (dir[0] || dir[2]) {
+      vec4_norm(dir, dir);
+      vec4_scale(dir, dir, PLR_SPEED * (float)delta);
 
-    vec4 rel_move;
-    mat4x4_mul_vec4(rel_move, cam_trans, dir);
+      vec4 rel_move;
+      mat4x4_mul_vec4(rel_move, cam_trans, dir);
 
-    blob_char_move(&blob_simulation, blob_char, rel_move);
-    */
+      vec3 test_pos;
+      vec3_add(test_pos, duck_blobs[0]->pos, rel_move);
+
+      vec3 correction;
+      blob_get_correction_from_solids(correction, &blob_simulation, test_pos,
+                                      1.0f);
+      if (vec3_len(correction) == 0.0f) {
+        vec3_dup(duck_blobs[0]->pos, test_pos);
+      }
+
+      vec3 forward;
+      vec3_norm(forward, rel_move);
+      vec3_scale(forward, forward, -1.0f);
+
+      vec3 up;
+      vec3_dup(up, cam_trans[1]);
+
+      vec3 right;
+      vec3_mul_cross(right, up, forward);
+
+      mat4x4 rot_mat;
+      mat4x4_identity(rot_mat);
+      vec3_dup(rot_mat[0], right);
+      vec3_dup(rot_mat[1], up);
+      vec3_dup(rot_mat[2], forward);
+
+      for (int i = 0; i < ARR_SIZE(duck_blobs); i++) {
+        vec4 p;
+        mat4x4_mul_vec4(p, rot_mat, duck_offsets[i]);
+        vec3_add(duck_blobs[i]->pos, duck_blobs[0]->pos, p);
+      }
+    }
 
     // Render blobs
 

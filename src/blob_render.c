@@ -232,23 +232,43 @@ void blob_render(BlobRenderer* br, const BlobSimulation* bs) {
                     BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS);
 
   vec4 blob_char_v4[BLOB_CHAR_MAX_COUNT];
+  vec3 blob_char_min = {100, 100, 100};
+  vec3 blob_char_max = {-100, -100, -100};
   for (int i = 0; i < bs->blob_char_count; i++) {
-    vec3_dup(blob_char_v4[i], bs->blob_chars[i].pos);
+    BlobChar *b = &bs->blob_chars[i];
+
+    vec3_dup(blob_char_v4[i], b->pos);
     blob_char_v4[i][3] =
-        (float)((int)(bs->blob_chars[i].radius * BLOB_RADIUS_MULT) *
-                    BLOB_MAT_COUNT +
-                bs->blob_chars[i].mat_idx);
+        (float)((int)(b->radius * BLOB_RADIUS_MULT) * BLOB_MAT_COUNT +
+                b->mat_idx);
+
+    for (int x = 0; x < 3; x++) {
+      float c = b->pos[x];
+      if (c - b->radius - BLOB_CHAR_SMOOTH < blob_char_min[x]) {
+        blob_char_min[x] = c - b->radius - BLOB_CHAR_SMOOTH;
+      }
+      if (c + b->radius + BLOB_CHAR_SMOOTH > blob_char_max[x]) {
+        blob_char_max[x] = c + b->radius + BLOB_CHAR_SMOOTH;
+      }
+    }
   }
+  vec3 blob_char_size_v3;
+  vec3_sub(blob_char_size_v3, blob_char_max, blob_char_min);
+  float blob_char_size = blob_char_size_v3[0];
+  for (int i = 1; i < 3; i++) {
+    if (blob_char_size_v3[i] > blob_char_size) {
+      blob_char_size = blob_char_size_v3[i];
+    }
+  }
+
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, br->blobs_ssbo);
   glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(blob_char_v4),
                   blob_char_v4);
   glBindImageTexture(0, br->sdf_char_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY,
                      GL_RGBA8);
   glUniform1i(0, bs->blob_char_count);
-  vec3 size = {6, 6, 6};
-  glUniform3fv(1, 1, size);
-  vec3 start_pos = {-3, 0, -3};
-  glUniform3fv(2, 1, start_pos);
+  glUniform3fv(1, 1, (vec3){blob_char_size, blob_char_size, blob_char_size});
+  glUniform3fv(2, 1, blob_char_min);
   glUniform1f(3, BLOB_CHAR_SDF_MAX_DIST);
   glUniform1f(4, BLOB_CHAR_SMOOTH);
   glDispatchCompute(BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUPS,
@@ -289,12 +309,13 @@ void blob_render(BlobRenderer* br, const BlobSimulation* bs) {
 
   glBindTexture(GL_TEXTURE_3D, br->sdf_char_tex);
   mat4x4_identity(model_mat);
-  mat4x4_scale(model_mat, model_mat, size[0]);
-  vec3_scale(model_mat[3], size, 0.5f);
-  vec3_add(model_mat[3], model_mat[3], start_pos);
+  mat4x4_scale(model_mat, model_mat, blob_char_size);
+  vec3_scale(model_mat[3],
+             (vec3){blob_char_size, blob_char_size, blob_char_size}, 0.5f);
+  vec3_add(model_mat[3], model_mat[3], blob_char_min);
   model_mat[3][3] = 1.0f;
   glUniformMatrix4fv(0, 1, GL_FALSE, model_mat[0]);
-  glUniform1f(4, 1.0f / size[0]);
+  glUniform1f(4, 1.0f / blob_char_size);
   glUniform1f(5, BLOB_CHAR_SDF_MAX_DIST);
   glDrawElements(GL_TRIANGLES, sizeof(cube_indices) / sizeof(*cube_indices),
                  GL_UNSIGNED_BYTE, NULL);
