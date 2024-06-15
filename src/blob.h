@@ -96,10 +96,8 @@ void blob_simulate(BlobSimulation *bs, double delta);
 
 // Returns correction vector to separate a blob at pos from solids
 void blob_get_correction_from_solids(vec3 correction, BlobSimulation *bs,
-                                     const vec3 pos, float radius);
-
-// Attempts to move a blob character and does correction against solids
-void blob_char_move(BlobSimulation *bs, BlobChar *b, vec3 move);
+                                     const vec3 pos, float radius,
+                                     bool check_chars);
 
 // Returns how many bytes are needed to fit the worst case octree
 int blob_ot_get_alloc_size();

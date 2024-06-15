@@ -211,9 +211,10 @@ int main() {
       blob_spawn_cd = BLOB_SPAWN_CD;
 
       vec3 pos;
-      vec3_scale(pos, cam_trans[2], -4.0f);
+      vec3_scale(pos, cam_trans[2], -5.0f);
       vec3_add(pos, pos, cam_trans[3]);
-      blob_create(&blob_simulation, BLOB_LIQUID, 0.5f, pos, BLOB_LIQUID);
+      pos[1] += 1.0f;
+      blob_create(&blob_simulation, BLOB_LIQUID, 0.5f, pos, 3);
     }
 
     // Simulate blobs
@@ -242,10 +243,9 @@ int main() {
 
       vec3 correction;
       blob_get_correction_from_solids(correction, &blob_simulation, test_pos,
-                                      1.0f);
-      if (vec3_len(correction) == 0.0f) {
-        vec3_dup(duck_blobs[0]->pos, test_pos);
-      }
+                                      duck_blobs[0]->radius, false);
+
+      vec3_add(duck_blobs[0]->pos, test_pos, correction);
 
       vec3 forward;
       vec3_norm(forward, rel_move);

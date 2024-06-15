@@ -177,7 +177,7 @@ void blob_simulate(BlobSimulation *bs, double delta) {
 
     vec3 correction;
     blob_get_correction_from_solids(correction, bs, bs->blobs[b].pos,
-                                    bs->blobs[b].radius);
+                                    bs->blobs[b].radius, true);
     vec3_add(bs->blobs[b].pos, bs->blobs[b].pos, correction);
 
     vec3_max(bs->blobs[b].pos, bs->blobs[b].pos, blob_min_pos);
@@ -217,55 +217,49 @@ static float dist_sphere(const vec3 c, float r, const vec3 p) {
   return vec3_len(d) - r;
 }
 
+static void blob_check_blob_at(float *min_dist, vec3 correction,
+                               const vec3 bpos, float bradius, const vec3 pos,
+                               float radius) {
+  *min_dist = sminf(*min_dist, dist_sphere(bpos, bradius, pos), BLOB_SMOOTH);
+
+  vec3 dir;
+  vec3_sub(dir, pos, bpos);
+  float influence = fmaxf(0.0f, radius + bradius + BLOB_SMOOTH - vec3_len(dir));
+  vec3_norm(dir, dir);
+  vec3_scale(dir, dir, influence);
+  vec3_add(correction, correction, dir);
+}
+
 void blob_get_correction_from_solids(vec3 correction, BlobSimulation *bs,
-                                     const vec3 pos, float radius) {
-  correction[0] = 0.0f;
-  correction[1] = 0.0f;
-  correction[2] = 0.0f;
+                                     const vec3 pos, float radius, bool check_chars) {
+  vec3_dup(correction, (vec3){0});
 
   float min_dist = 10000.0f;
 
   // Use smin to figure out if this blob is touching smoothed solid blobs
+  // Also check how much each blob should influence the normal
 
   for (int ob = 0; ob < bs->blob_count; ob++) {
     if (bs->blobs[ob].type == BLOB_LIQUID)
       continue;
 
-    min_dist = sminf(min_dist,
-                     dist_sphere(bs->blobs[ob].pos, bs->blobs[ob].radius, pos),
-                     BLOB_SMOOTH);
+    blob_check_blob_at(&min_dist, correction, bs->blobs[ob].pos,
+                       bs->blobs[ob].radius, pos, radius);
+  }
+
+  if (check_chars) {
+    for (int ob = 0; ob < bs->blob_char_count; ob++) {
+      blob_check_blob_at(&min_dist, correction, bs->blob_chars[ob].pos,
+                         bs->blob_chars[ob].radius, pos, radius);
+    }
   }
 
   // Is this blob inside of a solid blob?
   if (min_dist < radius) {
-    // Now we need to figure out the normal of the solid blobs at this point
-    // for the direction to push this blob away
-
-    for (int ob = 0; ob < bs->blob_count; ob++) {
-      if (bs->blobs[ob].type == BLOB_LIQUID)
-        continue;
-
-      vec3 dir;
-      vec3_sub(dir, pos, bs->blobs[ob].pos);
-      float influence = fmaxf(0.0f, radius + bs->blobs[ob].radius +
-                                        BLOB_SMOOTH - vec3_len(dir));
-      vec3_norm(dir, dir);
-      vec3_scale(dir, dir, influence);
-      vec3_add(correction, correction, dir);
-    }
-
     vec3_norm(correction, correction);
     vec3_scale(correction, correction, radius - min_dist);
-  }
-}
-
-void blob_char_move(BlobSimulation *bs, BlobChar *b, vec3 move) {
-  vec3 pos;
-  vec3_add(pos, b->pos, move);
-  vec3 correction;
-  blob_get_correction_from_solids(correction, bs, pos, b->radius);
-  if (vec3_len(correction) == 0.0f) {
-    vec3_dup(b->pos, pos);
+  } else {
+    vec3_dup(correction, (vec3){0});
   }
 }
 
