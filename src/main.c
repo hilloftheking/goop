@@ -95,6 +95,7 @@ int main() {
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
+  glfwWindowHint(GLFW_DEPTH_BITS, 32);
 
   GLFWwindow *window = glfwCreateWindow(512, 512, "goop", NULL, NULL);
   if (!window)

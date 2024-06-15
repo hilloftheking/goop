@@ -58,7 +58,7 @@ vec2 intersect_aabb(vec3 ro, vec3 rd, vec3 bmin, vec3 bmax) {
     return vec2(tnear, tfar);
 }
 
-// Returns color and distance. Or it discards the pixel
+// Returns color and distance. Negative distance means it should be discarded
 vec4 ray_march(vec3 ro, vec3 rd) {
   vec2 near_far = intersect_aabb(ro, rd, vec3(-0.5), vec3(0.5));
 
@@ -98,7 +98,8 @@ vec4 ray_march(vec3 ro, vec3 rd) {
     }
   }
 
-  discard;
+  // Discarding outside of main() seems to not work on intel
+  return vec4(0, 0, 0, -1);
 }
 
 void main() {
@@ -108,6 +109,8 @@ void main() {
   vec3 rd = normalize(local_pos - ro);
 
   vec4 result = ray_march(ro, rd);
+  if (result.a < 0.0)
+    discard;
 
   out_color = vec4(result.rgb, 1.0);
   gl_FragDepth = get_depth_at(ro + rd * result.a);

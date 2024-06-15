@@ -157,6 +157,7 @@ void blob_renderer_create(BlobRenderer* br) {
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA8, BLOB_SDF_RES, BLOB_SDF_RES,
                BLOB_SDF_RES, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+  glBindImageTexture(0, br->sdf_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA8);
 
   glGenTextures(1, &br->sdf_char_tex);
   glActiveTexture(GL_TEXTURE0);
@@ -168,6 +169,7 @@ void blob_renderer_create(BlobRenderer* br) {
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA8, BLOB_SDF_RES, BLOB_SDF_RES,
                BLOB_SDF_RES, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+  glBindImageTexture(0, br->sdf_char_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA8);
 
   br->blobs_ssbo_size_bytes = sizeof(vec4) * BLOB_MAX_COUNT;
   glGenBuffers(1, &br->blobs_ssbo);
