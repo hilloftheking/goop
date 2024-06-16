@@ -2,7 +2,7 @@
 
 #include "../src/blob_defines.h"
 
-layout(local_size_x = BLOB_SDF_LOCAL_GROUPS, local_size_y = BLOB_SDF_LOCAL_GROUPS, local_size_z = BLOB_SDF_LOCAL_GROUPS) in;
+layout(local_size_x = BLOB_SDF_LOCAL_GROUP_COUNT, local_size_y = BLOB_SDF_LOCAL_GROUP_COUNT, local_size_z = BLOB_SDF_LOCAL_GROUP_COUNT) in;
 
 layout(std430, binding = 0) restrict readonly buffer Blobs {
   vec4 blobs[];
@@ -15,14 +15,14 @@ layout(std430, binding = 1) restrict readonly buffer BlobOctree {
 layout(rgba8, binding = 0) writeonly uniform image3D img_output;
 
 layout(location = 0) uniform int blob_count; // If this is -1, an octree is used
-layout(location = 1) uniform vec3 sdf_size;
-layout(location = 2) uniform vec3 sdf_start;
+layout(location = 1) uniform vec3 sdf_pos;
+layout(location = 2) uniform float sdf_size;
 layout(location = 3) uniform float sdf_max_dist;
 layout(location = 4) uniform float blob_smooth;
 
 vec3 colors[BLOB_MAT_COUNT] = {
-  vec3(BLOB_COL_LIQUID),
-  vec3(BLOB_COL_SOLID),
+  vec3(0.41, 0.04, 0.06), // liquid: red
+  vec3(0.8, 0.8, 0.7), // solid: white
   vec3(0.850, 0.767, 0.136), // yellow
   vec3(0.940, 0.561, 0.0658), // orange
   vec3(0.150, 0.0850, 0.00) // black
@@ -47,7 +47,7 @@ void main() {
 
   vec3 p =
       (vec3(gl_GlobalInvocationID) + vec3(0.5)) * (sdf_size / BLOB_SDF_RES) +
-      sdf_start;
+      sdf_pos - vec3(sdf_size) * 0.5;
   
   const vec3 ot_quadrants[8] = {vec3(0.5f, 0.5f, 0.5f),   vec3(0.5f, 0.5f, -0.5f),
                                vec3(0.5f, -0.5f, 0.5f),  vec3(0.5f, -0.5f, -0.5f),
@@ -58,8 +58,8 @@ void main() {
   float node_size;
   int node_idx, node_leaf_blob_count;
   if (use_octree) {
-    node_pos = sdf_start + sdf_size * 0.5;
-    node_size = sdf_size.x;
+    node_pos = sdf_pos;
+    node_size = sdf_size;
     node_idx = 0;
     node_leaf_blob_count = blob_ot[node_idx];
     while (node_leaf_blob_count == -1) {

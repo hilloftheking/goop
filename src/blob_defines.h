@@ -11,16 +11,10 @@
 #define BLOB_MAT_COUNT 5
 #define BLOB_RADIUS_MULT 10000.0f
 
-#define BLOB_COL_LIQUID 0.41f, 0.04f, 0.06f
-#define BLOB_COL_SOLID 0.8f, 0.8f, 0.7f
-
 #define BLOB_SDF_RES 128
-#define BLOB_SDF_LOCAL_GROUPS 4
+#define BLOB_SDF_LOCAL_GROUP_COUNT 4
 #define BLOB_SDF_MAX_DIST 2.0f
-#define BLOB_CHAR_SDF_MAX_DIST 2.0f
+#define MODEL_BLOB_SDF_MAX_DIST 2.0f
 #define BLOB_SDF_MIN_DIST -0.25f
-
-#define BLOB_SDF_SIZE 16.0f, 16.0f, 16.0f
-#define BLOB_SDF_START -8.0f, 0.0f, -8.0f
 
 #endif

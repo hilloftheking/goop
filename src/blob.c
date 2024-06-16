@@ -79,19 +79,19 @@ Blob *blob_create(BlobSimulation *bs, BlobType type, float radius,
   return b;
 }
 
-BlobChar* blob_char_create(BlobSimulation* bs, float radius, const vec3 pos,
-    int mat_idx) {
-  if (bs->blob_char_count >= BLOB_CHAR_MAX_COUNT) {
-    fprintf(stderr, "Blob character max count reached\n");
+ModelBlob *model_blob_create(BlobSimulation *bs, float radius, const vec3 pos,
+                             int mat_idx) {
+  if (bs->model_blob_count >= MODEL_BLOB_MAX_COUNT) {
+    fprintf(stderr, "Model blob max count reached\n");
     return NULL;
   }
 
-  BlobChar *b = &bs->blob_chars[bs->blob_char_count];
+  ModelBlob *b = &bs->model_blobs[bs->model_blob_count];
   b->radius = radius;
   vec3_dup(b->pos, pos);
   b->mat_idx = mat_idx;
 
-  bs->blob_char_count++;
+  bs->model_blob_count++;
 
   return b;
 }
@@ -101,8 +101,8 @@ static float rand_float() { return ((float)rand() / (float)(RAND_MAX)); }
 void blob_simulation_create(BlobSimulation *bs) {
   bs->blob_count = 0;
   bs->blobs = malloc(BLOB_MAX_COUNT * sizeof(*bs->blobs));
-  bs->blob_char_count = 0;
-  bs->blob_chars = malloc(BLOB_CHAR_MAX_COUNT * sizeof(*bs->blob_chars));
+  bs->model_blob_count = 0;
+  bs->model_blobs = malloc(MODEL_BLOB_MAX_COUNT * sizeof(*bs->model_blobs));
   bs->tick_timer = 0.0;
 
   for (int i = 0; i < BLOB_START_COUNT; i++) {
@@ -118,9 +118,9 @@ void blob_simulation_destroy(BlobSimulation *bs) {
   free(bs->blobs);
   bs->blobs = NULL;
 
-  bs->blob_char_count = 0;
-  free(bs->blob_chars);
-  bs->blob_chars = NULL;
+  bs->model_blob_count = 0;
+  free(bs->model_blobs);
+  bs->model_blobs = NULL;
 
   bs->tick_timer = 0.0;
 }
@@ -180,8 +180,12 @@ void blob_simulate(BlobSimulation *bs, double delta) {
                                     bs->blobs[b].radius, true);
     vec3_add(bs->blobs[b].pos, bs->blobs[b].pos, correction);
 
-    vec3_max(bs->blobs[b].pos, bs->blobs[b].pos, blob_min_pos);
-    vec3_min(bs->blobs[b].pos, bs->blobs[b].pos, blob_max_pos);
+    for (int x = 0; x < 3; x++) {
+      bs->blobs[b].pos[x] =
+          fmaxf(bs->blobs[b].pos[x], BLOB_SIM_POS[x] - BLOB_SIM_SIZE * 0.5f);
+      bs->blobs[b].pos[x] =
+          fminf(bs->blobs[b].pos[x], BLOB_SIM_POS[x] + BLOB_SIM_SIZE * 0.5f);
+    }
 
 #ifdef BLOB_SLEEP_ENABLED
     if (!blob_is_solid(&bs->blobs[b])) {
@@ -231,7 +235,8 @@ static void blob_check_blob_at(float *min_dist, vec3 correction,
 }
 
 void blob_get_correction_from_solids(vec3 correction, BlobSimulation *bs,
-                                     const vec3 pos, float radius, bool check_chars) {
+                                     const vec3 pos, float radius,
+                                     bool check_models) {
   vec3_dup(correction, (vec3){0});
 
   float min_dist = 10000.0f;
@@ -247,10 +252,10 @@ void blob_get_correction_from_solids(vec3 correction, BlobSimulation *bs,
                        bs->blobs[ob].radius, pos, radius);
   }
 
-  if (check_chars) {
-    for (int ob = 0; ob < bs->blob_char_count; ob++) {
-      blob_check_blob_at(&min_dist, correction, bs->blob_chars[ob].pos,
-                         bs->blob_chars[ob].radius, pos, radius);
+  if (check_models) {
+    for (int ob = 0; ob < bs->model_blob_count; ob++) {
+      blob_check_blob_at(&min_dist, correction, bs->model_blobs[ob].pos,
+                         bs->model_blobs[ob].radius, pos, radius);
     }
   }
 
@@ -332,19 +337,19 @@ static float dist_cube(vec3 c, float s, vec3 p) {
   return vec3_len(d);
 }
 
-static void insert_into_nodes(BlobOt blob_ot, BlobOtNode *node, vec3 node_pos,
-                              vec3 node_size, vec3 blob_pos, int blob_idx) {
+static void insert_into_nodes(BlobOt blob_ot, BlobOtNode *node,
+                              const vec3 node_pos, float node_size,
+                              const vec3 blob_pos, int blob_idx) {
   if (node->leaf_blob_count == -1) {
     // This node has child nodes
     for (int i = 0; i < 8; i++) {
       vec3 child_pos;
-      vec3_mul(child_pos, node_size, ot_quadrants[i]);
+      vec3_scale(child_pos, ot_quadrants[i], node_size);
       vec3_scale(child_pos, child_pos, 0.5f);
       vec3_add(child_pos, node_pos, child_pos);
-      vec3 child_size;
-      vec3_scale(child_size, node_size, 0.5f);
+      float child_size = node_size * 0.5f;
 
-      float dist = dist_cube(child_pos, child_size[0], blob_pos) -
+      float dist = dist_cube(child_pos, child_size, blob_pos) -
                    BLOB_MAX_RADIUS - BLOB_SMOOTH - BLOB_SDF_MAX_DIST;
 
       if (dist <= 0.0f) {
@@ -369,9 +374,6 @@ static void insert_into_nodes(BlobOt blob_ot, BlobOtNode *node, vec3 node_pos,
 
 void blob_ot_insert(BlobOt blob_ot, vec3 blob_pos, int blob_idx) {
   BlobOtNode *root = blob_ot + 0;
-  vec3 root_pos = {BLOB_SDF_SIZE};
-  vec3_scale(root_pos, root_pos, 0.5f);
-  vec3_add(root_pos, root_pos, blob_sdf_start);
-  vec3 root_size = {BLOB_SDF_SIZE};
-  insert_into_nodes(blob_ot, root, root_pos, root_size, blob_pos, blob_idx);
+  insert_into_nodes(blob_ot, root, BLOB_SIM_POS, BLOB_SIM_SIZE, blob_pos,
+                    blob_idx);
 }

@@ -8,14 +8,14 @@
 
 #define BLOB_START_COUNT 128
 #define BLOB_MAX_COUNT 1024
-#define BLOB_CHAR_MAX_COUNT 64
+#define MODEL_BLOB_MAX_COUNT 64
 #define BLOB_DESIRED_DISTANCE 0.4f
 #define BLOB_FALL_SPEED 0.5f
 
 #define BLOB_TICK_TIME 0.1
 
 // TODO: Wake up sleeping blobs when blob character is near
-//#define BLOB_SLEEP_ENABLED
+// #define BLOB_SLEEP_ENABLED
 
 // How many ticks until a blob can go to sleep
 #define BLOB_SLEEP_TICKS_REQUIRED 10
@@ -38,18 +38,18 @@ typedef struct Blob {
   };
 } Blob;
 
-// A blob that is moved manually
-typedef struct BlobChar {
+// A blob that belongs to a model
+typedef struct ModelBlob {
   float radius;
   vec3 pos;
   int mat_idx;
-} BlobChar;
+} ModelBlob;
 
 typedef struct BlobSimulation {
   int blob_count;
   Blob *blobs;
-  int blob_char_count;
-  BlobChar *blob_chars;
+  int model_blob_count;
+  ModelBlob *model_blobs;
   double tick_timer;
 } BlobSimulation;
 
@@ -66,11 +66,8 @@ typedef struct BlobOtNode {
 
 typedef BlobOtNode *BlobOt;
 
-static const vec3 blob_min_pos = {-8.0f, 0.0f, -8.0f};
-static const vec3 blob_max_pos = {8.0f, 16.0f, 8.0f};
-
-static const vec3 blob_sdf_size = {BLOB_SDF_SIZE};
-static const vec3 blob_sdf_start = {BLOB_SDF_START};
+static const vec3 BLOB_SIM_POS = {0, 8, 0};
+static const float BLOB_SIM_SIZE = 16.0f;
 
 // How much force is needed to attract b to other
 void blob_get_attraction_to(vec3 r, Blob *b, Blob *other);
@@ -83,11 +80,11 @@ bool blob_is_solid(Blob *b);
 
 // Creates a blob if possible and adds it to the simulation
 Blob *blob_create(BlobSimulation *bs, BlobType type, float radius,
-                 const vec3 pos, int mat_idx);
+                  const vec3 pos, int mat_idx);
 
-// Creates a blob character if possible and adds it to the simulation
-BlobChar *blob_char_create(BlobSimulation *bs, float radius, const vec3 pos,
-                           int mat_idx);
+// Creates a model blob if possible and adds it to the simulation
+ModelBlob *model_blob_create(BlobSimulation *bs, float radius, const vec3 pos,
+                             int mat_idx);
 
 void blob_simulation_create(BlobSimulation *bs);
 void blob_simulation_destroy(BlobSimulation *bs);
@@ -97,7 +94,7 @@ void blob_simulate(BlobSimulation *bs, double delta);
 // Returns correction vector to separate a blob at pos from solids
 void blob_get_correction_from_solids(vec3 correction, BlobSimulation *bs,
                                      const vec3 pos, float radius,
-                                     bool check_chars);
+                                     bool check_models);
 
 // Returns how many bytes are needed to fit the worst case octree
 int blob_ot_get_alloc_size();

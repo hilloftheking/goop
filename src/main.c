@@ -1,10 +1,9 @@
+#include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#define _USE_MATH_DEFINES
-#include <math.h>
 
 #include <glad/glad.h>
 
@@ -120,7 +119,8 @@ int main() {
   glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE,
                         GL_DEBUG_SEVERITY_NOTIFICATION, 0, NULL, GL_FALSE);
 
-  // Only back faces are rendered so that the camera can be inside of a bounding cube
+  // Only back faces are rendered so that the camera can be inside of a bounding
+  // cube
   glEnable(GL_CULL_FACE);
   glFrontFace(GL_CCW);
   glCullFace(GL_FRONT);
@@ -131,23 +131,23 @@ int main() {
   BlobSimulation blob_simulation;
   blob_simulation_create(&blob_simulation);
 
-  // Create duck out of BlobChars
+  // Create duck out of ModelBlobs
 
   struct {
     float radius;
     vec3 pos;
     int mat_idx;
   } duck_data[] = {
-      {0.35f, {0, 1.3f, -0.1f}, 2},    {0.15f, {0, 1.1f, -0.5f}, 3},
-      {0.5f, {0, 0.5f, 0}, 2},        {0.4f, {0, 0.5f, 0.4f}, 2},
+      {0.35f, {0, 1.3f, -0.1f}, 2},      {0.15f, {0, 1.1f, -0.5f}, 3},
+      {0.5f, {0, 0.5f, 0}, 2},           {0.4f, {0, 0.5f, 0.4f}, 2},
       {0.05f, {0.25f, 1.45f, -0.3f}, 4}, {0.05f, {-0.25f, 1.45f, -0.3f}, 4}};
 
-  BlobChar *duck_blobs[ARR_SIZE(duck_data)];
+  ModelBlob *duck_blobs[ARR_SIZE(duck_data)];
   vec4 duck_offsets[ARR_SIZE(duck_data)];
 
   for (int i = ARR_SIZE(duck_data) - 1; i >= 0; i--) {
-    duck_blobs[i] = blob_char_create(&blob_simulation, duck_data[i].radius,
-                                     duck_data[i].pos, duck_data[i].mat_idx);
+    duck_blobs[i] = model_blob_create(&blob_simulation, duck_data[i].radius,
+                                      duck_data[i].pos, duck_data[i].mat_idx);
     vec3_sub(duck_offsets[i], duck_data[i].pos, duck_data[0].pos);
     duck_offsets[i][3] = 0.0f;
   }
@@ -182,7 +182,8 @@ int main() {
     }
 
     char win_title[100];
-    snprintf(win_title, sizeof(win_title), "%d fps  -  %lf ms", fps, delta * 1000.0);
+    snprintf(win_title, sizeof(win_title), "%d fps  -  %lf ms", fps,
+             delta * 1000.0);
     glfwSetWindowTitle(window, win_title);
 
     glfwPollEvents();
@@ -215,7 +216,7 @@ int main() {
       vec3_scale(pos, cam_trans[2], -5.0f);
       vec3_add(pos, pos, cam_trans[3]);
       pos[1] += 1.0f;
-      blob_create(&blob_simulation, BLOB_LIQUID, 0.5f, pos, 3);
+      blob_create(&blob_simulation, BLOB_LIQUID, 0.5f, pos, 2);
     }
 
     // Simulate blobs
@@ -248,21 +249,15 @@ int main() {
 
       vec3_add(duck_blobs[0]->pos, test_pos, correction);
 
-      vec3 forward;
-      vec3_norm(forward, rel_move);
-      vec3_scale(forward, forward, -1.0f);
-
-      vec3 up;
-      vec3_dup(up, cam_trans[1]);
-
-      vec3 right;
-      vec3_mul_cross(right, up, forward);
-
       mat4x4 rot_mat;
       mat4x4_identity(rot_mat);
-      vec3_dup(rot_mat[0], right);
-      vec3_dup(rot_mat[1], up);
-      vec3_dup(rot_mat[2], forward);
+
+      vec3_norm(rot_mat[2], rel_move);
+      vec3_scale(rot_mat[2], rot_mat[2], -1.0f);
+
+      vec3_dup(rot_mat[1], cam_trans[1]);
+
+      vec3_mul_cross(rot_mat[0], rot_mat[1], rot_mat[2]);
 
       for (int i = 0; i < ARR_SIZE(duck_blobs); i++) {
         vec4 p;
