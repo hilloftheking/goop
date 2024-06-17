@@ -9,6 +9,9 @@
 
 #include <GLFW/glfw3.h>
 
+#define VC_EXTRALEAN
+#include <Windows.h>
+
 #include "linmath.h"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -18,6 +21,7 @@
 #include "blob_render.h"
 #include "blob_models.h"
 #include "cube.h"
+#include "resource.h"
 #include "shader.h"
 #include "shader_sources.h"
 
@@ -174,6 +178,9 @@ int main() {
 
   GLuint skybox_tex;
   {
+    const int faces[] = {IDB_BLUECLOUD_RT, IDB_BLUECLOUD_LF, IDB_BLUECLOUD_UP,
+                         IDB_BLUECLOUD_DN, IDB_BLUECLOUD_BK, IDB_BLUECLOUD_FT};
+
     glGenTextures(1, &skybox_tex);
     glBindTexture(GL_TEXTURE_CUBE_MAP, skybox_tex);
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -181,23 +188,29 @@ int main() {
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-    const char prefix[] = "assets/bluecloud_";
-    const char *faces[] = {"rt.jpg", "lf.jpg", "up.jpg",
-                           "dn.jpg", "bk.jpg", "ft.jpg"};
-    for (int i = 0; i < 6; i++) {
-      char path[32];
-      strncpy(path, prefix, sizeof(path));
-      strncat(path, faces[i], sizeof(path) - sizeof(prefix));
+
+    for (int i = 0; i < ARR_SIZE(faces); i++) {
+      HRSRC rsrc = FindResourceA(NULL, MAKEINTRESOURCEA(faces[i]), "JPG");
+      if (!rsrc) {
+        printf("Failed to load image resource %d\n", faces[i]);
+        exit(-1);
+      }
+      DWORD data_size = SizeofResource(NULL, rsrc);
+      HGLOBAL h_data = LoadResource(NULL, rsrc);
+      void *data = LockResource(h_data);
+
       int width, height;
-      stbi_uc *data = stbi_load(path, &width, &height, NULL, 4);
-      if (!data) {
-        printf("Failed to load image %s\n", path);
+      stbi_uc *pixels = stbi_load_from_memory(data, data_size, &width, &height, NULL, 4);
+      if (!pixels) {
+        printf("Failed to parse image resource %d\n", faces[i]);
         exit(-1);
       }
 
       glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA8, width,
-                   height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-      stbi_image_free(data);
+                   height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+      stbi_image_free(pixels);
+
+      FreeResource(h_data);
     }
   }
 

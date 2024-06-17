@@ -40,6 +40,9 @@
     <ClInclude Include="src\shader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\resource.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.c">
@@ -83,5 +86,30 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\embed_shaders.py" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="assets\bluecloud_dn.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\bluecloud_ft.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\bluecloud_lf.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\bluecloud_rt.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\bluecloud_up.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\bluecloud_bk.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="src\resource.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
   </ItemGroup>
 </Project>
