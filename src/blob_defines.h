@@ -15,6 +15,6 @@
 #define BLOB_SDF_LOCAL_GROUP_COUNT 4
 #define BLOB_SDF_MAX_DIST 2.0f
 #define MODEL_BLOB_SDF_MAX_DIST 0.5f
-#define BLOB_SDF_MIN_DIST -0.1f
+#define BLOB_SDF_MIN_DIST -0.2f
 
 #endif

@@ -8,11 +8,14 @@ typedef struct BlobOtNode BlobOtNode;
 typedef BlobOtNode *BlobOt;
 
 typedef struct BlobRenderer {
-  unsigned int vao, vbo, ibo, raymarch_program, compute_program, sdf_tex,
-      sdf_char_tex, blobs_ssbo, blob_ot_ssbo;
+  unsigned int raymarch_program, compute_program, sdf_tex, sdf_char_tex,
+      blobs_ssbo, blob_ot_ssbo;
   int blobs_ssbo_size_bytes, blob_ot_ssbo_size_bytes;
 
   mat4x4 cam_trans;
+  mat4x4 view_mat;
+  mat4x4 proj_mat;
+
   float aspect_ratio;
 
   BlobOt blob_ot;

@@ -7,142 +7,15 @@
 
 #include "blob.h"
 #include "blob_render.h"
+#include "cube.h"
+#include "shader.h"
 #include "shader_sources.h"
 
 // Request dedicated GPU
 __declspec(dllexport) unsigned long NvOptimusEnablement = 1;
 __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 
-static GLuint compile_shader(const char *source, GLenum shader_type) {
-  int size = (int)strlen(source);
-
-  GLuint shader = glCreateShader(shader_type);
-  glShaderSource(shader, 1, &source, &size);
-  glCompileShader(shader);
-
-  int compile_status = 0;
-  glGetShaderiv(shader, GL_COMPILE_STATUS, &compile_status);
-
-  // Compilation failed
-  // TODO: fallback shader
-  if (compile_status == GL_FALSE) {
-    int log_length = 0;
-    glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &log_length);
-
-    char *message = malloc(log_length);
-    glGetShaderInfoLog(shader, log_length, NULL, message);
-
-    fprintf(stderr, "Shader compilation failed: %s\n", message);
-    free(message);
-
-    glDeleteShader(shader);
-    return 0;
-  }
-
-  return shader;
-}
-
-static GLuint create_shader_program(const char *vert_shader_src,
-                                    const char *frag_shader_src) {
-  GLuint vert_shader = compile_shader(vert_shader_src, GL_VERTEX_SHADER);
-  if (!vert_shader) {
-    // TODO: Better error handling
-    return 0;
-  }
-  GLuint frag_shader = compile_shader(frag_shader_src, GL_FRAGMENT_SHADER);
-  if (!frag_shader) {
-    return 0;
-  }
-
-  GLuint shader_program = glCreateProgram();
-  glAttachShader(shader_program, vert_shader);
-  glAttachShader(shader_program, frag_shader);
-  // Shader objects only have to exist for this call
-  glLinkProgram(shader_program);
-
-  glDetachShader(shader_program, vert_shader);
-  glDetachShader(shader_program, frag_shader);
-  glDeleteShader(vert_shader);
-  glDeleteShader(frag_shader);
-
-  int link_status = 0;
-  glGetProgramiv(shader_program, GL_LINK_STATUS, &link_status);
-
-  // Linking failed
-  if (link_status == GL_FALSE) {
-    int log_length = 0;
-    glGetProgramiv(shader_program, GL_INFO_LOG_LENGTH, &log_length);
-
-    char *message = malloc(log_length);
-    glGetProgramInfoLog(shader_program, log_length, NULL, message);
-
-    fprintf(stderr, "Shader linking: %s\n", message);
-    free(message);
-
-    glDeleteProgram(shader_program);
-    return 0;
-  }
-
-  return shader_program;
-}
-
-static GLuint create_compute_program(const char *source) {
-  GLuint shader = compile_shader(source, GL_COMPUTE_SHADER);
-  if (!shader) {
-    // TODO: Better error handling
-    return 0;
-  }
-
-  GLuint shader_program = glCreateProgram();
-  glAttachShader(shader_program, shader);
-  // Shader objects only have to exist for this call
-  glLinkProgram(shader_program);
-
-  glDetachShader(shader_program, shader);
-  glDeleteShader(shader);
-
-  int link_status = 0;
-  glGetProgramiv(shader_program, GL_LINK_STATUS, &link_status);
-
-  // Linking failed
-  if (link_status == GL_FALSE) {
-    int log_length = 0;
-    glGetProgramiv(shader_program, GL_INFO_LOG_LENGTH, &log_length);
-
-    char *message = malloc(log_length);
-    glGetProgramInfoLog(shader_program, log_length, NULL, message);
-
-    fprintf(stderr, "Shader linking: %s\n", message);
-    free(message);
-
-    glDeleteProgram(shader_program);
-    return 0;
-  }
-
-  return shader_program;
-}
-
-static vec3 cube_verts[] = {{0.5f, 0.5f, -0.5f},  {0.5f, -0.5f, -0.5f},
-                            {0.5f, 0.5f, 0.5f},   {0.5f, -0.5f, 0.5f},
-                            {-0.5f, 0.5f, -0.5f}, {-0.5f, -0.5f, -0.5f},
-                            {-0.5f, 0.5f, 0.5f},  {-0.5f, -0.5f, 0.5f}};
-static uint8_t cube_indices[] = {4, 2, 0, 2, 7, 3, 6, 5, 7, 1, 7, 5,
-                                 0, 3, 1, 4, 1, 5, 4, 6, 2, 2, 6, 7,
-                                 6, 4, 5, 1, 3, 7, 0, 2, 3, 4, 0, 1};
-
 void blob_renderer_create(BlobRenderer *br) {
-  glGenVertexArrays(1, &br->vao);
-  glBindVertexArray(br->vao);
-
-  glGenBuffers(1, &br->vbo);
-  glBindBuffer(GL_ARRAY_BUFFER, br->vbo);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(cube_verts), cube_verts, GL_STATIC_DRAW);
-
-  glGenBuffers(1, &br->ibo);
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, br->ibo);
-  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cube_indices), cube_indices,
-               GL_STATIC_DRAW);
-
   br->raymarch_program =
       create_shader_program(RAYMARCH_VERT_SRC, RAYMARCH_FRAG_SRC);
   glUseProgram(br->raymarch_program);
@@ -212,8 +85,7 @@ static void draw_sdf_cube(BlobRenderer *br, unsigned int sdf_tex,
   glUniformMatrix4fv(0, 1, GL_FALSE, model_mat[0]);
   glUniform1f(4, 1.0f / size);
   glUniform1f(5, sdf_max_dist);
-  glDrawElements(GL_TRIANGLES, sizeof(cube_indices) / sizeof(*cube_indices),
-                 GL_UNSIGNED_BYTE, NULL);
+  cube_draw();
 }
 
 void blob_render_sim(BlobRenderer *br, const BlobSimulation *bs) {
@@ -256,18 +128,11 @@ void blob_render_sim(BlobRenderer *br, const BlobSimulation *bs) {
                     BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUP_COUNT,
                     BLOB_SDF_RES / BLOB_SDF_LOCAL_GROUP_COUNT);
 
-  mat4x4 view_mat;
-  mat4x4_invert(view_mat, br->cam_trans);
-
-  mat4x4 proj_mat;
-  mat4x4_perspective(proj_mat, 60.0f * (M_PI / 180.0f), br->aspect_ratio, 0.1f,
-                     100.0f);
-
-  glBindVertexArray(br->vao);
+  glBindVertexArray(cube_vao);
 
   glUseProgram(br->raymarch_program);
-  glUniformMatrix4fv(1, 1, GL_FALSE, view_mat[0]);
-  glUniformMatrix4fv(2, 1, GL_FALSE, proj_mat[0]);
+  glUniformMatrix4fv(1, 1, GL_FALSE, br->view_mat[0]);
+  glUniformMatrix4fv(2, 1, GL_FALSE, br->proj_mat[0]);
   glUniform3fv(3, 1, br->cam_trans[3]);
 
   glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);

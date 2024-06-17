@@ -11,9 +11,15 @@
 
 #include "linmath.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 #include "blob.h"
 #include "blob_render.h"
 #include "blob_models.h"
+#include "cube.h"
+#include "shader.h"
+#include "shader_sources.h"
 
 #define ARR_SIZE(a) (sizeof(a) / sizeof(*a))
 
@@ -156,12 +162,47 @@ int main() {
                                        ANGRY_MDL[i].pos, ANGRY_MDL[i].mat_idx);
   }
 
+  // Create cube buffers for blob renderer and skybox
+  cube_create_buffers();
+
   BlobRenderer blob_renderer;
   blob_renderer_create(&blob_renderer);
   cb_data.br = &blob_renderer;
 
   cam_rot[0] = 0.5f;
   cam_rot[1] = (float)M_PI;
+
+  GLuint skybox_tex;
+  {
+    glGenTextures(1, &skybox_tex);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, skybox_tex);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    const char prefix[] = "assets/bluecloud_";
+    const char *faces[] = {"rt.jpg", "lf.jpg", "up.jpg",
+                           "dn.jpg", "bk.jpg", "ft.jpg"};
+    for (int i = 0; i < 6; i++) {
+      char path[32];
+      strncpy(path, prefix, sizeof(path));
+      strncat(path, faces[i], sizeof(path) - sizeof(prefix));
+      int width, height;
+      stbi_uc *data = stbi_load(path, &width, &height, NULL, 4);
+      if (!data) {
+        printf("Failed to load image %s\n", path);
+        exit(-1);
+      }
+
+      glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA8, width,
+                   height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+      stbi_image_free(data);
+    }
+  }
+
+  GLuint skybox_program =
+      create_shader_program(SKYBOX_VERT_SRC, SKYBOX_FRAG_SRC);
 
   uint64_t timer_freq = glfwGetTimerFrequency();
   uint64_t prev_timer = glfwGetTimerValue();
@@ -270,9 +311,23 @@ int main() {
       }
     }
 
-    // Render blobs
+    // Render scene
+
+    mat4x4_perspective(blob_renderer.proj_mat, 60.0f * (M_PI / 180.0f),
+                       blob_renderer.aspect_ratio, 0.1f, 100.0f);
+    mat4x4_invert(blob_renderer.view_mat, cam_trans);
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    glDepthMask(GL_FALSE);
+    glUseProgram(skybox_program);
+    glUniformMatrix4fv(0, 1, GL_FALSE, blob_renderer.view_mat[0]);
+    glUniformMatrix4fv(1, 1, GL_FALSE, blob_renderer.proj_mat[0]);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, skybox_tex);
+    cube_draw();
+    glDepthMask(GL_TRUE);
+
     blob_render_sim(&blob_renderer, &blob_simulation);
     blob_render_mdl(&blob_renderer, &blob_simulation, duck_idx, duck_count);
     blob_render_mdl(&blob_renderer, &blob_simulation, angry_idx, angry_count);

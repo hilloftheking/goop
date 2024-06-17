@@ -34,6 +34,12 @@
     <ClInclude Include="src\blob_models.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\cube.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\shader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.c">
@@ -51,6 +57,12 @@
     <ClCompile Include="src\blob_render.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\shader.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cube.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="shaders\compute_sdf.comp">
@@ -60,6 +72,12 @@
       <Filter>Shaders</Filter>
     </CopyFileToFolders>
     <CopyFileToFolders Include="shaders\raymarch.vert">
+      <Filter>Shaders</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="shaders\skybox.frag">
+      <Filter>Shaders</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="shaders\skybox.vert">
       <Filter>Shaders</Filter>
     </CopyFileToFolders>
   </ItemGroup>

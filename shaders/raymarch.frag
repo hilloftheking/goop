@@ -1,4 +1,4 @@
-#version 430 core
+#version 430
 
 #include "../src/blob_defines.h"
 
@@ -75,10 +75,10 @@ vec4 ray_march(vec3 ro, vec3 rd) {
       // Maybe it could be possible to have a low quality normal in the SDF
       vec3 normal = get_normal_at(p);
 
-      const vec3 light0_dir = -normalize(vec3(2.0, -5.0, 3.0));
+      const vec3 light0_dir = -normalize(vec3(2.0, -5.0, -3.0));
       const vec3 light0_col = vec3(1.0, 1.0, 0.9);
 
-      const vec3 light1_dir = -normalize(vec3(-1.0, 5.0, -2.0));
+      const vec3 light1_dir = -normalize(vec3(-1.0, 5.0, 2.0));
       const vec3 light1_col = vec3(0.05, 0.05, 0.08);
 
       float light0_val =
