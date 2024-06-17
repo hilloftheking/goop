@@ -223,12 +223,12 @@ static float dist_sphere(const vec3 c, float r, const vec3 p) {
 
 static void blob_check_blob_at(float *min_dist, vec3 correction,
                                const vec3 bpos, float bradius, const vec3 pos,
-                               float radius) {
-  *min_dist = sminf(*min_dist, dist_sphere(bpos, bradius, pos), BLOB_SMOOTH);
+                               float radius, float smooth) {
+  *min_dist = sminf(*min_dist, dist_sphere(bpos, bradius, pos), smooth);
 
   vec3 dir;
   vec3_sub(dir, pos, bpos);
-  float influence = fmaxf(0.0f, radius + bradius + BLOB_SMOOTH - vec3_len(dir));
+  float influence = fmaxf(0.0f, radius + bradius + smooth - vec3_len(dir));
   vec3_norm(dir, dir);
   vec3_scale(dir, dir, influence);
   vec3_add(correction, correction, dir);
@@ -249,13 +249,14 @@ void blob_get_correction_from_solids(vec3 correction, BlobSimulation *bs,
       continue;
 
     blob_check_blob_at(&min_dist, correction, bs->blobs[ob].pos,
-                       bs->blobs[ob].radius, pos, radius);
+                       bs->blobs[ob].radius, pos, radius, BLOB_SMOOTH);
   }
 
   if (check_models) {
     for (int ob = 0; ob < bs->model_blob_count; ob++) {
       blob_check_blob_at(&min_dist, correction, bs->model_blobs[ob].pos,
-                         bs->model_blobs[ob].radius, pos, radius);
+                         bs->model_blobs[ob].radius, pos, radius,
+                         MODEL_BLOB_SMOOTH);
     }
   }
 

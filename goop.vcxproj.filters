@@ -31,6 +31,9 @@
     <ClInclude Include="src\blob_render.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\blob_models.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.c">

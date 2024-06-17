@@ -24,4 +24,8 @@ typedef struct BlobSimulation BlobSimulation;
 void blob_renderer_create(BlobRenderer *br);
 void blob_renderer_destroy(BlobRenderer *br);
 
-void blob_render(BlobRenderer *br, const BlobSimulation *bs);
+void blob_render_sim(BlobRenderer *br, const BlobSimulation *bs);
+
+// This should be called after blob_render_sim()!!!!
+void blob_render_mdl(BlobRenderer *br, const BlobSimulation *bs,
+                     int mdl_blob_idx, int mdl_blob_count);

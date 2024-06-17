@@ -177,6 +177,7 @@
   <ItemGroup>
     <ClInclude Include="src\blob.h" />
     <ClInclude Include="src\blob_defines.h" />
+    <ClInclude Include="src\blob_models.h" />
     <ClInclude Include="src\blob_render.h" />
     <ClInclude Include="src\shader_sources.h" />
   </ItemGroup>

@@ -13,6 +13,7 @@
 
 #include "blob.h"
 #include "blob_render.h"
+#include "blob_models.h"
 
 #define ARR_SIZE(a) (sizeof(a) / sizeof(*a))
 
@@ -133,23 +134,26 @@ int main() {
 
   // Create duck out of ModelBlobs
 
-  struct {
-    float radius;
-    vec3 pos;
-    int mat_idx;
-  } duck_data[] = {
-      {0.35f, {0, 1.3f, -0.1f}, 2},      {0.15f, {0, 1.1f, -0.5f}, 3},
-      {0.5f, {0, 0.5f, 0}, 2},           {0.4f, {0, 0.5f, 0.4f}, 2},
-      {0.05f, {0.25f, 1.45f, -0.3f}, 4}, {0.05f, {-0.25f, 1.45f, -0.3f}, 4}};
+  int duck_idx = blob_simulation.model_blob_count;
+  int duck_count = ARR_SIZE(DUCK_MDL);
+  ModelBlob *duck_blobs[ARR_SIZE(DUCK_MDL)];
+  vec4 duck_offsets[ARR_SIZE(DUCK_MDL)];
 
-  ModelBlob *duck_blobs[ARR_SIZE(duck_data)];
-  vec4 duck_offsets[ARR_SIZE(duck_data)];
-
-  for (int i = ARR_SIZE(duck_data) - 1; i >= 0; i--) {
-    duck_blobs[i] = model_blob_create(&blob_simulation, duck_data[i].radius,
-                                      duck_data[i].pos, duck_data[i].mat_idx);
-    vec3_sub(duck_offsets[i], duck_data[i].pos, duck_data[0].pos);
+  for (int i = ARR_SIZE(DUCK_MDL) - 1; i >= 0; i--) {
+    duck_blobs[i] = model_blob_create(&blob_simulation, DUCK_MDL[i].radius,
+                                      DUCK_MDL[i].pos, DUCK_MDL[i].mat_idx);
+    vec3_sub(duck_offsets[i], DUCK_MDL[i].pos, DUCK_MDL[0].pos);
     duck_offsets[i][3] = 0.0f;
+  }
+
+  // Angry face model
+
+  int angry_idx = blob_simulation.model_blob_count;
+  int angry_count = ARR_SIZE(ANGRY_MDL);
+  ModelBlob *angry_blobs[ARR_SIZE(ANGRY_MDL)];
+  for (int i = 0; i < ARR_SIZE(ANGRY_MDL); i++) {
+    angry_blobs[i] = model_blob_create(&blob_simulation, ANGRY_MDL[i].radius,
+                                       ANGRY_MDL[i].pos, ANGRY_MDL[i].mat_idx);
   }
 
   BlobRenderer blob_renderer;
@@ -269,7 +273,9 @@ int main() {
     // Render blobs
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    blob_render(&blob_renderer, &blob_simulation);
+    blob_render_sim(&blob_renderer, &blob_simulation);
+    blob_render_mdl(&blob_renderer, &blob_simulation, duck_idx, duck_count);
+    blob_render_mdl(&blob_renderer, &blob_simulation, angry_idx, angry_count);
     glfwSwapBuffers(window);
   }
 
