@@ -187,6 +187,8 @@
     <ClInclude Include="src\cube.h" />
     <ClInclude Include="src\shader.h" />
     <ClInclude Include="src\shader_sources.h" />
+    <ClInclude Include="src\skybox.h" />
+    <ClInclude Include="src\stb\stb_image.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\blob.c" />
@@ -196,6 +198,8 @@
     <ClCompile Include="src\main.c" />
     <ClCompile Include="src\shader.c" />
     <ClCompile Include="src\shader_sources.c" />
+    <ClCompile Include="src\skybox.c" />
+    <ClCompile Include="src\stb\stb_image.c" />
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="shaders\compute_sdf.comp">

@@ -9,21 +9,13 @@
 
 #include <GLFW/glfw3.h>
 
-#define VC_EXTRALEAN
-#include <Windows.h>
-
 #include "linmath.h"
-
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
 
 #include "blob.h"
 #include "blob_render.h"
 #include "blob_models.h"
 #include "cube.h"
-#include "resource.h"
-#include "shader.h"
-#include "shader_sources.h"
+#include "skybox.h"
 
 #define ARR_SIZE(a) (sizeof(a) / sizeof(*a))
 
@@ -169,53 +161,15 @@ int main() {
   // Create cube buffers for blob renderer and skybox
   cube_create_buffers();
 
+  Skybox skybox;
+  skybox_create(&skybox);
+
   BlobRenderer blob_renderer;
   blob_renderer_create(&blob_renderer);
   cb_data.br = &blob_renderer;
 
   cam_rot[0] = 0.5f;
   cam_rot[1] = (float)M_PI;
-
-  GLuint skybox_tex;
-  {
-    const int faces[] = {IDB_BLUECLOUD_RT, IDB_BLUECLOUD_LF, IDB_BLUECLOUD_UP,
-                         IDB_BLUECLOUD_DN, IDB_BLUECLOUD_BK, IDB_BLUECLOUD_FT};
-
-    glGenTextures(1, &skybox_tex);
-    glBindTexture(GL_TEXTURE_CUBE_MAP, skybox_tex);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-
-    for (int i = 0; i < ARR_SIZE(faces); i++) {
-      HRSRC rsrc = FindResourceA(NULL, MAKEINTRESOURCEA(faces[i]), "JPG");
-      if (!rsrc) {
-        printf("Failed to load image resource %d\n", faces[i]);
-        exit(-1);
-      }
-      DWORD data_size = SizeofResource(NULL, rsrc);
-      HGLOBAL h_data = LoadResource(NULL, rsrc);
-      void *data = LockResource(h_data);
-
-      int width, height;
-      stbi_uc *pixels = stbi_load_from_memory(data, data_size, &width, &height, NULL, 4);
-      if (!pixels) {
-        printf("Failed to parse image resource %d\n", faces[i]);
-        exit(-1);
-      }
-
-      glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA8, width,
-                   height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-      stbi_image_free(pixels);
-
-      FreeResource(h_data);
-    }
-  }
-
-  GLuint skybox_program =
-      create_shader_program(SKYBOX_VERT_SRC, SKYBOX_FRAG_SRC);
 
   uint64_t timer_freq = glfwGetTimerFrequency();
   uint64_t prev_timer = glfwGetTimerValue();
@@ -330,22 +284,17 @@ int main() {
                        blob_renderer.aspect_ratio, 0.1f, 100.0f);
     mat4x4_invert(blob_renderer.view_mat, cam_trans);
 
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glClear(GL_DEPTH_BUFFER_BIT);
 
-    glDepthMask(GL_FALSE);
-    glUseProgram(skybox_program);
-    glUniformMatrix4fv(0, 1, GL_FALSE, blob_renderer.view_mat[0]);
-    glUniformMatrix4fv(1, 1, GL_FALSE, blob_renderer.proj_mat[0]);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_CUBE_MAP, skybox_tex);
-    cube_draw();
-    glDepthMask(GL_TRUE);
+    skybox_draw(&skybox, blob_renderer.view_mat, blob_renderer.proj_mat);
 
     blob_render_sim(&blob_renderer, &blob_simulation);
     blob_render_mdl(&blob_renderer, &blob_simulation, duck_idx, duck_count);
     blob_render_mdl(&blob_renderer, &blob_simulation, angry_idx, angry_count);
     glfwSwapBuffers(window);
   }
+
+  skybox_destroy(&skybox);
 
   blob_simulation_destroy(&blob_simulation);
   blob_renderer_destroy(&blob_renderer);

@@ -20,7 +20,7 @@ layout(location = 5) uniform float sdf_max_dist;
 #define MARCH_MAX_DIST 40.0
 #define MARCH_NORM_STEP 0.2
 
-#define BRIGHTNESS 0.4
+#define BRIGHTNESS 0.6
 
 // Figure out the normal with a gradient
 vec3 get_normal_at(vec3 p) {
@@ -75,10 +75,10 @@ vec4 ray_march(vec3 ro, vec3 rd) {
       // Maybe it could be possible to have a low quality normal in the SDF
       vec3 normal = get_normal_at(p);
 
-      const vec3 light0_dir = -normalize(vec3(2.0, -5.0, -3.0));
+      const vec3 light0_dir = -normalize(vec3(-2.0, -5.0, -3.0));
       const vec3 light0_col = vec3(1.0, 1.0, 0.9);
 
-      const vec3 light1_dir = -normalize(vec3(-1.0, 5.0, 2.0));
+      const vec3 light1_dir = -normalize(vec3(1.0, 5.0, 2.0));
       const vec3 light1_col = vec3(0.05, 0.05, 0.08);
 
       float light0_val =

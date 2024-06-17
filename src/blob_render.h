@@ -8,7 +8,7 @@ typedef struct BlobOtNode BlobOtNode;
 typedef BlobOtNode *BlobOt;
 
 typedef struct BlobRenderer {
-  unsigned int raymarch_program, compute_program, sdf_tex, sdf_char_tex,
+  unsigned int raymarch_program, compute_program, sdf_tex, sdf_mdl_tex,
       blobs_ssbo, blob_ot_ssbo;
   int blobs_ssbo_size_bytes, blob_ot_ssbo_size_bytes;
 

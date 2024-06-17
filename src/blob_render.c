@@ -37,9 +37,9 @@ void blob_renderer_create(BlobRenderer *br) {
                BLOB_SDF_RES, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
   glBindImageTexture(0, br->sdf_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA8);
 
-  glGenTextures(1, &br->sdf_char_tex);
+  glGenTextures(1, &br->sdf_mdl_tex);
   glActiveTexture(GL_TEXTURE0);
-  glBindTexture(GL_TEXTURE_3D, br->sdf_char_tex);
+  glBindTexture(GL_TEXTURE_3D, br->sdf_mdl_tex);
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
@@ -47,7 +47,7 @@ void blob_renderer_create(BlobRenderer *br) {
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA8, BLOB_SDF_RES, BLOB_SDF_RES,
                BLOB_SDF_RES, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-  glBindImageTexture(0, br->sdf_char_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY,
+  glBindImageTexture(0, br->sdf_mdl_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY,
                      GL_RGBA8);
 
   br->blobs_ssbo_size_bytes = sizeof(vec4) * BLOB_MAX_COUNT;
@@ -178,7 +178,7 @@ void blob_render_mdl(BlobRenderer *br, const BlobSimulation *bs,
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, br->blobs_ssbo);
   glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(model_blob_v4),
                   model_blob_v4);
-  glBindImageTexture(0, br->sdf_char_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY,
+  glBindImageTexture(0, br->sdf_mdl_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY,
                      GL_RGBA8);
   glUseProgram(br->compute_program);
   glUniform1i(0, mdl_blob_count);
@@ -192,6 +192,6 @@ void blob_render_mdl(BlobRenderer *br, const BlobSimulation *bs,
 
   glUseProgram(br->raymarch_program);
   glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-  draw_sdf_cube(br, br->sdf_char_tex, model_blob_pos, model_blob_size,
+  draw_sdf_cube(br, br->sdf_mdl_tex, model_blob_pos, model_blob_size,
                 MODEL_BLOB_SDF_MAX_DIST);
 }
