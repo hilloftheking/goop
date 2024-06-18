@@ -55,12 +55,12 @@ void skybox_create(Skybox* sb) {
   sb->program = create_shader_program(SKYBOX_VERT_SRC, SKYBOX_FRAG_SRC);
 }
 
-void skybox_draw(const Skybox* sb, const mat4x4 view_mat,
-    const mat4x4 proj_mat) {
+void skybox_draw(const Skybox *sb, const HMM_Mat4 *view_mat,
+                 const HMM_Mat4 *proj_mat) {
   glDepthMask(GL_FALSE);
   glUseProgram(sb->program);
-  glUniformMatrix4fv(0, 1, GL_FALSE, view_mat[0]);
-  glUniformMatrix4fv(1, 1, GL_FALSE, proj_mat[0]);
+  glUniformMatrix4fv(0, 1, GL_FALSE, view_mat->Elements[0]);
+  glUniformMatrix4fv(1, 1, GL_FALSE, proj_mat->Elements[0]);
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_CUBE_MAP, sb->tex);
   cube_draw();

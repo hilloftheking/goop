@@ -9,7 +9,7 @@
 
 #include <GLFW/glfw3.h>
 
-#include "linmath.h"
+#include "HandmadeMath.h"
 
 #include "blob.h"
 #include "blob_render.h"
@@ -28,7 +28,7 @@ static void gl_debug_callback(GLenum source, GLenum type, GLuint id,
 #define PLR_SPEED 4.0f
 #define CAM_SENS 0.01f
 
-static vec2 cam_rot;
+static HMM_Vec2 cam_rot;
 
 static struct {
   BlobRenderer *br;
@@ -40,11 +40,11 @@ static void cursor_position_callback(GLFWwindow *window, double xpos,
   static double last_ypos = 0.0;
 
   if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_1) == GLFW_PRESS) {
-    cam_rot[0] -= (float)(ypos - last_ypos) * CAM_SENS;
-    cam_rot[1] -= (float)(xpos - last_xpos) * CAM_SENS;
+    cam_rot.X -= (float)(ypos - last_ypos) * CAM_SENS;
+    cam_rot.Y -= (float)(xpos - last_xpos) * CAM_SENS;
 
-    cam_rot[0] = fmodf(cam_rot[0], (float)M_PI * 2.0f);
-    cam_rot[1] = fmodf(cam_rot[1], (float)M_PI * 2.0f);
+    cam_rot.X = fmodf(cam_rot.X, HMM_PI32 * 2.0f);
+    cam_rot.Y = fmodf(cam_rot.Y, HMM_PI32 * 2.0f);
   }
 
   last_xpos = xpos;
@@ -139,13 +139,13 @@ int main() {
   int duck_idx = blob_simulation.model_blob_count;
   int duck_count = ARR_SIZE(DUCK_MDL);
   ModelBlob *duck_blobs[ARR_SIZE(DUCK_MDL)];
-  vec4 duck_offsets[ARR_SIZE(DUCK_MDL)];
+  HMM_Vec4 duck_offsets[ARR_SIZE(DUCK_MDL)];
 
   for (int i = ARR_SIZE(DUCK_MDL) - 1; i >= 0; i--) {
     duck_blobs[i] = model_blob_create(&blob_simulation, DUCK_MDL[i].radius,
-                                      DUCK_MDL[i].pos, DUCK_MDL[i].mat_idx);
-    vec3_sub(duck_offsets[i], DUCK_MDL[i].pos, DUCK_MDL[0].pos);
-    duck_offsets[i][3] = 0.0f;
+                                      &DUCK_MDL[i].pos, DUCK_MDL[i].mat_idx);
+    duck_offsets[i].XYZ = HMM_SubV3(DUCK_MDL[i].pos, DUCK_MDL[0].pos);
+    duck_offsets[i].W = 0.0f;
   }
 
   // Angry face model
@@ -155,7 +155,7 @@ int main() {
   ModelBlob *angry_blobs[ARR_SIZE(ANGRY_MDL)];
   for (int i = 0; i < ARR_SIZE(ANGRY_MDL); i++) {
     angry_blobs[i] = model_blob_create(&blob_simulation, ANGRY_MDL[i].radius,
-                                       ANGRY_MDL[i].pos, ANGRY_MDL[i].mat_idx);
+                                       &ANGRY_MDL[i].pos, ANGRY_MDL[i].mat_idx);
   }
 
   // Create cube buffers for blob renderer and skybox
@@ -168,8 +168,8 @@ int main() {
   blob_renderer_create(&blob_renderer);
   cb_data.br = &blob_renderer;
 
-  cam_rot[0] = 0.5f;
-  cam_rot[1] = (float)M_PI;
+  cam_rot.X = 0.5f;
+  cam_rot.Y = (float)M_PI;
 
   uint64_t timer_freq = glfwGetTimerFrequency();
   uint64_t prev_timer = glfwGetTimerValue();
@@ -205,14 +205,16 @@ int main() {
     else
       glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 
-    vec4 *cam_trans = blob_renderer.cam_trans;
-    mat4x4_identity(cam_trans);
+    HMM_Mat4 *cam_trans = &blob_renderer.cam_trans;
+    *cam_trans = HMM_M4D(1.0f);
 
-    mat4x4_rotate_Y(cam_trans, cam_trans, cam_rot[1]);
-    mat4x4_rotate_X(cam_trans, cam_trans, cam_rot[0]);
+    *cam_trans =
+        HMM_MulM4(*cam_trans, HMM_Rotate_RH(cam_rot.Y, (HMM_Vec3){{0, 1, 0}}));
+    *cam_trans =
+        HMM_MulM4(*cam_trans, HMM_Rotate_RH(cam_rot.X, (HMM_Vec3){{1, 0, 0}}));
 
-    vec3_scale(cam_trans[3], cam_trans[2], 5.0f);
-    vec3_add(cam_trans[3], cam_trans[3], duck_blobs[0]->pos);
+    cam_trans->Columns[3].XYZ = HMM_AddV3(
+        HMM_MulV3F(cam_trans->Columns[2].XYZ, 5.0f), duck_blobs[0]->pos);
 
     // Hold space to spawn more blobs
 
@@ -224,11 +226,10 @@ int main() {
         blob_spawn_cd <= 0.0) {
       blob_spawn_cd = BLOB_SPAWN_CD;
 
-      vec3 pos;
-      vec3_scale(pos, cam_trans[2], -5.0f);
-      vec3_add(pos, pos, cam_trans[3]);
-      pos[1] += 1.0f;
-      blob_create(&blob_simulation, BLOB_LIQUID, 0.5f, pos, 2);
+      HMM_Vec3 pos = HMM_AddV3(HMM_MulV3F(cam_trans->Columns[2].XYZ, -5.0f),
+                               cam_trans->Columns[3].XYZ);
+      pos.Y += 1.0f;
+      blob_create(&blob_simulation, BLOB_LIQUID, 0.5f, &pos, 2);
     }
 
     // Simulate blobs
@@ -242,51 +243,40 @@ int main() {
     bool s_press = glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS;
     bool a_press = glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS;
     bool d_press = glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS;
-    vec4 dir = {0};
-    dir[0] = (float)(d_press - a_press);
-    dir[2] = (float)(s_press - w_press);
-    if (dir[0] || dir[2]) {
-      vec4_norm(dir, dir);
-      vec4_scale(dir, dir, PLR_SPEED * (float)delta);
+    HMM_Vec4 dir = {0};
+    dir.X = (float)(d_press - a_press);
+    dir.Z = (float)(s_press - w_press);
+    if (dir.X || dir.Z) {
+      dir = HMM_MulV4F(HMM_NormV4(dir), PLR_SPEED * (float)delta);
 
-      vec4 rel_move;
-      mat4x4_mul_vec4(rel_move, cam_trans, dir);
+      HMM_Vec4 rel_move = HMM_MulM4V4(*cam_trans, dir);
 
-      vec3 test_pos;
-      vec3_add(test_pos, duck_blobs[0]->pos, rel_move);
+      HMM_Vec3 test_pos = HMM_AddV3(duck_blobs[0]->pos, rel_move.XYZ);
+      HMM_Vec3 correction = blob_get_correction_from_solids(
+          &blob_simulation, &test_pos, duck_blobs[0]->radius, false);
+      duck_blobs[0]->pos = HMM_AddV3(test_pos, correction);
 
-      vec3 correction;
-      blob_get_correction_from_solids(correction, &blob_simulation, test_pos,
-                                      duck_blobs[0]->radius, false);
-
-      vec3_add(duck_blobs[0]->pos, test_pos, correction);
-
-      mat4x4 rot_mat;
-      mat4x4_identity(rot_mat);
-
-      vec3_norm(rot_mat[2], rel_move);
-      vec3_scale(rot_mat[2], rot_mat[2], -1.0f);
-
-      vec3_dup(rot_mat[1], cam_trans[1]);
-
-      vec3_mul_cross(rot_mat[0], rot_mat[1], rot_mat[2]);
+      HMM_Mat4 rot_mat = HMM_M4D(1.0f);
+      rot_mat.Columns[2].XYZ = HMM_MulV3F(HMM_NormV3(rel_move.XYZ), -1.0f);
+      rot_mat.Columns[1].XYZ = cam_trans->Columns[1].XYZ;
+      rot_mat.Columns[0].XYZ =
+          HMM_Cross(rot_mat.Columns[1].XYZ, rot_mat.Columns[2].XYZ);
 
       for (int i = 0; i < ARR_SIZE(duck_blobs); i++) {
-        vec4 p;
-        mat4x4_mul_vec4(p, rot_mat, duck_offsets[i]);
-        vec3_add(duck_blobs[i]->pos, duck_blobs[0]->pos, p);
+        HMM_Vec4 p = HMM_MulM4V4(rot_mat, duck_offsets[i]);
+        duck_blobs[i]->pos = HMM_AddV3(duck_blobs[0]->pos, p.XYZ);
       }
     }
 
     // Render scene
 
-    mat4x4_perspective(blob_renderer.proj_mat, 60.0f * (M_PI / 180.0f),
-                       blob_renderer.aspect_ratio, 0.1f, 100.0f);
-    mat4x4_invert(blob_renderer.view_mat, cam_trans);
+    blob_renderer.proj_mat = HMM_Perspective_RH_ZO(
+        60.0f * HMM_DegToRad, blob_renderer.aspect_ratio, 0.1f, 100.0f);
+    blob_renderer.view_mat = HMM_InvGeneralM4(*cam_trans);
 
     glClear(GL_DEPTH_BUFFER_BIT);
 
-    skybox_draw(&skybox, blob_renderer.view_mat, blob_renderer.proj_mat);
+    skybox_draw(&skybox, &blob_renderer.view_mat, &blob_renderer.proj_mat);
 
     blob_render_sim(&blob_renderer, &blob_simulation);
     blob_render_mdl(&blob_renderer, &blob_simulation, duck_idx, duck_count);

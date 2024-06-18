@@ -2,7 +2,7 @@
 
 #include <stdbool.h>
 
-#include "linmath.h"
+#include "HandmadeMath.h"
 
 typedef struct BlobOtNode BlobOtNode;
 typedef BlobOtNode *BlobOt;
@@ -12,14 +12,12 @@ typedef struct BlobRenderer {
       blobs_ssbo, blob_ot_ssbo;
   int blobs_ssbo_size_bytes, blob_ot_ssbo_size_bytes;
 
-  mat4x4 cam_trans;
-  mat4x4 view_mat;
-  mat4x4 proj_mat;
+  HMM_Mat4 cam_trans, view_mat, proj_mat;
 
   float aspect_ratio;
 
   BlobOt blob_ot;
-  vec4 *blobs_lerped;
+  HMM_Vec4 *blobs_lerped;
 } BlobRenderer;
 
 typedef struct BlobSimulation BlobSimulation;

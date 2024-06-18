@@ -2,7 +2,7 @@
 
 #include <stdbool.h>
 
-#include "linmath.h"
+#include "HandmadeMath.h"
 
 #include "blob_defines.h"
 
@@ -30,8 +30,8 @@ typedef enum BlobType { BLOB_LIQUID = 0, BLOB_SOLID = 1 } BlobType;
 typedef struct Blob {
   BlobType type;
   float radius;
-  vec3 pos;
-  vec3 prev_pos; // For interpolation
+  HMM_Vec3 pos;
+  HMM_Vec3 prev_pos; // For interpolation
   int mat_idx;
   union {
     int liquid_sleep_ticks;
@@ -41,7 +41,7 @@ typedef struct Blob {
 // A blob that belongs to a model
 typedef struct ModelBlob {
   float radius;
-  vec3 pos;
+  HMM_Vec3 pos;
   int mat_idx;
 } ModelBlob;
 
@@ -66,11 +66,11 @@ typedef struct BlobOtNode {
 
 typedef BlobOtNode *BlobOt;
 
-static const vec3 BLOB_SIM_POS = {0, 8, 0};
+static const HMM_Vec3 BLOB_SIM_POS = {0, 8, 0};
 static const float BLOB_SIM_SIZE = 16.0f;
 
 // How much force is needed to attract b to other
-void blob_get_attraction_to(vec3 r, Blob *b, Blob *other);
+HMM_Vec3 blob_get_attraction_to(Blob *b, Blob *other);
 
 // How much anti gravitational force is applied to b from other
 float blob_get_support_with(Blob *b, Blob *other);
@@ -80,11 +80,11 @@ bool blob_is_solid(Blob *b);
 
 // Creates a blob if possible and adds it to the simulation
 Blob *blob_create(BlobSimulation *bs, BlobType type, float radius,
-                  const vec3 pos, int mat_idx);
+                  const HMM_Vec3 *pos, int mat_idx);
 
 // Creates a model blob if possible and adds it to the simulation
-ModelBlob *model_blob_create(BlobSimulation *bs, float radius, const vec3 pos,
-                             int mat_idx);
+ModelBlob *model_blob_create(BlobSimulation *bs, float radius,
+                             const HMM_Vec3 *pos, int mat_idx);
 
 void blob_simulation_create(BlobSimulation *bs);
 void blob_simulation_destroy(BlobSimulation *bs);
@@ -92,9 +92,9 @@ void blob_simulation_destroy(BlobSimulation *bs);
 void blob_simulate(BlobSimulation *bs, double delta);
 
 // Returns correction vector to separate a blob at pos from solids
-void blob_get_correction_from_solids(vec3 correction, BlobSimulation *bs,
-                                     const vec3 pos, float radius,
-                                     bool check_models);
+HMM_Vec3 blob_get_correction_from_solids(BlobSimulation *bs,
+                                         const HMM_Vec3 *pos, float radius,
+                                         bool check_models);
 
 // Returns how many bytes are needed to fit the worst case octree
 int blob_ot_get_alloc_size();
@@ -104,4 +104,4 @@ BlobOt blob_ot_create();
 
 void blob_ot_reset(BlobOt blob_ot);
 
-void blob_ot_insert(BlobOt blob_ot, vec3 blob_pos, int blob_idx);
+void blob_ot_insert(BlobOt blob_ot, const HMM_Vec3 *blob_pos, int blob_idx);

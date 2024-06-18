@@ -5,35 +5,33 @@
 
 #include "blob.h"
 
-void blob_get_attraction_to(vec3 r, Blob *b, Blob *other) {
-  vec3 direction;
-  vec3_sub(direction, b->pos, other->pos);
-  float len = vec3_len(direction);
+HMM_Vec3 blob_get_attraction_to(Blob *b, Blob *other) {
+  HMM_Vec3 direction = HMM_SubV3(b->pos, other->pos);
+  float len = HMM_LenV3(direction);
 
   float x = fabsf(BLOB_DESIRED_DISTANCE - len);
 
   if (x > BLOB_DESIRED_DISTANCE * 2.0f) {
-    vec3_scale(r, r, 0.0f);
-    return;
+    return (HMM_Vec3){0};
   }
 
   float power =
       fmaxf(0.0f, logf(-5.0f * x * (x - BLOB_DESIRED_DISTANCE) + 1.0f));
   // float power = fmaxf(0.0f, -2.1f * x * (x - BLOB_DESIRED_DISTANCE));
 
-  vec3_norm(r, direction);
-  vec3_scale(r, r, power);
+  direction = HMM_MulV3F(HMM_NormV3(direction), power);
 
   // Blobs only fall with gravity, they don't force each other to fall
-  if (r[1] < 0.0f) {
-    r[1] = 0.0f;
+  if (direction.Y < 0.0f) {
+    direction.Y = 0.0f;
   }
+
+  return direction;
 }
 
 float blob_get_support_with(Blob *b, Blob *other) {
-  vec3 direction;
-  vec3_sub(direction, b->pos, other->pos);
-  float len = vec3_len(direction);
+  HMM_Vec3 direction = HMM_SubV3(b->pos, other->pos);
+  float len = HMM_LenV3(direction);
 
   float x = BLOB_DESIRED_DISTANCE - len;
 
@@ -47,7 +45,7 @@ float blob_get_support_with(Blob *b, Blob *other) {
   }
 
   // Less support when other blob is above
-  if (direction[1] <= 0.1f) {
+  if (direction.Y <= 0.1f) {
     x *= 1.4f;
   }
 
@@ -57,7 +55,7 @@ float blob_get_support_with(Blob *b, Blob *other) {
 bool blob_is_solid(Blob *b) { return b->type == BLOB_SOLID; }
 
 Blob *blob_create(BlobSimulation *bs, BlobType type, float radius,
-                  const vec3 pos, int mat_idx) {
+                  const HMM_Vec3 *pos, int mat_idx) {
   if (bs->blob_count >= BLOB_MAX_COUNT) {
     fprintf(stderr, "Blob max count reached\n");
     return NULL;
@@ -66,8 +64,8 @@ Blob *blob_create(BlobSimulation *bs, BlobType type, float radius,
   Blob *b = &bs->blobs[bs->blob_count];
   b->type = type;
   b->radius = radius;
-  vec3_dup(b->pos, pos);
-  vec3_dup(b->prev_pos, pos);
+  b->pos = *pos;
+  b->prev_pos = *pos;
   b->mat_idx = mat_idx;
 
   if (type == BLOB_LIQUID) {
@@ -79,8 +77,8 @@ Blob *blob_create(BlobSimulation *bs, BlobType type, float radius,
   return b;
 }
 
-ModelBlob *model_blob_create(BlobSimulation *bs, float radius, const vec3 pos,
-                             int mat_idx) {
+ModelBlob *model_blob_create(BlobSimulation *bs, float radius,
+                             const HMM_Vec3 *pos, int mat_idx) {
   if (bs->model_blob_count >= MODEL_BLOB_MAX_COUNT) {
     fprintf(stderr, "Model blob max count reached\n");
     return NULL;
@@ -88,7 +86,7 @@ ModelBlob *model_blob_create(BlobSimulation *bs, float radius, const vec3 pos,
 
   ModelBlob *b = &bs->model_blobs[bs->model_blob_count];
   b->radius = radius;
-  vec3_dup(b->pos, pos);
+  b->pos = *pos;
   b->mat_idx = mat_idx;
 
   bs->model_blob_count++;
@@ -106,9 +104,9 @@ void blob_simulation_create(BlobSimulation *bs) {
   bs->tick_timer = 0.0;
 
   for (int i = 0; i < BLOB_START_COUNT; i++) {
-    vec3 pos = {(rand_float() - 0.5f) * 5.0f, 4.0f + (rand_float() * 6.0f),
-                (rand_float() - 0.5f) * 5.0f};
-    blob_create(bs, i % 2 /* alternate between solid and liquid */, 0.5f, pos,
+    HMM_Vec3 pos = {(rand_float() - 0.5f) * 5.0f, 4.0f + (rand_float() * 6.0f),
+                    (rand_float() - 0.5f) * 5.0f};
+    blob_create(bs, i % 2 /* alternate between solid and liquid */, 0.5f, &pos,
                 i % 2);
   }
 }
@@ -139,9 +137,9 @@ void blob_simulate(BlobSimulation *bs, double delta) {
         bs->blobs[b].liquid_sleep_ticks >= BLOB_SLEEP_TICKS_REQUIRED)
       continue;
 
-    vec3_dup(bs->blobs[b].prev_pos, bs->blobs[b].pos);
+    bs->blobs[b].prev_pos = bs->blobs[b].pos;
 
-    vec3 velocity = {0};
+    HMM_Vec3 velocity = {0};
 
     if (bs->blobs[b].type == BLOB_LIQUID) {
       float anti_grav = 0.0f;
@@ -152,39 +150,38 @@ void blob_simulate(BlobSimulation *bs, double delta) {
         if (blob_is_solid(&bs->blobs[ob]))
           continue;
 
-        vec3 attraction;
-        blob_get_attraction_to(attraction, &bs->blobs[b], &bs->blobs[ob]);
+        HMM_Vec3 attraction =
+            blob_get_attraction_to(&bs->blobs[b], &bs->blobs[ob]);
 
-        float attraction_magnitude = vec3_len(attraction);
+        float attraction_magnitude = HMM_LenV3(attraction);
         if (attraction_magnitude > BLOB_SLEEP_THRESHOLD)
           bs->blobs[ob].liquid_sleep_ticks = 0;
 
-        vec3_add(velocity, velocity, attraction);
+        velocity = HMM_AddV3(velocity, attraction);
 
         anti_grav += blob_get_support_with(&bs->blobs[b], &bs->blobs[ob]);
       }
 
-      velocity[1] -= BLOB_FALL_SPEED * (1.0f - fminf(anti_grav, 1.0f));
+      velocity.Y -= BLOB_FALL_SPEED * (1.0f - fminf(anti_grav, 1.0f));
     }
 
     // Now position + velocity will be the new position before dealing with
     // solid blobs
 
-    vec3 pos_old;
-    vec3_dup(pos_old, bs->blobs[b].pos);
+    HMM_Vec3 pos_old = bs->blobs[b].pos;
 
-    vec3_add(bs->blobs[b].pos, bs->blobs[b].pos, velocity);
-
-    vec3 correction;
-    blob_get_correction_from_solids(correction, bs, bs->blobs[b].pos,
-                                    bs->blobs[b].radius, true);
-    vec3_add(bs->blobs[b].pos, bs->blobs[b].pos, correction);
+    bs->blobs[b].pos = HMM_AddV3(bs->blobs[b].pos, velocity);
+    HMM_Vec3 correction = blob_get_correction_from_solids(
+        bs, &bs->blobs[b].pos, bs->blobs[b].radius, true);
+    bs->blobs[b].pos = HMM_AddV3(bs->blobs[b].pos, correction);
 
     for (int x = 0; x < 3; x++) {
-      bs->blobs[b].pos[x] =
-          fmaxf(bs->blobs[b].pos[x], BLOB_SIM_POS[x] - BLOB_SIM_SIZE * 0.5f);
-      bs->blobs[b].pos[x] =
-          fminf(bs->blobs[b].pos[x], BLOB_SIM_POS[x] + BLOB_SIM_SIZE * 0.5f);
+      bs->blobs[b].pos.Elements[x] =
+          fmaxf(bs->blobs[b].pos.Elements[x],
+                BLOB_SIM_POS.Elements[x] - BLOB_SIM_SIZE * 0.5f);
+      bs->blobs[b].pos.Elements[x] =
+          fminf(bs->blobs[b].pos.Elements[x],
+                BLOB_SIM_POS.Elements[x] + BLOB_SIM_SIZE * 0.5f);
     }
 
 #ifdef BLOB_SLEEP_ENABLED
@@ -215,29 +212,25 @@ static float sminf(float a, float b, float k) {
   return mixf(b, a, h) - k * h * (1.0f - h);
 }
 
-static float dist_sphere(const vec3 c, float r, const vec3 p) {
-  vec3 d;
-  vec3_sub(d, p, c);
-  return vec3_len(d) - r;
+static float dist_sphere(const HMM_Vec3 *c, float r, const HMM_Vec3 *p) {
+  HMM_Vec3 d = HMM_SubV3(*p, *c);
+  return HMM_LenV3(d) - r;
 }
 
-static void blob_check_blob_at(float *min_dist, vec3 correction,
-                               const vec3 bpos, float bradius, const vec3 pos,
+static void blob_check_blob_at(float *min_dist, HMM_Vec3 *correction,
+                               const HMM_Vec3 *bpos, float bradius, const HMM_Vec3 *pos,
                                float radius, float smooth) {
   *min_dist = sminf(*min_dist, dist_sphere(bpos, bradius, pos), smooth);
 
-  vec3 dir;
-  vec3_sub(dir, pos, bpos);
-  float influence = fmaxf(0.0f, radius + bradius + smooth - vec3_len(dir));
-  vec3_norm(dir, dir);
-  vec3_scale(dir, dir, influence);
-  vec3_add(correction, correction, dir);
+  HMM_Vec3 dir = HMM_SubV3(*pos, *bpos);
+  float influence = fmaxf(0.0f, radius + bradius + smooth - HMM_LenV3(dir));
+  *correction = HMM_AddV3(*correction, HMM_MulV3F(HMM_NormV3(dir), influence));
 }
 
-void blob_get_correction_from_solids(vec3 correction, BlobSimulation *bs,
-                                     const vec3 pos, float radius,
+HMM_Vec3 blob_get_correction_from_solids(BlobSimulation *bs,
+                                     const HMM_Vec3 *pos, float radius,
                                      bool check_models) {
-  vec3_dup(correction, (vec3){0});
+  HMM_Vec3 correction = {0};
 
   float min_dist = 10000.0f;
 
@@ -248,13 +241,13 @@ void blob_get_correction_from_solids(vec3 correction, BlobSimulation *bs,
     if (bs->blobs[ob].type == BLOB_LIQUID)
       continue;
 
-    blob_check_blob_at(&min_dist, correction, bs->blobs[ob].pos,
+    blob_check_blob_at(&min_dist, &correction, &bs->blobs[ob].pos,
                        bs->blobs[ob].radius, pos, radius, BLOB_SMOOTH);
   }
 
   if (check_models) {
     for (int ob = 0; ob < bs->model_blob_count; ob++) {
-      blob_check_blob_at(&min_dist, correction, bs->model_blobs[ob].pos,
+      blob_check_blob_at(&min_dist, &correction, &bs->model_blobs[ob].pos,
                          bs->model_blobs[ob].radius, pos, radius,
                          MODEL_BLOB_SMOOTH);
     }
@@ -262,10 +255,9 @@ void blob_get_correction_from_solids(vec3 correction, BlobSimulation *bs,
 
   // Is this blob inside of a solid blob?
   if (min_dist < radius) {
-    vec3_norm(correction, correction);
-    vec3_scale(correction, correction, radius - min_dist);
+    return HMM_MulV3F(HMM_NormV3(correction), radius - min_dist);
   } else {
-    vec3_dup(correction, (vec3){0});
+    return (HMM_Vec3){0};
   }
 }
 
@@ -325,36 +317,35 @@ BlobOt blob_ot_create() {
 
 void blob_ot_reset(BlobOt blob_ot) { setup_test_octree(blob_ot); }
 
-static vec3 ot_quadrants[8] = {{0.5f, 0.5f, 0.5f},   {0.5f, 0.5f, -0.5f},
-                               {0.5f, -0.5f, 0.5f},  {0.5f, -0.5f, -0.5f},
-                               {-0.5f, 0.5f, 0.5f},  {-0.5f, 0.5f, -0.5f},
-                               {-0.5f, -0.5f, 0.5f}, {-0.5f, -0.5f, -0.5f}};
+static HMM_Vec3 ot_quadrants[8] = {{0.5f, 0.5f, 0.5f},   {0.5f, 0.5f, -0.5f},
+                                   {0.5f, -0.5f, 0.5f},  {0.5f, -0.5f, -0.5f},
+                                   {-0.5f, 0.5f, 0.5f},  {-0.5f, 0.5f, -0.5f},
+                                   {-0.5f, -0.5f, 0.5f}, {-0.5f, -0.5f, -0.5f}};
 
-static float dist_cube(vec3 c, float s, vec3 p) {
-  vec3 d;
+static float dist_cube(const HMM_Vec3 *c, float s, const HMM_Vec3 *p) {
+  HMM_Vec3 d;
   for (int i = 0; i < 3; i++) {
-    d[i] = fmaxf(0.0f, fabsf(p[i] - c[i]) - s * 0.5f);
+    d.Elements[i] =
+        fmaxf(0.0f, fabsf(p->Elements[i] - c->Elements[i]) - s * 0.5f);
   }
-  return vec3_len(d);
+  return HMM_LenV3(d);
 }
 
 static void insert_into_nodes(BlobOt blob_ot, BlobOtNode *node,
-                              const vec3 node_pos, float node_size,
-                              const vec3 blob_pos, int blob_idx) {
+                              const HMM_Vec3 *node_pos, float node_size,
+                              const HMM_Vec3 *blob_pos, int blob_idx) {
   if (node->leaf_blob_count == -1) {
     // This node has child nodes
     for (int i = 0; i < 8; i++) {
-      vec3 child_pos;
-      vec3_scale(child_pos, ot_quadrants[i], node_size);
-      vec3_scale(child_pos, child_pos, 0.5f);
-      vec3_add(child_pos, node_pos, child_pos);
+      HMM_Vec3 child_pos =
+          HMM_AddV3(HMM_MulV3F(ot_quadrants[i], node_size * 0.5f), *node_pos);
       float child_size = node_size * 0.5f;
 
-      float dist = dist_cube(child_pos, child_size, blob_pos) -
+      float dist = dist_cube(&child_pos, child_size, blob_pos) -
                    BLOB_MAX_RADIUS - BLOB_SMOOTH - BLOB_SDF_MAX_DIST;
 
       if (dist <= 0.0f) {
-        insert_into_nodes(blob_ot, blob_ot + node->indices[i], child_pos,
+        insert_into_nodes(blob_ot, blob_ot + node->indices[i], &child_pos,
                           child_size, blob_pos, blob_idx);
       }
     }
@@ -373,8 +364,8 @@ static void insert_into_nodes(BlobOt blob_ot, BlobOtNode *node,
   }
 }
 
-void blob_ot_insert(BlobOt blob_ot, vec3 blob_pos, int blob_idx) {
+void blob_ot_insert(BlobOt blob_ot, const HMM_Vec3 *blob_pos, int blob_idx) {
   BlobOtNode *root = blob_ot + 0;
-  insert_into_nodes(blob_ot, root, BLOB_SIM_POS, BLOB_SIM_SIZE, blob_pos,
+  insert_into_nodes(blob_ot, root, &BLOB_SIM_POS, BLOB_SIM_SIZE, blob_pos,
                     blob_idx);
 }

@@ -50,7 +50,7 @@ void blob_renderer_create(BlobRenderer *br) {
   glBindImageTexture(0, br->sdf_mdl_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY,
                      GL_RGBA8);
 
-  br->blobs_ssbo_size_bytes = sizeof(vec4) * BLOB_MAX_COUNT;
+  br->blobs_ssbo_size_bytes = sizeof(HMM_Vec4) * BLOB_MAX_COUNT;
   glGenBuffers(1, &br->blobs_ssbo);
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, br->blobs_ssbo);
   glBufferData(GL_SHADER_STORAGE_BUFFER, br->blobs_ssbo_size_bytes, NULL,
@@ -73,16 +73,14 @@ void blob_renderer_destroy(BlobRenderer *br) {
 }
 
 static void draw_sdf_cube(BlobRenderer *br, unsigned int sdf_tex,
-                          const vec3 pos, float size, float sdf_max_dist) {
+                          const HMM_Vec3 *pos, float size, float sdf_max_dist) {
   glBindTexture(GL_TEXTURE_3D, sdf_tex);
 
-  mat4x4 model_mat;
-  mat4x4_identity(model_mat);
-  mat4x4_scale(model_mat, model_mat, size);
-  vec3_dup(model_mat[3], pos);
-  model_mat[3][3] = 1.0f;
+  HMM_Mat4 model_mat = HMM_M4D(size);
+  model_mat.Columns[3].XYZ = *pos;
+  model_mat.Elements[3][3] = 1.0f;
 
-  glUniformMatrix4fv(0, 1, GL_FALSE, model_mat[0]);
+  glUniformMatrix4fv(0, 1, GL_FALSE, model_mat.Elements[0]);
   glUniform1f(4, 1.0f / size);
   glUniform1f(5, sdf_max_dist);
   cube_draw();
@@ -93,20 +91,21 @@ void blob_render_sim(BlobRenderer *br, const BlobSimulation *bs) {
 
   // Loop backwards so that new blobs are prioritized in the octree
   for (int i = bs->blob_count - 1; i >= 0; i--) {
-    float *pos_lerp = br->blobs_lerped[i];
+    HMM_Vec4 *pos_lerp = &br->blobs_lerped[i];
     for (int x = 0; x < 3; x++) {
-      float diff = bs->blobs[i].pos[x] - bs->blobs[i].prev_pos[x];
+      float diff =
+          bs->blobs[i].pos.Elements[x] - bs->blobs[i].prev_pos.Elements[x];
       float diff_delta =
           diff * (float)((BLOB_TICK_TIME - bs->tick_timer) / BLOB_TICK_TIME);
 
-      pos_lerp[x] = bs->blobs[i].prev_pos[x] + diff_delta;
+      pos_lerp->Elements[x] = bs->blobs[i].prev_pos.Elements[x] + diff_delta;
     }
 
-    pos_lerp[3] =
+    pos_lerp->W =
         (float)((int)(bs->blobs[i].radius * BLOB_RADIUS_MULT) * BLOB_MAT_COUNT +
                 bs->blobs[i].mat_idx);
 
-    blob_ot_insert(br->blob_ot, pos_lerp, i);
+    blob_ot_insert(br->blob_ot, &pos_lerp->XYZ, i);
   }
 
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, br->blobs_ssbo);
@@ -120,7 +119,7 @@ void blob_render_sim(BlobRenderer *br, const BlobSimulation *bs) {
   glBindImageTexture(0, br->sdf_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA8);
   glUseProgram(br->compute_program);
   glUniform1i(0, -1); // Use the octree
-  glUniform3fv(1, 1, BLOB_SIM_POS);
+  glUniform3fv(1, 1, BLOB_SIM_POS.Elements);
   glUniform1f(2, BLOB_SIM_SIZE);
   glUniform1f(3, BLOB_SDF_MAX_DIST);
   glUniform1f(4, BLOB_SMOOTH);
@@ -131,48 +130,47 @@ void blob_render_sim(BlobRenderer *br, const BlobSimulation *bs) {
   glBindVertexArray(cube_vao);
 
   glUseProgram(br->raymarch_program);
-  glUniformMatrix4fv(1, 1, GL_FALSE, br->view_mat[0]);
-  glUniformMatrix4fv(2, 1, GL_FALSE, br->proj_mat[0]);
-  glUniform3fv(3, 1, br->cam_trans[3]);
+  glUniformMatrix4fv(1, 1, GL_FALSE, br->view_mat.Elements[0]);
+  glUniformMatrix4fv(2, 1, GL_FALSE, br->proj_mat.Elements[0]);
+  glUniform3fv(3, 1, br->cam_trans.Elements[3]);
 
   glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-  draw_sdf_cube(br, br->sdf_tex, BLOB_SIM_POS, BLOB_SIM_SIZE,
+  draw_sdf_cube(br, br->sdf_tex, &BLOB_SIM_POS, BLOB_SIM_SIZE,
                 BLOB_SDF_MAX_DIST);
 }
 
 void blob_render_mdl(BlobRenderer *br, const BlobSimulation *bs,
                      int mdl_blob_idx, int mdl_blob_count) {
-  vec4 model_blob_v4[MODEL_BLOB_MAX_COUNT];
-  vec3 model_blob_min = {100, 100, 100};
-  vec3 model_blob_max = {-100, -100, -100};
+  HMM_Vec4 model_blob_v4[MODEL_BLOB_MAX_COUNT];
+  HMM_Vec3 model_blob_min = {100, 100, 100};
+  HMM_Vec3 model_blob_max = {-100, -100, -100};
   for (int i = 0; i < mdl_blob_count; i++) {
     ModelBlob *b = &bs->model_blobs[mdl_blob_idx + i];
 
-    vec3_dup(model_blob_v4[i], b->pos);
-    model_blob_v4[i][3] =
+    model_blob_v4[i].XYZ = b->pos;
+    model_blob_v4[i].W =
         (float)((int)(b->radius * BLOB_RADIUS_MULT) * BLOB_MAT_COUNT +
                 b->mat_idx);
 
     for (int x = 0; x < 3; x++) {
-      float c = b->pos[x];
-      if (c - b->radius - MODEL_BLOB_SMOOTH < model_blob_min[x]) {
-        model_blob_min[x] = c - b->radius - MODEL_BLOB_SMOOTH;
+      float c = b->pos.Elements[x];
+      if (c - b->radius - MODEL_BLOB_SMOOTH < model_blob_min.Elements[x]) {
+        model_blob_min.Elements[x] = c - b->radius - MODEL_BLOB_SMOOTH;
       }
-      if (c + b->radius + MODEL_BLOB_SMOOTH > model_blob_max[x]) {
-        model_blob_max[x] = c + b->radius + MODEL_BLOB_SMOOTH;
+      if (c + b->radius + MODEL_BLOB_SMOOTH > model_blob_max.Elements[x]) {
+        model_blob_max.Elements[x] = c + b->radius + MODEL_BLOB_SMOOTH;
       }
     }
   }
   float model_blob_size = 0.0f;
   for (int i = 0; i < 3; i++) {
-    float diff = model_blob_max[i] - model_blob_min[i];
+    float diff = model_blob_max.Elements[i] - model_blob_min.Elements[i];
     if (diff > model_blob_size) {
       model_blob_size = diff;
     }
   }
-  vec3 model_blob_pos;
-  vec3_add(model_blob_pos, model_blob_min, model_blob_max);
-  vec3_scale(model_blob_pos, model_blob_pos, 0.5f);
+  HMM_Vec3 model_blob_pos =
+      HMM_MulV3F(HMM_AddV3(model_blob_min, model_blob_max), 0.5f);
 
   // TODO: use a different SSBO and image unit per dispatch?
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, br->blobs_ssbo);
@@ -182,7 +180,7 @@ void blob_render_mdl(BlobRenderer *br, const BlobSimulation *bs,
                      GL_RGBA8);
   glUseProgram(br->compute_program);
   glUniform1i(0, mdl_blob_count);
-  glUniform3fv(1, 1, model_blob_pos);
+  glUniform3fv(1, 1, model_blob_pos.Elements);
   glUniform1f(2, model_blob_size);
   glUniform1f(3, MODEL_BLOB_SDF_MAX_DIST);
   glUniform1f(4, MODEL_BLOB_SMOOTH);
@@ -192,6 +190,6 @@ void blob_render_mdl(BlobRenderer *br, const BlobSimulation *bs,
 
   glUseProgram(br->raymarch_program);
   glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-  draw_sdf_cube(br, br->sdf_mdl_tex, model_blob_pos, model_blob_size,
+  draw_sdf_cube(br, br->sdf_mdl_tex, &model_blob_pos, model_blob_size,
                 MODEL_BLOB_SDF_MAX_DIST);
 }
