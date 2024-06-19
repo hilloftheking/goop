@@ -9,6 +9,7 @@
 
 #include <GLFW/glfw3.h>
 
+#define HANDMADE_MATH_NO_SIMD
 #include "HandmadeMath.h"
 
 #include "blob.h"
@@ -87,6 +88,8 @@ static void glfw_fatal_error() {
   exit(-1);
 }
 
+static float rand_float() { return ((float)rand() / (float)(RAND_MAX)); }
+
 int main() {
   if (!glfwInit())
     glfw_fatal_error();
@@ -134,6 +137,13 @@ int main() {
   BlobSimulation blob_simulation;
   blob_simulation_create(&blob_simulation);
 
+  // Ground
+  for (int i = 0; i < 256; i++) {
+    HMM_Vec3 pos = {(rand_float() - 0.5f) * 8.0f, rand_float() * 2.0f,
+                    (rand_float() - 0.5f) * 8.0f};
+    blob_create(&blob_simulation, BLOB_SOLID, 0.5f, &pos, 1);
+  }
+
   // Create duck out of ModelBlobs
 
   int duck_idx = blob_simulation.model_blob_count;
@@ -154,8 +164,10 @@ int main() {
   int angry_count = ARR_SIZE(ANGRY_MDL);
   ModelBlob *angry_blobs[ARR_SIZE(ANGRY_MDL)];
   for (int i = 0; i < ARR_SIZE(ANGRY_MDL); i++) {
+    HMM_Vec3 p = HMM_AddV3(ANGRY_MDL[i].pos, (HMM_Vec3){0, 4, 0});
+    p.Z = -p.Z;
     angry_blobs[i] = model_blob_create(&blob_simulation, ANGRY_MDL[i].radius,
-                                       &ANGRY_MDL[i].pos, ANGRY_MDL[i].mat_idx);
+                                       &p, ANGRY_MDL[i].mat_idx);
   }
 
   // Create cube buffers for blob renderer and skybox
@@ -179,6 +191,8 @@ int main() {
   double second_timer = 1.0;
 
   double blob_spawn_cd = 0.0;
+
+  HMM_Quat duck_quat = {0, 0, 0, 1};
 
   while (!glfwWindowShouldClose(window)) {
     uint64_t timer_val = glfwGetTimerValue();
@@ -229,7 +243,7 @@ int main() {
       HMM_Vec3 pos = HMM_AddV3(HMM_MulV3F(cam_trans->Columns[2].XYZ, -5.0f),
                                cam_trans->Columns[3].XYZ);
       pos.Y += 1.0f;
-      blob_create(&blob_simulation, BLOB_LIQUID, 0.5f, &pos, 2);
+      blob_create(&blob_simulation, BLOB_LIQUID, 0.5f, &pos, 5);
     }
 
     // Simulate blobs
@@ -261,6 +275,10 @@ int main() {
       rot_mat.Columns[1].XYZ = cam_trans->Columns[1].XYZ;
       rot_mat.Columns[0].XYZ =
           HMM_Cross(rot_mat.Columns[1].XYZ, rot_mat.Columns[2].XYZ);
+
+      float step = (HMM_PI32 * 4.0f) * (float)delta;
+      duck_quat = HMM_RotateTowardsQ(duck_quat, step, HMM_M4ToQ_RH(rot_mat));
+      rot_mat = HMM_QToM4(duck_quat);
 
       for (int i = 0; i < ARR_SIZE(duck_blobs); i++) {
         HMM_Vec4 p = HMM_MulM4V4(rot_mat, duck_offsets[i]);

@@ -79,7 +79,7 @@ vec4 ray_march(vec3 ro, vec3 rd) {
       const vec3 light0_col = vec3(1.0, 1.0, 0.9);
 
       const vec3 light1_dir = -normalize(vec3(1.0, 5.0, 2.0));
-      const vec3 light1_col = vec3(0.05, 0.05, 0.08);
+      const vec3 light1_col = vec3(0.09, 0.09, 0.2);
 
       float light0_val =
           mix(max(0.0, dot(normal, light0_dir)), 1.0, BRIGHTNESS);

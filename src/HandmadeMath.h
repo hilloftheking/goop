@@ -2399,6 +2399,14 @@ static inline HMM_Quat HMM_SLerp(HMM_Quat Left, float Time, HMM_Quat Right)
     return Result;
 }
 
+COVERAGE(HMM_RotateTowardsQ, 1)
+static inline HMM_Quat HMM_RotateTowardsQ(HMM_Quat Left, float MaxAngDelta,
+                                          HMM_Quat Right) {
+  float Dot = HMM_MIN(HMM_ABS(HMM_DotQ(Left, Right)), 1.0f);
+  float Ang = HMM_ACosF(Dot) * 2.0f;
+  return HMM_SLerp(Left, HMM_MIN(MaxAngDelta / Ang, 1.0f), Right);
+}
+
 COVERAGE(HMM_QToM4, 1)
 static inline HMM_Mat4 HMM_QToM4(HMM_Quat Left)
 {

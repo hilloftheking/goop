@@ -94,21 +94,12 @@ ModelBlob *model_blob_create(BlobSimulation *bs, float radius,
   return b;
 }
 
-static float rand_float() { return ((float)rand() / (float)(RAND_MAX)); }
-
 void blob_simulation_create(BlobSimulation *bs) {
   bs->blob_count = 0;
   bs->blobs = malloc(BLOB_MAX_COUNT * sizeof(*bs->blobs));
   bs->model_blob_count = 0;
   bs->model_blobs = malloc(MODEL_BLOB_MAX_COUNT * sizeof(*bs->model_blobs));
   bs->tick_timer = 0.0;
-
-  for (int i = 0; i < BLOB_START_COUNT; i++) {
-    HMM_Vec3 pos = {(rand_float() - 0.5f) * 5.0f, 4.0f + (rand_float() * 6.0f),
-                    (rand_float() - 0.5f) * 5.0f};
-    blob_create(bs, i % 2 /* alternate between solid and liquid */, 0.5f, &pos,
-                i % 2);
-  }
 }
 
 void blob_simulation_destroy(BlobSimulation *bs) {

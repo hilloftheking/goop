@@ -6,7 +6,6 @@
 
 #include "blob_defines.h"
 
-#define BLOB_START_COUNT 128
 #define BLOB_MAX_COUNT 1024
 #define MODEL_BLOB_MAX_COUNT 64
 #define BLOB_DESIRED_DISTANCE 0.4f
@@ -54,7 +53,8 @@ typedef struct BlobSimulation {
 } BlobSimulation;
 
 #define BLOB_OT_MAX_SUBDIVISIONS 3
-#define BLOB_OT_LEAF_MAX_BLOB_COUNT 128
+// This uses a lot of memory
+#define BLOB_OT_LEAF_MAX_BLOB_COUNT 512
 
 typedef struct BlobOtNode {
   // Blob count if this node is a leaf. Otherwise, it is -1

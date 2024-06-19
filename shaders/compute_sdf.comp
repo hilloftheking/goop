@@ -17,15 +17,17 @@ layout(rgba8, binding = 0) writeonly uniform image3D img_output;
 layout(location = 0) uniform int blob_count; // If this is -1, an octree is used
 layout(location = 1) uniform vec3 sdf_pos;
 layout(location = 2) uniform float sdf_size;
-layout(location = 3) uniform float sdf_max_dist;
-layout(location = 4) uniform float blob_smooth;
+layout(location = 3) uniform int sdf_res;
+layout(location = 4) uniform float sdf_max_dist;
+layout(location = 5) uniform float blob_smooth;
 
 vec3 colors[BLOB_MAT_COUNT] = {
-  vec3(0.41, 0.04, 0.06), // liquid: red
-  vec3(0.8, 0.8, 0.7), // solid: white
+  vec3(0.41, 0.04, 0.06), // red
+  vec3(0.49, 0.8, 0.2), // green
   vec3(0.850, 0.767, 0.136), // yellow
   vec3(0.940, 0.561, 0.0658), // orange
-  vec3(0.150, 0.0850, 0.00) // black
+  vec3(0.150, 0.0850, 0.00), // black
+  vec3(0.505, 0.706, 0.870) // blue
 };
 
 float smin(float a, float b, float k) {
@@ -46,7 +48,7 @@ void main() {
   bool use_octree = blob_count == -1;
 
   vec3 p =
-      (vec3(gl_GlobalInvocationID) + vec3(0.5)) * (sdf_size / BLOB_SDF_RES) +
+      (vec3(gl_GlobalInvocationID) + vec3(0.5)) * (sdf_size / sdf_res) +
       sdf_pos - vec3(sdf_size) * 0.5;
   
   const vec3 ot_quadrants[8] = {vec3(0.5f, 0.5f, 0.5f),   vec3(0.5f, 0.5f, -0.5f),
