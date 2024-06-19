@@ -9,7 +9,6 @@
 
 #include <GLFW/glfw3.h>
 
-#define HANDMADE_MATH_NO_SIMD
 #include "HandmadeMath.h"
 
 #include "blob.h"
@@ -134,41 +133,27 @@ int main() {
   glEnable(GL_DEPTH_TEST);
   glDepthRange(0.0, 1.0);
 
-  BlobSimulation blob_simulation;
-  blob_simulation_create(&blob_simulation);
+  BlobSim blob_sim;
+  blob_sim_create(&blob_sim);
 
   // Ground
   for (int i = 0; i < 256; i++) {
     HMM_Vec3 pos = {(rand_float() - 0.5f) * 8.0f, rand_float() * 2.0f,
                     (rand_float() - 0.5f) * 8.0f};
-    blob_create(&blob_simulation, BLOB_SOLID, 0.5f, &pos, 1);
+    blob_create(&blob_sim, BLOB_SOLID, 0.5f, &pos, 1);
   }
 
   // Create duck out of ModelBlobs
 
-  int duck_idx = blob_simulation.model_blob_count;
-  int duck_count = ARR_SIZE(DUCK_MDL);
-  ModelBlob *duck_blobs[ARR_SIZE(DUCK_MDL)];
-  HMM_Vec4 duck_offsets[ARR_SIZE(DUCK_MDL)];
-
-  for (int i = ARR_SIZE(DUCK_MDL) - 1; i >= 0; i--) {
-    duck_blobs[i] = model_blob_create(&blob_simulation, DUCK_MDL[i].radius,
-                                      &DUCK_MDL[i].pos, DUCK_MDL[i].mat_idx);
-    duck_offsets[i].XYZ = HMM_SubV3(DUCK_MDL[i].pos, DUCK_MDL[0].pos);
-    duck_offsets[i].W = 0.0f;
-  }
+  Model duck_mdl;
+  blob_sim_create_mdl(&duck_mdl, &blob_sim, DUCK_MDL, ARR_SIZE(DUCK_MDL));
+  HMM_Mat4 duck_cam_origin = HMM_Translate((HMM_Vec3){0, 1, 0});
 
   // Angry face model
 
-  int angry_idx = blob_simulation.model_blob_count;
-  int angry_count = ARR_SIZE(ANGRY_MDL);
-  ModelBlob *angry_blobs[ARR_SIZE(ANGRY_MDL)];
-  for (int i = 0; i < ARR_SIZE(ANGRY_MDL); i++) {
-    HMM_Vec3 p = HMM_AddV3(ANGRY_MDL[i].pos, (HMM_Vec3){0, 4, 0});
-    p.Z = -p.Z;
-    angry_blobs[i] = model_blob_create(&blob_simulation, ANGRY_MDL[i].radius,
-                                       &p, ANGRY_MDL[i].mat_idx);
-  }
+  Model angry_mdl;
+  blob_sim_create_mdl(&angry_mdl, &blob_sim, ANGRY_MDL, ARR_SIZE(ANGRY_MDL));
+  angry_mdl.transform.Columns[3].Y = 3.0f;
 
   // Create cube buffers for blob renderer and skybox
   cube_create_buffers();
@@ -190,6 +175,8 @@ int main() {
   int frames_this_second = 0;
   double second_timer = 1.0;
 
+  double t = 0.0;
+
   double blob_spawn_cd = 0.0;
 
   HMM_Quat duck_quat = {0, 0, 0, 1};
@@ -197,6 +184,7 @@ int main() {
   while (!glfwWindowShouldClose(window)) {
     uint64_t timer_val = glfwGetTimerValue();
     double delta = (timer_val - prev_timer) / (double)timer_freq;
+    t += delta;
     prev_timer = timer_val;
 
     frames_this_second++;
@@ -227,8 +215,9 @@ int main() {
     *cam_trans =
         HMM_MulM4(*cam_trans, HMM_Rotate_RH(cam_rot.X, (HMM_Vec3){{1, 0, 0}}));
 
-    cam_trans->Columns[3].XYZ = HMM_AddV3(
-        HMM_MulV3F(cam_trans->Columns[2].XYZ, 5.0f), duck_blobs[0]->pos);
+    cam_trans->Columns[3].XYZ =
+        HMM_AddV3(HMM_MulM4(duck_mdl.transform, duck_cam_origin).Columns[3].XYZ,
+                  HMM_MulV3F(cam_trans->Columns[2].XYZ, 4.0f));
 
     // Hold space to spawn more blobs
 
@@ -243,13 +232,13 @@ int main() {
       HMM_Vec3 pos = HMM_AddV3(HMM_MulV3F(cam_trans->Columns[2].XYZ, -5.0f),
                                cam_trans->Columns[3].XYZ);
       pos.Y += 1.0f;
-      blob_create(&blob_simulation, BLOB_LIQUID, 0.5f, &pos, 5);
+      blob_create(&blob_sim, BLOB_LIQUID, 0.5f, &pos, 5);
     }
 
     // Simulate blobs
 
     if (blob_sim_running)
-      blob_simulate(&blob_simulation, delta);
+      blob_simulate(&blob_sim, delta);
 
     // Move duck with WASD
 
@@ -265,10 +254,13 @@ int main() {
 
       HMM_Vec4 rel_move = HMM_MulM4V4(*cam_trans, dir);
 
-      HMM_Vec3 test_pos = HMM_AddV3(duck_blobs[0]->pos, rel_move.XYZ);
+      duck_mdl.transform.Columns[3].XYZ =
+          HMM_AddV3(duck_mdl.transform.Columns[3].XYZ, rel_move.XYZ);
+      /*
       HMM_Vec3 correction = blob_get_correction_from_solids(
-          &blob_simulation, &test_pos, duck_blobs[0]->radius, false);
+          &blob_sim, &test_pos, duck_blobs[0]->radius, false);
       duck_blobs[0]->pos = HMM_AddV3(test_pos, correction);
+      */
 
       HMM_Mat4 rot_mat = HMM_M4D(1.0f);
       rot_mat.Columns[2].XYZ = HMM_MulV3F(HMM_NormV3(rel_move.XYZ), -1.0f);
@@ -280,10 +272,14 @@ int main() {
       duck_quat = HMM_RotateTowardsQ(duck_quat, step, HMM_M4ToQ_RH(rot_mat));
       rot_mat = HMM_QToM4(duck_quat);
 
-      for (int i = 0; i < ARR_SIZE(duck_blobs); i++) {
-        HMM_Vec4 p = HMM_MulM4V4(rot_mat, duck_offsets[i]);
-        duck_blobs[i]->pos = HMM_AddV3(duck_blobs[0]->pos, p.XYZ);
-      }
+      duck_mdl.transform.Columns[0] = rot_mat.Columns[0];
+      duck_mdl.transform.Columns[1] = rot_mat.Columns[1];
+      duck_mdl.transform.Columns[2] = rot_mat.Columns[2];
+    }
+
+    for (int i = 4; i < 6; i++) {
+      blob_sim.model_blobs[duck_mdl.idx + i].radius =
+          0.05f + HMM_MIN(0.0f, sinf(5.0f * (float)t) + 0.95f);
     }
 
     // Render scene
@@ -296,15 +292,15 @@ int main() {
 
     skybox_draw(&skybox, &blob_renderer.view_mat, &blob_renderer.proj_mat);
 
-    blob_render_sim(&blob_renderer, &blob_simulation);
-    blob_render_mdl(&blob_renderer, &blob_simulation, duck_idx, duck_count);
-    blob_render_mdl(&blob_renderer, &blob_simulation, angry_idx, angry_count);
+    blob_render_sim(&blob_renderer, &blob_sim);
+    blob_render_mdl(&blob_renderer, &blob_sim, &duck_mdl);
+    blob_render_mdl(&blob_renderer, &blob_sim, &angry_mdl);
     glfwSwapBuffers(window);
   }
 
   skybox_destroy(&skybox);
 
-  blob_simulation_destroy(&blob_simulation);
+  blob_sim_destroy(&blob_sim);
   blob_renderer_destroy(&blob_renderer);
 
   glfwTerminate();

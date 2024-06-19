@@ -73,13 +73,18 @@ void blob_renderer_destroy(BlobRenderer *br) {
   // TODO
 }
 
+// transform can be null
 static void draw_sdf_cube(BlobRenderer *br, unsigned int sdf_tex,
-                          const HMM_Vec3 *pos, float size, float sdf_max_dist) {
+                          const HMM_Vec3 *pos, float size,
+                          const HMM_Mat4 *transform, float sdf_max_dist) {
   glBindTexture(GL_TEXTURE_3D, sdf_tex);
 
   HMM_Mat4 model_mat = HMM_M4D(size);
   model_mat.Columns[3].XYZ = *pos;
   model_mat.Elements[3][3] = 1.0f;
+  if (transform) {
+    model_mat = HMM_MulM4(*transform, model_mat);
+  }
 
   glUniformMatrix4fv(0, 1, GL_FALSE, model_mat.Elements[0]);
   glUniform1f(4, 1.0f / size);
@@ -87,7 +92,7 @@ static void draw_sdf_cube(BlobRenderer *br, unsigned int sdf_tex,
   cube_draw();
 }
 
-void blob_render_sim(BlobRenderer *br, const BlobSimulation *bs) {
+void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
   blob_ot_reset(br->blob_ot);
 
   // Loop backwards so that new blobs are prioritized in the octree
@@ -137,17 +142,16 @@ void blob_render_sim(BlobRenderer *br, const BlobSimulation *bs) {
   glUniform3fv(3, 1, br->cam_trans.Elements[3]);
 
   glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-  draw_sdf_cube(br, br->sdf_tex, &BLOB_SIM_POS, BLOB_SIM_SIZE,
+  draw_sdf_cube(br, br->sdf_tex, &BLOB_SIM_POS, BLOB_SIM_SIZE, NULL,
                 BLOB_SDF_MAX_DIST);
 }
 
-void blob_render_mdl(BlobRenderer *br, const BlobSimulation *bs,
-                     int mdl_blob_idx, int mdl_blob_count) {
+void blob_render_mdl(BlobRenderer *br, const BlobSim *bs, const Model *mdl) {
   HMM_Vec4 model_blob_v4[MODEL_BLOB_MAX_COUNT];
   HMM_Vec3 model_blob_min = {100, 100, 100};
   HMM_Vec3 model_blob_max = {-100, -100, -100};
-  for (int i = 0; i < mdl_blob_count; i++) {
-    ModelBlob *b = &bs->model_blobs[mdl_blob_idx + i];
+  for (int i = 0; i < mdl->count; i++) {
+    ModelBlob *b = &bs->model_blobs[mdl->idx + i];
 
     model_blob_v4[i].XYZ = b->pos;
     model_blob_v4[i].W =
@@ -181,7 +185,7 @@ void blob_render_mdl(BlobRenderer *br, const BlobSimulation *bs,
   glBindImageTexture(0, br->sdf_mdl_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY,
                      GL_RGBA8);
   glUseProgram(br->compute_program);
-  glUniform1i(0, mdl_blob_count);
+  glUniform1i(0, mdl->count);
   glUniform3fv(1, 1, model_blob_pos.Elements);
   glUniform1f(2, model_blob_size);
   glUniform1i(3, BLOB_MODEL_SDF_RES);
@@ -194,5 +198,5 @@ void blob_render_mdl(BlobRenderer *br, const BlobSimulation *bs,
   glUseProgram(br->raymarch_program);
   glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
   draw_sdf_cube(br, br->sdf_mdl_tex, &model_blob_pos, model_blob_size,
-                MODEL_BLOB_SDF_MAX_DIST);
+                &mdl->transform, MODEL_BLOB_SDF_MAX_DIST);
 }
