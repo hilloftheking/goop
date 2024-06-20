@@ -178,8 +178,7 @@ void blob_render_mdl(BlobRenderer *br, const BlobSim *bs, const Model *mdl) {
   HMM_Vec3 model_blob_pos =
       HMM_MulV3F(HMM_AddV3(model_blob_min, model_blob_max), 0.5f);
 
-  // TODO: use a different SSBO and image unit per dispatch?
-  glBindBuffer(GL_SHADER_STORAGE_BUFFER, br->blobs_ssbo);
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, br->blobs_ssbo);
   glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(model_blob_v4),
                   model_blob_v4);
   glBindImageTexture(0, br->sdf_mdl_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY,

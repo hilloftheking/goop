@@ -51,7 +51,7 @@ static void cursor_position_callback(GLFWwindow *window, double xpos,
   last_ypos = ypos;
 }
 
-static bool blob_sim_running = false;
+static bool blob_sim_running = true;
 static bool vsync_enabled = true;
 
 static void key_callback(GLFWwindow *window, int key, int scancode, int action,
@@ -137,9 +137,9 @@ int main() {
   blob_sim_create(&blob_sim);
 
   // Ground
-  for (int i = 0; i < 256; i++) {
-    HMM_Vec3 pos = {(rand_float() - 0.5f) * 8.0f, rand_float() * 2.0f,
-                    (rand_float() - 0.5f) * 8.0f};
+  for (int i = 0; i < 512; i++) {
+    HMM_Vec3 pos = {(rand_float() - 0.5f) * 12.0f, rand_float() * 0.5f,
+                    (rand_float() - 0.5f) * 12.0f};
     blob_create(&blob_sim, BLOB_SOLID, 0.5f, &pos, 1);
   }
 
@@ -148,6 +148,7 @@ int main() {
   Model duck_mdl;
   blob_sim_create_mdl(&duck_mdl, &blob_sim, DUCK_MDL, ARR_SIZE(DUCK_MDL));
   duck_mdl.transform.Columns[3].Y = 6.0f;
+  HMM_Quat duck_quat = {0, 0, 0, 1};
 
   HMM_Vec3 duck_vel = {0};
   HMM_Vec3 duck_grav = {0, -9.81f, 0};
@@ -168,7 +169,7 @@ int main() {
   blob_renderer_create(&blob_renderer);
   cb_data.br = &blob_renderer;
 
-  cam_rot.X = 0.5f;
+  cam_rot.X = -0.5f;
   cam_rot.Y = (float)M_PI;
 
   uint64_t timer_freq = glfwGetTimerFrequency();
@@ -181,8 +182,6 @@ int main() {
   double t = 0.0;
 
   double blob_spawn_cd = 0.0;
-
-  HMM_Quat duck_quat = {0, 0, 0, 1};
 
   while (!glfwWindowShouldClose(window)) {
     uint64_t timer_val = glfwGetTimerValue();
@@ -214,6 +213,9 @@ int main() {
 
     if (blob_sim_running)
       blob_simulate(&blob_sim, delta);
+
+    // Avoid extremely high deltas
+    delta = HMM_MIN(delta, 1.0 / 30.0);
 
     // Duck movement/physics
 
@@ -255,10 +257,10 @@ int main() {
 
     duck_vel.X = 0;
     duck_vel.Z = 0;
-    duck_vel = HMM_AddV3(duck_vel, HMM_MulV3F(duck_grav, delta));
+    duck_vel = HMM_AddV3(duck_vel, HMM_MulV3F(duck_grav, (float)delta));
     duck_vel = HMM_AddV3(duck_vel, HMM_MulV3F(dir.XYZ, PLR_SPEED));
     HMM_Vec3 test_pos = HMM_AddV3(duck_mdl.transform.Columns[3].XYZ,
-                                  HMM_MulV3F(duck_vel, delta));
+                                  HMM_MulV3F(duck_vel, (float)delta));
     HMM_Vec3 correction =
         blob_get_correction_from_solids(&blob_sim, &test_pos, 0.5f);
 
@@ -276,9 +278,21 @@ int main() {
     }
 
     // Set camera position after moving duck
-    cam_trans->Columns[3].XYZ =
-        HMM_AddV3(duck_mdl.transform.Columns[3].XYZ,
-                  HMM_MulV3F(cam_trans->Columns[2].XYZ, 4.0f));
+    {
+      HMM_Vec3 ro = duck_mdl.transform.Columns[3].XYZ;
+      float cam_dist = 4.0f;
+      HMM_Vec3 rd = HMM_MulV3F(cam_trans->Columns[2].XYZ, cam_dist);
+
+      RaycastResult result;
+      blob_sim_raycast(&result, &blob_sim, ro, rd);
+
+      if (result.has_hit) {
+        cam_dist = result.traveled * 0.7f;
+      }
+
+      cam_trans->Columns[3].XYZ =
+          HMM_AddV3(ro, HMM_MulV3F(cam_trans->Columns[2].XYZ, cam_dist));
+    }
 
     for (int i = 4; i < 6; i++) {
       duck_mdl.blobs[i].radius =
@@ -301,6 +315,7 @@ int main() {
       blob_create(&blob_sim, BLOB_LIQUID, 0.5f, &pos, 5);
 
       HMM_Vec3 force = HMM_MulV3F(cam_trans->Columns[2].XYZ, -1.5f);
+      force = HMM_AddV3(force, (HMM_Vec3){0, 0.5f, 0});
       blob_sim_add_force(&blob_sim, blob_sim.blob_count - 1, &force);
     }
 

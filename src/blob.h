@@ -22,9 +22,6 @@ typedef struct Blob {
   HMM_Vec3 pos;
   HMM_Vec3 prev_pos; // For interpolation
   int mat_idx;
-  union {
-    int liquid_sleep_ticks;
-  };
 } Blob;
 
 // Only a few blobs actually keep track of their velocity
@@ -57,6 +54,16 @@ typedef struct Model {
   ModelBlob *blobs;
   HMM_Mat4 transform;
 } Model;
+
+#define BLOB_RAY_MAX_STEPS 32
+#define BLOB_RAY_INTERSECT 0.001f
+
+typedef struct RaycastResult {
+  bool has_hit;
+  HMM_Vec3 hit;
+  HMM_Vec3 norm;
+  float traveled;
+} RaycastResult;
 
 #define BLOB_OT_MAX_SUBDIVISIONS 3
 // This uses a lot of memory
@@ -95,6 +102,9 @@ void blob_sim_create_mdl(Model *mdl, BlobSim *bs, const ModelBlob *mdl_blob_src,
                          int mdl_blob_count);
 
 void blob_sim_add_force(BlobSim *bs, int blob_idx, const HMM_Vec3 *force);
+
+// rd should not be normalized
+void blob_sim_raycast(RaycastResult *r, const BlobSim *bs, HMM_Vec3 ro, HMM_Vec3 rd);
 
 void blob_simulate(BlobSim *bs, double delta);
 

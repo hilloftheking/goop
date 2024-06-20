@@ -8,6 +8,8 @@
 HMM_Vec3 blob_get_attraction_to(Blob *b, Blob *other) {
   HMM_Vec3 direction = HMM_SubV3(b->pos, other->pos);
   float len = HMM_LenV3(direction);
+  if (len == 0.0f)
+    return (HMM_Vec3){0};
 
   float x = fabsf(BLOB_DESIRED_DISTANCE - len);
 
@@ -68,10 +70,6 @@ Blob *blob_create(BlobSim *bs, BlobType type, float radius,
   b->prev_pos = *pos;
   b->mat_idx = mat_idx;
 
-  if (type == BLOB_LIQUID) {
-    b->liquid_sleep_ticks = 0;
-  }
-
   bs->blob_count++;
 
   return b;
@@ -122,6 +120,55 @@ void blob_sim_add_force(BlobSim *bs, int blob_idx, const HMM_Vec3 *force) {
   }
 
   fprintf(stderr, "Ran out of liquid forces\n");
+}
+
+static float clampf(float x, float a, float b) {
+  return x > a ? x < b ? x : b : a;
+}
+
+static float mixf(float x, float y, float a) { return x * (1.0f - a) + y * a; }
+
+static float sminf(float a, float b, float k) {
+  float h = clampf(0.5f + 0.5f * (b - a) / k, 0.0f, 1.0f);
+  return mixf(b, a, h) - k * h * (1.0f - h);
+}
+
+static float dist_sphere(const HMM_Vec3 *c, float r, const HMM_Vec3 *p) {
+  HMM_Vec3 d = HMM_SubV3(*p, *c);
+  return HMM_LenV3(d) - r;
+}
+
+void blob_sim_raycast(RaycastResult *r, const BlobSim *bs, HMM_Vec3 ro, HMM_Vec3 rd) {
+  r->has_hit = false;
+
+  float ray_dist = HMM_LenV3(rd);
+  if (ray_dist == 0.0f) {
+    return;
+  }
+  HMM_Vec3 rd_n = HMM_NormV3(rd);
+
+  float traveled = 0.0f;
+
+  for (int i = 0; i < BLOB_RAY_MAX_STEPS; i++) {
+    HMM_Vec3 p = HMM_AddV3(ro, HMM_MulV3F(rd_n, traveled));
+
+    float dist = 100000.0f;
+    for (int b = 0; b < bs->blob_count; b++) {
+      dist =
+          sminf(dist, dist_sphere(&bs->blobs[b].pos, bs->blobs[b].radius, &p),
+                BLOB_SMOOTH);
+    }
+
+    traveled += dist;
+
+    if (dist <= BLOB_RAY_INTERSECT) {
+      r->has_hit = true;
+      r->hit = p;
+      r->traveled = traveled;
+    } else if (traveled >= ray_dist) {
+      break;
+    }
+  }
 }
 
 void blob_simulate(BlobSim *bs, double delta) {
@@ -189,22 +236,6 @@ void blob_simulate(BlobSim *bs, double delta) {
       }
     }
   }
-}
-
-static float clampf(float x, float a, float b) {
-  return x > a ? x < b ? x : b : a;
-}
-
-static float mixf(float x, float y, float a) { return x * (1.0f - a) + y * a; }
-
-static float sminf(float a, float b, float k) {
-  float h = clampf(0.5f + 0.5f * (b - a) / k, 0.0f, 1.0f);
-  return mixf(b, a, h) - k * h * (1.0f - h);
-}
-
-static float dist_sphere(const HMM_Vec3 *c, float r, const HMM_Vec3 *p) {
-  HMM_Vec3 d = HMM_SubV3(*p, *c);
-  return HMM_LenV3(d) - r;
 }
 
 static void blob_check_blob_at(float *min_dist, HMM_Vec3 *correction,
