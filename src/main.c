@@ -43,7 +43,7 @@ static void cursor_position_callback(GLFWwindow *window, double xpos,
     cam_rot.X -= (float)(ypos - last_ypos) * CAM_SENS;
     cam_rot.Y -= (float)(xpos - last_xpos) * CAM_SENS;
 
-    cam_rot.X = fmodf(cam_rot.X, HMM_PI32 * 2.0f);
+    cam_rot.X = HMM_Clamp(HMM_PI32 * -0.45f, cam_rot.X, HMM_PI32 * 0.45f);
     cam_rot.Y = fmodf(cam_rot.Y, HMM_PI32 * 2.0f);
   }
 
@@ -143,11 +143,14 @@ int main() {
     blob_create(&blob_sim, BLOB_SOLID, 0.5f, &pos, 1);
   }
 
-  // Create duck out of ModelBlobs
+  // Duck model
 
   Model duck_mdl;
   blob_sim_create_mdl(&duck_mdl, &blob_sim, DUCK_MDL, ARR_SIZE(DUCK_MDL));
-  HMM_Mat4 duck_cam_origin = HMM_Translate((HMM_Vec3){0, 1, 0});
+  duck_mdl.transform.Columns[3].Y = 6.0f;
+
+  HMM_Vec3 duck_vel = {0};
+  HMM_Vec3 duck_grav = {0, -9.81f, 0};
 
   // Angry face model
 
@@ -207,6 +210,13 @@ int main() {
     else
       glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 
+    // Simulate blobs
+
+    if (blob_sim_running)
+      blob_simulate(&blob_sim, delta);
+
+    // Duck movement/physics
+
     HMM_Mat4 *cam_trans = &blob_renderer.cam_trans;
     *cam_trans = HMM_M4D(1.0f);
 
@@ -214,33 +224,6 @@ int main() {
         HMM_MulM4(*cam_trans, HMM_Rotate_RH(cam_rot.Y, (HMM_Vec3){{0, 1, 0}}));
     *cam_trans =
         HMM_MulM4(*cam_trans, HMM_Rotate_RH(cam_rot.X, (HMM_Vec3){{1, 0, 0}}));
-
-    cam_trans->Columns[3].XYZ =
-        HMM_AddV3(HMM_MulM4(duck_mdl.transform, duck_cam_origin).Columns[3].XYZ,
-                  HMM_MulV3F(cam_trans->Columns[2].XYZ, 4.0f));
-
-    // Hold space to spawn more blobs
-
-    if (blob_spawn_cd > 0.0) {
-      blob_spawn_cd -= delta;
-    }
-
-    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS &&
-        blob_spawn_cd <= 0.0) {
-      blob_spawn_cd = BLOB_SPAWN_CD;
-
-      HMM_Vec3 pos = HMM_AddV3(HMM_MulV3F(cam_trans->Columns[2].XYZ, -5.0f),
-                               cam_trans->Columns[3].XYZ);
-      pos.Y += 1.0f;
-      blob_create(&blob_sim, BLOB_LIQUID, 0.5f, &pos, 5);
-    }
-
-    // Simulate blobs
-
-    if (blob_sim_running)
-      blob_simulate(&blob_sim, delta);
-
-    // Move duck with WASD
 
     bool w_press = glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS;
     bool s_press = glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS;
@@ -250,21 +233,14 @@ int main() {
     dir.X = (float)(d_press - a_press);
     dir.Z = (float)(s_press - w_press);
     if (dir.X || dir.Z) {
-      dir = HMM_MulV4F(HMM_NormV4(dir), PLR_SPEED * (float)delta);
-
-      HMM_Vec4 rel_move = HMM_MulM4V4(*cam_trans, dir);
-
-      duck_mdl.transform.Columns[3].XYZ =
-          HMM_AddV3(duck_mdl.transform.Columns[3].XYZ, rel_move.XYZ);
-      /*
-      HMM_Vec3 correction = blob_get_correction_from_solids(
-          &blob_sim, &test_pos, duck_blobs[0]->radius, false);
-      duck_blobs[0]->pos = HMM_AddV3(test_pos, correction);
-      */
+      dir = HMM_MulM4V4(*cam_trans, dir);
+      dir.Y = 0;
+      dir.W = 0;
+      dir = HMM_NormV4(dir);
 
       HMM_Mat4 rot_mat = HMM_M4D(1.0f);
-      rot_mat.Columns[2].XYZ = HMM_MulV3F(HMM_NormV3(rel_move.XYZ), -1.0f);
-      rot_mat.Columns[1].XYZ = cam_trans->Columns[1].XYZ;
+      rot_mat.Columns[2].XYZ = HMM_MulV3F(dir.XYZ, -1.0f);
+      rot_mat.Columns[1].XYZ = (HMM_Vec3){0, 1, 0};
       rot_mat.Columns[0].XYZ =
           HMM_Cross(rot_mat.Columns[1].XYZ, rot_mat.Columns[2].XYZ);
 
@@ -277,9 +253,52 @@ int main() {
       duck_mdl.transform.Columns[2] = rot_mat.Columns[2];
     }
 
+    duck_vel.X = 0;
+    duck_vel.Z = 0;
+    duck_vel = HMM_AddV3(duck_vel, HMM_MulV3F(duck_grav, delta));
+    duck_vel = HMM_AddV3(duck_vel, HMM_MulV3F(dir.XYZ, PLR_SPEED));
+    HMM_Vec3 test_pos = HMM_AddV3(duck_mdl.transform.Columns[3].XYZ,
+                                  HMM_MulV3F(duck_vel, delta));
+    HMM_Vec3 correction =
+        blob_get_correction_from_solids(&blob_sim, &test_pos, 0.5f);
+
+    // Avoid slowly sliding off of mostly flat surfaces
+    if (HMM_LenV3(duck_vel) > 0.1f) {
+      duck_mdl.transform.Columns[3].XYZ = HMM_AddV3(test_pos, correction);
+    }
+
+    if (correction.Y && HMM_DotV3(HMM_NormV3(correction), (HMM_Vec3){0, 1, 0}) >
+                            HMM_CosF(45.0f * HMM_DegToRad)) {
+      duck_vel.Y = 0.0f;
+
+      if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+        duck_vel.Y = 5.0f;
+    }
+
+    // Set camera position after moving duck
+    cam_trans->Columns[3].XYZ =
+        HMM_AddV3(duck_mdl.transform.Columns[3].XYZ,
+                  HMM_MulV3F(cam_trans->Columns[2].XYZ, 4.0f));
+
     for (int i = 4; i < 6; i++) {
-      blob_sim.model_blobs[duck_mdl.idx + i].radius =
+      duck_mdl.blobs[i].radius =
           0.05f + HMM_MIN(0.0f, sinf(5.0f * (float)t) + 0.95f);
+    }
+
+    // Hold right click to spawn more blobs
+
+    if (blob_spawn_cd > 0.0) {
+      blob_spawn_cd -= delta;
+    }
+
+    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_2) == GLFW_PRESS &&
+        blob_spawn_cd <= 0.0) {
+      blob_spawn_cd = BLOB_SPAWN_CD;
+
+      HMM_Vec3 pos = HMM_AddV3(HMM_MulV3F(cam_trans->Columns[2].XYZ, -5.0f),
+                               cam_trans->Columns[3].XYZ);
+      pos.Y += 1.0f;
+      blob_create(&blob_sim, BLOB_LIQUID, 0.5f, &pos, 5);
     }
 
     // Render scene

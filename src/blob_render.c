@@ -147,11 +147,11 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
 }
 
 void blob_render_mdl(BlobRenderer *br, const BlobSim *bs, const Model *mdl) {
-  HMM_Vec4 model_blob_v4[MODEL_BLOB_MAX_COUNT];
+  HMM_Vec4 model_blob_v4[128];
   HMM_Vec3 model_blob_min = {100, 100, 100};
   HMM_Vec3 model_blob_max = {-100, -100, -100};
-  for (int i = 0; i < mdl->count; i++) {
-    ModelBlob *b = &bs->model_blobs[mdl->idx + i];
+  for (int i = 0; i < mdl->blob_count; i++) {
+    const ModelBlob *b = &mdl->blobs[i];
 
     model_blob_v4[i].XYZ = b->pos;
     model_blob_v4[i].W =
@@ -185,7 +185,7 @@ void blob_render_mdl(BlobRenderer *br, const BlobSim *bs, const Model *mdl) {
   glBindImageTexture(0, br->sdf_mdl_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY,
                      GL_RGBA8);
   glUseProgram(br->compute_program);
-  glUniform1i(0, mdl->count);
+  glUniform1i(0, mdl->blob_count);
   glUniform3fv(1, 1, model_blob_pos.Elements);
   glUniform1f(2, model_blob_size);
   glUniform1i(3, BLOB_MODEL_SDF_RES);

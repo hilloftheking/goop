@@ -36,8 +36,6 @@ typedef struct Blob {
   };
 } Blob;
 
-#define MODEL_BLOB_MAX_COUNT 256
-
 // A blob that belongs to a model
 typedef struct ModelBlob {
   float radius;
@@ -49,19 +47,12 @@ typedef struct BlobSim {
   int blob_count;
   Blob *blobs;
 
-  int model_blob_count;
-  ModelBlob *model_blobs;
-
   double tick_timer;
 } BlobSim;
 
-// Models just provide an index into a simulation's model_blobs
 typedef struct Model {
-  // Index of first model blob
-  int idx;
-  // Model blob count
-  int count;
-
+  int blob_count;
+  ModelBlob *blobs;
   HMM_Mat4 transform;
 } Model;
 
@@ -95,10 +86,6 @@ bool blob_is_solid(Blob *b);
 Blob *blob_create(BlobSim *bs, BlobType type, float radius,
                   const HMM_Vec3 *pos, int mat_idx);
 
-// Creates a model blob if possible and adds it to the simulation
-ModelBlob *model_blob_create(BlobSim *bs, float radius,
-                             const HMM_Vec3 *pos, int mat_idx);
-
 void blob_sim_create(BlobSim *bs);
 void blob_sim_destroy(BlobSim *bs);
 
@@ -108,9 +95,8 @@ void blob_sim_create_mdl(Model *mdl, BlobSim *bs, const ModelBlob *mdl_blob_src,
 void blob_simulate(BlobSim *bs, double delta);
 
 // Returns correction vector to separate a blob at pos from solids
-HMM_Vec3 blob_get_correction_from_solids(BlobSim *bs,
-                                         const HMM_Vec3 *pos, float radius,
-                                         bool check_models);
+HMM_Vec3 blob_get_correction_from_solids(BlobSim *bs, const HMM_Vec3 *pos,
+                                         float radius);
 
 // Returns how many bytes are needed to fit the worst case octree
 int blob_ot_get_alloc_size();

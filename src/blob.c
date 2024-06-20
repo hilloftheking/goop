@@ -77,28 +77,9 @@ Blob *blob_create(BlobSim *bs, BlobType type, float radius,
   return b;
 }
 
-ModelBlob *model_blob_create(BlobSim *bs, float radius,
-                             const HMM_Vec3 *pos, int mat_idx) {
-  if (bs->model_blob_count >= MODEL_BLOB_MAX_COUNT) {
-    fprintf(stderr, "Model blob max count reached\n");
-    return NULL;
-  }
-
-  ModelBlob *b = &bs->model_blobs[bs->model_blob_count];
-  b->radius = radius;
-  b->pos = *pos;
-  b->mat_idx = mat_idx;
-
-  bs->model_blob_count++;
-
-  return b;
-}
-
 void blob_sim_create(BlobSim *bs) {
   bs->blob_count = 0;
   bs->blobs = malloc(BLOB_MAX_COUNT * sizeof(*bs->blobs));
-  bs->model_blob_count = 0;
-  bs->model_blobs = malloc(MODEL_BLOB_MAX_COUNT * sizeof(*bs->model_blobs));
   bs->tick_timer = 0.0;
 }
 
@@ -107,22 +88,17 @@ void blob_sim_destroy(BlobSim *bs) {
   free(bs->blobs);
   bs->blobs = NULL;
 
-  bs->model_blob_count = 0;
-  free(bs->model_blobs);
-  bs->model_blobs = NULL;
-
   bs->tick_timer = 0.0;
 }
 
 void blob_sim_create_mdl(Model *mdl, BlobSim *bs, const ModelBlob *mdl_blob_src,
                          int mdl_blob_count) {
-  mdl->idx = bs->model_blob_count;
-  mdl->count = mdl_blob_count;
+  mdl->blobs = malloc(sizeof(*mdl->blobs) * mdl_blob_count);
+  mdl->blob_count = mdl_blob_count;
   mdl->transform = HMM_M4D(1.0f);
 
-  for (int i = 0; i < mdl->count; i++) {
-    model_blob_create(bs, mdl_blob_src[i].radius, &mdl_blob_src[i].pos,
-                      mdl_blob_src[i].mat_idx);
+  for (int i = 0; i < mdl->blob_count; i++) {
+    mdl->blobs[i] = mdl_blob_src[i];
   }
 }
 
@@ -174,8 +150,8 @@ void blob_simulate(BlobSim *bs, double delta) {
     HMM_Vec3 pos_old = bs->blobs[b].pos;
 
     bs->blobs[b].pos = HMM_AddV3(bs->blobs[b].pos, velocity);
-    HMM_Vec3 correction = blob_get_correction_from_solids(
-        bs, &bs->blobs[b].pos, bs->blobs[b].radius, true);
+    HMM_Vec3 correction = blob_get_correction_from_solids(bs, &bs->blobs[b].pos,
+                                                          bs->blobs[b].radius);
     bs->blobs[b].pos = HMM_AddV3(bs->blobs[b].pos, correction);
 
     for (int x = 0; x < 3; x++) {
@@ -230,9 +206,8 @@ static void blob_check_blob_at(float *min_dist, HMM_Vec3 *correction,
   *correction = HMM_AddV3(*correction, HMM_MulV3F(HMM_NormV3(dir), influence));
 }
 
-HMM_Vec3 blob_get_correction_from_solids(BlobSim *bs,
-                                     const HMM_Vec3 *pos, float radius,
-                                     bool check_models) {
+HMM_Vec3 blob_get_correction_from_solids(BlobSim *bs, const HMM_Vec3 *pos,
+                                         float radius) {
   HMM_Vec3 correction = {0};
 
   float min_dist = 10000.0f;
@@ -246,14 +221,6 @@ HMM_Vec3 blob_get_correction_from_solids(BlobSim *bs,
 
     blob_check_blob_at(&min_dist, &correction, &bs->blobs[ob].pos,
                        bs->blobs[ob].radius, pos, radius, BLOB_SMOOTH);
-  }
-
-  if (check_models) {
-    for (int ob = 0; ob < bs->model_blob_count; ob++) {
-      blob_check_blob_at(&min_dist, &correction, &bs->model_blobs[ob].pos,
-                         bs->model_blobs[ob].radius, pos, radius,
-                         MODEL_BLOB_SMOOTH);
-    }
   }
 
   // Is this blob inside of a solid blob?

@@ -71,9 +71,16 @@ vec4 ray_march(vec3 ro, vec3 rd) {
     float dist = (((1.0 - dat.a) * (sdf_max_dist - BLOB_SDF_MIN_DIST)) + BLOB_SDF_MIN_DIST) * dist_scale;
 
     if (dist <= MARCH_INTERSECT) {
+      // Try not to give the player a seizure when the camera is clipping
+      if (dist <= -MARCH_INTERSECT * 1.5) {
+        return vec4(dat.rgb * 0.5, max(0.01, traveled));
+      }
+
       // TODO: Getting the normal is kind of expensive
       // Maybe it could be possible to have a low quality normal in the SDF
       vec3 normal = get_normal_at(p);
+      // TODO: Don't create normal matrix here
+      normal = normalize(transpose(inverse(mat3(model_mat))) * normal);
 
       const vec3 light0_dir = -normalize(vec3(-2.0, -5.0, -3.0));
       const vec3 light0_col = vec3(1.0, 1.0, 0.9);
