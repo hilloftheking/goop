@@ -80,6 +80,12 @@ Blob *blob_create(BlobSim *bs, BlobType type, float radius,
 void blob_sim_create(BlobSim *bs) {
   bs->blob_count = 0;
   bs->blobs = malloc(BLOB_MAX_COUNT * sizeof(*bs->blobs));
+
+  bs->liq_forces = malloc(BLOB_SIM_MAX_FORCES * sizeof(*bs->liq_forces));
+  for (int i = 0; i < BLOB_SIM_MAX_FORCES; i++) {
+    bs->liq_forces[i].idx = -1;
+  }
+
   bs->tick_timer = 0.0;
 }
 
@@ -87,6 +93,9 @@ void blob_sim_destroy(BlobSim *bs) {
   bs->blob_count = 0;
   free(bs->blobs);
   bs->blobs = NULL;
+
+  free(bs->liq_forces);
+  bs->liq_forces = NULL;
 
   bs->tick_timer = 0.0;
 }
@@ -102,6 +111,19 @@ void blob_sim_create_mdl(Model *mdl, BlobSim *bs, const ModelBlob *mdl_blob_src,
   }
 }
 
+void blob_sim_add_force(BlobSim *bs, int blob_idx, const HMM_Vec3 *force) {
+  for (int i = 0; i < BLOB_SIM_MAX_FORCES; i++) {
+    LiquidForce *f = &bs->liq_forces[i];
+    if (f->idx == -1) {
+      f->idx = blob_idx;
+      f->force = *force;
+      return;
+    }
+  }
+
+  fprintf(stderr, "Ran out of liquid forces\n");
+}
+
 void blob_simulate(BlobSim *bs, double delta) {
   bs->tick_timer -= delta;
 
@@ -111,9 +133,6 @@ void blob_simulate(BlobSim *bs, double delta) {
 
   for (int b = 0; b < bs->blob_count; b++) {
     if (blob_is_solid(&bs->blobs[b]))
-      continue;
-    if (bs->blobs[b].type == BLOB_LIQUID &&
-        bs->blobs[b].liquid_sleep_ticks >= BLOB_SLEEP_TICKS_REQUIRED)
       continue;
 
     bs->blobs[b].prev_pos = bs->blobs[b].pos;
@@ -132,10 +151,6 @@ void blob_simulate(BlobSim *bs, double delta) {
         HMM_Vec3 attraction =
             blob_get_attraction_to(&bs->blobs[b], &bs->blobs[ob]);
 
-        float attraction_magnitude = HMM_LenV3(attraction);
-        if (attraction_magnitude > BLOB_SLEEP_THRESHOLD)
-          bs->blobs[ob].liquid_sleep_ticks = 0;
-
         velocity = HMM_AddV3(velocity, attraction);
 
         anti_grav += blob_get_support_with(&bs->blobs[b], &bs->blobs[ob]);
@@ -146,8 +161,6 @@ void blob_simulate(BlobSim *bs, double delta) {
 
     // Now position + velocity will be the new position before dealing with
     // solid blobs
-
-    HMM_Vec3 pos_old = bs->blobs[b].pos;
 
     bs->blobs[b].pos = HMM_AddV3(bs->blobs[b].pos, velocity);
     HMM_Vec3 correction = blob_get_correction_from_solids(bs, &bs->blobs[b].pos,
@@ -162,21 +175,19 @@ void blob_simulate(BlobSim *bs, double delta) {
           fminf(bs->blobs[b].pos.Elements[x],
                 BLOB_SIM_POS.Elements[x] + BLOB_SIM_SIZE * 0.5f);
     }
+  }
 
-#ifdef BLOB_SLEEP_ENABLED
-    if (!blob_is_solid(&bs->blobs[b])) {
-      // If movement during this tick was under the sleep threshold, the sleep
-      // counter can be incremented
-      vec3 pos_diff;
-      vec3_sub(pos_diff, bs->blobs[b].pos, pos_old);
-      float movement = vec3_len(pos_diff);
-      if (movement < BLOB_SLEEP_THRESHOLD) {
-        bs->blobs[b].liquid_sleep_ticks++;
-      } else {
-        bs->blobs[b].liquid_sleep_ticks = 0;
+  for (int i = 0; i < BLOB_SIM_MAX_FORCES; i++) {
+    LiquidForce *f = &bs->liq_forces[i];
+    if (f->idx >= 0) {
+      HMM_Vec3 *p = &bs->blobs[f->idx].pos;
+      *p = HMM_AddV3(*p, f->force);
+
+      f->force = HMM_MulV3F(f->force, 0.8f);
+      if (HMM_LenV3(f->force) < 0.1f) {
+        f->idx = -1;
       }
     }
-#endif
   }
 }
 

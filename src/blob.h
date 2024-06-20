@@ -12,15 +12,6 @@
 
 #define BLOB_TICK_TIME 0.1
 
-// TODO: Wake up sleeping blobs when blob character is near
-// #define BLOB_SLEEP_ENABLED
-
-// How many ticks until a blob can go to sleep
-#define BLOB_SLEEP_TICKS_REQUIRED 10
-
-// How weak attraction and movement must be before sleeping is allowed
-#define BLOB_SLEEP_THRESHOLD 0.008f
-
 #define BLOB_SPAWN_CD 0.05
 
 typedef enum BlobType { BLOB_LIQUID = 0, BLOB_SOLID = 1 } BlobType;
@@ -36,19 +27,30 @@ typedef struct Blob {
   };
 } Blob;
 
+// Only a few blobs actually keep track of their velocity
+#define BLOB_SIM_MAX_FORCES 32
+
+// Associates a blob index with a force
+typedef struct LiquidForce {
+  int idx;
+  HMM_Vec3 force;
+} LiquidForce;
+
+typedef struct BlobSim {
+  int blob_count;
+  Blob *blobs;
+
+  LiquidForce *liq_forces;
+
+  double tick_timer;
+} BlobSim;
+
 // A blob that belongs to a model
 typedef struct ModelBlob {
   float radius;
   HMM_Vec3 pos;
   int mat_idx;
 } ModelBlob;
-
-typedef struct BlobSim {
-  int blob_count;
-  Blob *blobs;
-
-  double tick_timer;
-} BlobSim;
 
 typedef struct Model {
   int blob_count;
@@ -91,6 +93,8 @@ void blob_sim_destroy(BlobSim *bs);
 
 void blob_sim_create_mdl(Model *mdl, BlobSim *bs, const ModelBlob *mdl_blob_src,
                          int mdl_blob_count);
+
+void blob_sim_add_force(BlobSim *bs, int blob_idx, const HMM_Vec3 *force);
 
 void blob_simulate(BlobSim *bs, double delta);
 

@@ -299,6 +299,9 @@ int main() {
                                cam_trans->Columns[3].XYZ);
       pos.Y += 1.0f;
       blob_create(&blob_sim, BLOB_LIQUID, 0.5f, &pos, 5);
+
+      HMM_Vec3 force = HMM_MulV3F(cam_trans->Columns[2].XYZ, -1.5f);
+      blob_sim_add_force(&blob_sim, blob_sim.blob_count - 1, &force);
     }
 
     // Render scene
