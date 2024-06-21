@@ -143,15 +143,15 @@ int main() {
     blob_create(&blob_sim, BLOB_SOLID, 0.5f, &pos, 1);
   }
 
-  // Duck model
+  // Player model
 
-  Model duck_mdl;
-  blob_sim_create_mdl(&duck_mdl, &blob_sim, DUCK_MDL, ARR_SIZE(DUCK_MDL));
-  duck_mdl.transform.Columns[3].Y = 6.0f;
-  HMM_Quat duck_quat = {0, 0, 0, 1};
+  Model player_mdl;
+  blob_sim_create_mdl(&player_mdl, &blob_sim, PLAYER_MDL, ARR_SIZE(PLAYER_MDL));
+  player_mdl.transform.Columns[3].Y = 6.0f;
+  HMM_Quat player_quat = {0, 0, 0, 1};
 
-  HMM_Vec3 duck_vel = {0};
-  HMM_Vec3 duck_grav = {0, -9.81f, 0};
+  HMM_Vec3 player_vel = {0};
+  HMM_Vec3 player_grav = {0, -9.81f, 0};
 
   // Angry face model
 
@@ -217,7 +217,7 @@ int main() {
     // Avoid extremely high deltas
     delta = HMM_MIN(delta, 1.0 / 30.0);
 
-    // Duck movement/physics
+    // Player movement/physics
 
     HMM_Mat4 *cam_trans = &blob_renderer.cam_trans;
     *cam_trans = HMM_M4D(1.0f);
@@ -247,39 +247,41 @@ int main() {
           HMM_Cross(rot_mat.Columns[1].XYZ, rot_mat.Columns[2].XYZ);
 
       float step = (HMM_PI32 * 4.0f) * (float)delta;
-      duck_quat = HMM_RotateTowardsQ(duck_quat, step, HMM_M4ToQ_RH(rot_mat));
-      rot_mat = HMM_QToM4(duck_quat);
+      player_quat = HMM_RotateTowardsQ(player_quat, step, HMM_M4ToQ_RH(rot_mat));
+      rot_mat = HMM_QToM4(player_quat);
 
-      duck_mdl.transform.Columns[0] = rot_mat.Columns[0];
-      duck_mdl.transform.Columns[1] = rot_mat.Columns[1];
-      duck_mdl.transform.Columns[2] = rot_mat.Columns[2];
+      player_mdl.transform.Columns[0] = rot_mat.Columns[0];
+      player_mdl.transform.Columns[1] = rot_mat.Columns[1];
+      player_mdl.transform.Columns[2] = rot_mat.Columns[2];
     }
 
-    duck_vel.X = 0;
-    duck_vel.Z = 0;
-    duck_vel = HMM_AddV3(duck_vel, HMM_MulV3F(duck_grav, (float)delta));
-    duck_vel = HMM_AddV3(duck_vel, HMM_MulV3F(dir.XYZ, PLR_SPEED));
-    HMM_Vec3 test_pos = HMM_AddV3(duck_mdl.transform.Columns[3].XYZ,
-                                  HMM_MulV3F(duck_vel, (float)delta));
+    player_vel.X = 0;
+    player_vel.Z = 0;
+    player_vel = HMM_AddV3(player_vel, HMM_MulV3F(player_grav, (float)delta));
+    player_vel = HMM_AddV3(player_vel, HMM_MulV3F(dir.XYZ, PLR_SPEED));
+    HMM_Vec3 test_pos = HMM_AddV3(player_mdl.transform.Columns[3].XYZ,
+                                  HMM_MulV3F(player_vel, (float)delta));
+    HMM_Vec3 test_pos_with_offset = HMM_AddV3(test_pos, (HMM_Vec3){0, 0.5f, 0});
     HMM_Vec3 correction =
-        blob_get_correction_from_solids(&blob_sim, &test_pos, 0.5f);
+        blob_get_correction_from_solids(&blob_sim, &test_pos_with_offset, 0.5f);
 
     // Avoid slowly sliding off of mostly flat surfaces
-    if (HMM_LenV3(duck_vel) > 0.1f) {
-      duck_mdl.transform.Columns[3].XYZ = HMM_AddV3(test_pos, correction);
+    if (HMM_LenV3(player_vel) > 0.1f) {
+      player_mdl.transform.Columns[3].XYZ = HMM_AddV3(test_pos, correction);
     }
 
     if (correction.Y && HMM_DotV3(HMM_NormV3(correction), (HMM_Vec3){0, 1, 0}) >
                             HMM_CosF(45.0f * HMM_DegToRad)) {
-      duck_vel.Y = 0.0f;
+      player_vel.Y = 0.0f;
 
       if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
-        duck_vel.Y = 5.0f;
+        player_vel.Y = 5.0f;
     }
 
-    // Set camera position after moving duck
+    // Set camera position after moving player
     {
-      HMM_Vec3 ro = duck_mdl.transform.Columns[3].XYZ;
+      HMM_Vec3 ro = HMM_AddV3(player_mdl.transform.Columns[3].XYZ,
+                              (HMM_Vec3){0, 2.3f, 0});
       float cam_dist = 4.0f;
       HMM_Vec3 rd = HMM_MulV3F(cam_trans->Columns[2].XYZ, cam_dist);
 
@@ -292,11 +294,6 @@ int main() {
 
       cam_trans->Columns[3].XYZ =
           HMM_AddV3(ro, HMM_MulV3F(cam_trans->Columns[2].XYZ, cam_dist));
-    }
-
-    for (int i = 4; i < 6; i++) {
-      duck_mdl.blobs[i].radius =
-          0.05f + HMM_MIN(0.0f, sinf(5.0f * (float)t) + 0.95f);
     }
 
     // Hold right click to spawn more blobs
@@ -330,7 +327,7 @@ int main() {
     skybox_draw(&skybox, &blob_renderer.view_mat, &blob_renderer.proj_mat);
 
     blob_render_sim(&blob_renderer, &blob_sim);
-    blob_render_mdl(&blob_renderer, &blob_sim, &duck_mdl);
+    blob_render_mdl(&blob_renderer, &blob_sim, &player_mdl);
     blob_render_mdl(&blob_renderer, &blob_sim, &angry_mdl);
     glfwSwapBuffers(window);
   }

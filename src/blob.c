@@ -154,6 +154,8 @@ void blob_sim_raycast(RaycastResult *r, const BlobSim *bs, HMM_Vec3 ro, HMM_Vec3
 
     float dist = 100000.0f;
     for (int b = 0; b < bs->blob_count; b++) {
+      if (bs->blobs[b].type == BLOB_LIQUID)
+        continue;
       dist =
           sminf(dist, dist_sphere(&bs->blobs[b].pos, bs->blobs[b].radius, &p),
                 BLOB_SMOOTH);
