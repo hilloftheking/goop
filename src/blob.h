@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "HandmadeMath.h"
 
@@ -12,7 +13,7 @@
 #define BLOB_FALL_SPEED 0.5f
 #define BLOB_TICK_TIME 0.1
 
-#define BLOB_SPAWN_CD 0.1
+#define BLOB_SPAWN_CD 0.05
 
 typedef enum LiquidType { LIQUID_BASE, LIQUID_PROJECTILE } LiquidType;
 
@@ -22,12 +23,21 @@ typedef struct SolidBlob {
   int mat_idx;
 } SolidBlob;
 
+typedef struct LiquidBlob LiquidBlob;
+typedef void (*ProjectileCallback)(LiquidBlob *, uint64_t);
+
 typedef struct LiquidBlob {
   LiquidType type;
   float radius;
   HMM_Vec3 pos;
   HMM_Vec3 prev_pos; // For interpolation
   int mat_idx;
+  union {
+    struct {
+      ProjectileCallback callback;
+      uint64_t userdata;
+    } projectile;
+  };
 } LiquidBlob;
 
 // Only a few liquid blobs actually keep track of their velocity

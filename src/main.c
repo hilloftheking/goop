@@ -25,6 +25,11 @@ static void gl_debug_callback(GLenum source, GLenum type, GLuint id,
   fprintf(stderr, "[GL DEBUG] %s\n", message);
 }
 
+static float rand_float() { return ((float)rand() / (float)(RAND_MAX)); }
+
+#define WIN_RES_X 1024
+#define WIN_RES_Y 768
+
 #define PLR_SPEED 4.0f
 #define CAM_SENS 0.01f
 
@@ -33,6 +38,30 @@ static HMM_Vec2 cam_rot;
 static struct {
   BlobRenderer *br;
 } cb_data;
+
+static struct {
+  bool player_dead;
+  bool enemy_dead;
+  Model *player_mdl;
+  Model *enemy_mdl;
+  BlobSim *blob_sim;
+} global_data;
+
+static void liquify_model(BlobSim *bs, const Model *mdl) {
+  for (int i = 0; i < mdl->blob_count; i++) {
+    HMM_Vec4 p = {0, 0, 0, 1};
+    p.XYZ = mdl->blobs[i].pos;
+    p = HMM_MulM4V4(mdl->transform, p);
+
+    liquid_blob_create(bs, LIQUID_BASE, HMM_MAX(0.1f, mdl->blobs[i].radius),
+                       &p.XYZ, mdl->blobs[i].mat_idx);
+    HMM_Vec3 force;
+    for (int x = 0; x < 3; x++) {
+      force.Elements[x] = (rand_float() - 0.5f) * 0.5f;
+    }
+    blob_sim_add_force(bs, bs->liq_blob_count - 1, &force);
+  }
+}
 
 static void cursor_position_callback(GLFWwindow *window, double xpos,
                                      double ypos) {
@@ -67,6 +96,13 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action,
     vsync_enabled ^= true;
     glfwSwapInterval((int)vsync_enabled);
     break;
+  case GLFW_KEY_K:
+    if (!global_data.player_dead) {
+      printf("Liquifying player\n");
+      global_data.player_dead = true;
+      liquify_model(global_data.blob_sim, global_data.player_mdl);
+    }
+    break;
   }
 }
 
@@ -87,7 +123,18 @@ static void glfw_fatal_error() {
   exit(-1);
 }
 
-static float rand_float() { return ((float)rand() / (float)(RAND_MAX)); }
+static void proj_callback(LiquidBlob *b, uint64_t userdata) {
+  if (HMM_LenV3(
+          HMM_SubV3(b->pos, global_data.enemy_mdl->transform.Columns[3].XYZ)) <=
+      0.5f + b->radius) {
+    if (!global_data.enemy_dead) {
+      global_data.enemy_dead = true;
+      printf("callback\n");
+
+      liquify_model(global_data.blob_sim, global_data.enemy_mdl);
+    }
+  }
+}
 
 int main() {
   if (!glfwInit())
@@ -101,7 +148,8 @@ int main() {
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
   glfwWindowHint(GLFW_DEPTH_BITS, 32);
 
-  GLFWwindow *window = glfwCreateWindow(512, 512, "goop", NULL, NULL);
+  GLFWwindow *window =
+      glfwCreateWindow(WIN_RES_X, WIN_RES_Y, "goop", NULL, NULL);
   if (!window)
     glfw_fatal_error();
 
@@ -135,6 +183,7 @@ int main() {
 
   BlobSim blob_sim;
   blob_sim_create(&blob_sim);
+  global_data.blob_sim = &blob_sim;
 
   // Ground
   for (int i = 0; i < 512; i++) {
@@ -148,8 +197,9 @@ int main() {
   Model player_mdl;
   blob_sim_create_mdl(&player_mdl, &blob_sim, PLAYER_MDL, ARR_SIZE(PLAYER_MDL));
   player_mdl.transform.Columns[3].Y = 6.0f;
-  HMM_Quat player_quat = {0, 0, 0, 1};
+  global_data.player_mdl = &player_mdl;
 
+  HMM_Quat player_quat = {0, 0, 0, 1};
   HMM_Vec3 player_vel = {0};
   HMM_Vec3 player_grav = {0, -9.81f, 0};
 
@@ -158,6 +208,7 @@ int main() {
   Model angry_mdl;
   blob_sim_create_mdl(&angry_mdl, &blob_sim, ANGRY_MDL, ARR_SIZE(ANGRY_MDL));
   angry_mdl.transform.Columns[3].Y = 3.0f;
+  global_data.enemy_mdl = &angry_mdl;
 
   // Create cube buffers for blob renderer and skybox
   cube_create_buffers();
@@ -167,6 +218,7 @@ int main() {
 
   BlobRenderer blob_renderer;
   blob_renderer_create(&blob_renderer);
+  blob_renderer.aspect_ratio = (float)WIN_RES_X / (float)WIN_RES_Y;
   cb_data.br = &blob_renderer;
 
   cam_rot.X = -0.5f;
@@ -179,14 +231,11 @@ int main() {
   int frames_this_second = 0;
   double second_timer = 1.0;
 
-  double t = 0.0;
-
   double blob_spawn_cd = 0.0;
 
   while (!glfwWindowShouldClose(window)) {
     uint64_t timer_val = glfwGetTimerValue();
     double delta = (timer_val - prev_timer) / (double)timer_freq;
-    t += delta;
     prev_timer = timer_val;
 
     frames_this_second++;
@@ -312,7 +361,9 @@ int main() {
                                cam_trans->Columns[3].XYZ);
       pos.Y += 1.0f;
 
-      liquid_blob_create(&blob_sim, LIQUID_PROJECTILE, radius, &pos, 5);
+      LiquidBlob *b =
+          liquid_blob_create(&blob_sim, LIQUID_PROJECTILE, radius, &pos, 5);
+      b->projectile.callback = proj_callback;
 
       HMM_Vec3 force = HMM_MulV3F(cam_trans->Columns[2].XYZ, -1.5f);
       force = HMM_AddV3(force, (HMM_Vec3){0, 0.5f, 0});
@@ -330,8 +381,10 @@ int main() {
     skybox_draw(&skybox, &blob_renderer.view_mat, &blob_renderer.proj_mat);
 
     blob_render_sim(&blob_renderer, &blob_sim);
-    blob_render_mdl(&blob_renderer, &blob_sim, &player_mdl);
-    blob_render_mdl(&blob_renderer, &blob_sim, &angry_mdl);
+    if (!global_data.player_dead)
+      blob_render_mdl(&blob_renderer, &blob_sim, &player_mdl);
+    if (!global_data.enemy_dead)
+      blob_render_mdl(&blob_renderer, &blob_sim, &angry_mdl);
     glfwSwapBuffers(window);
   }
 

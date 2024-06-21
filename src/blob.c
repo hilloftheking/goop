@@ -240,6 +240,10 @@ void blob_simulate(BlobSim *bs, double delta) {
       b->pos.Elements[x] = fminf(b->pos.Elements[x], BLOB_SIM_POS.Elements[x] +
                                                          BLOB_SIM_SIZE * 0.5f);
     }
+
+    if (b->type == LIQUID_PROJECTILE) {
+      b->projectile.callback(b, b->projectile.userdata);
+    }
   }
 
   for (int i = 0; i < BLOB_SIM_MAX_FORCES; i++) {
