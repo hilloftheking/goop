@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "blob.h"
 
@@ -94,12 +95,25 @@ LiquidBlob *liquid_blob_create(BlobSim *bs, LiquidType type, float radius,
   return b;
 }
 
+void liquid_blob_queue_delete(BlobSim *bs, LiquidBlob *b) {
+  if (bs->liq_blob_del_queue_count >= BLOB_SIM_MAX_DELETIONS) {
+    fprintf(stderr, "Too many blobs being deleted\n");
+    return;
+  }
+
+  int idx = b - bs->liq_blobs;
+  bs->liq_blob_del_queue[bs->liq_blob_del_queue_count++] = idx;
+}
+
 void blob_sim_create(BlobSim *bs) {
   bs->sol_blob_count = 0;
   bs->sol_blobs = malloc(SOLID_BLOB_MAX_COUNT * sizeof(*bs->sol_blobs));
 
   bs->liq_blob_count = 0;
   bs->liq_blobs = malloc(LIQUID_BLOB_MAX_COUNT * sizeof(*bs->liq_blobs));
+  bs->liq_blob_del_queue_count = 0;
+  bs->liq_blob_del_queue =
+      malloc(BLOB_SIM_MAX_DELETIONS * sizeof(*bs->liq_blob_del_queue));
 
   bs->liq_forces = malloc(BLOB_SIM_MAX_FORCES * sizeof(*bs->liq_forces));
   for (int i = 0; i < BLOB_SIM_MAX_FORCES; i++) {
@@ -258,6 +272,38 @@ void blob_simulate(BlobSim *bs, double delta) {
       }
     }
   }
+
+  // Deletion queue
+  for (int di = 0; di < bs->liq_blob_del_queue_count; di++) {
+    // Move everything after this blob to the left
+    int blob_idx = bs->liq_blob_del_queue[di];
+    int last_idx = bs->liq_blob_count - 1;
+    int cpy_size = (last_idx - blob_idx) * sizeof(*bs->liq_blobs);
+    memmove(bs->liq_blobs + blob_idx, bs->liq_blobs + blob_idx + 1, cpy_size);
+
+    // Decrement blob indices in liquid forces
+    for (int fi = 0; fi < BLOB_SIM_MAX_FORCES; fi++) {
+      LiquidForce *f = &bs->liq_forces[fi];
+      if (f->idx == blob_idx) {
+        // If this liquid force applies to the current blob, stop it
+        f->idx = -1;
+      } else if (f->idx > blob_idx) {
+        f->idx--;
+      }
+    }
+
+    // Also decrement blob indices in the deletion queue
+    for (int dj = di + 1; dj < bs->liq_blob_del_queue_count; dj++) {
+      if (bs->liq_blob_del_queue[dj] > blob_idx) {
+        bs->liq_blob_del_queue[dj]--;
+      }
+    }
+
+    // Finally update the blob count
+    bs->liq_blob_count--;
+  }
+  // Clear deletion queue
+  bs->liq_blob_del_queue_count = 0;
 }
 
 static void blob_check_blob_at(float *min_dist, HMM_Vec3 *correction,

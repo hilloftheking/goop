@@ -43,6 +43,8 @@ typedef struct LiquidBlob {
 // Only a few liquid blobs actually keep track of their velocity
 #define BLOB_SIM_MAX_FORCES 32
 
+#define BLOB_SIM_MAX_DELETIONS 128
+
 // Associates a liquid blob index with a force
 typedef struct LiquidForce {
   int idx;
@@ -55,6 +57,8 @@ typedef struct BlobSim {
 
   int liq_blob_count;
   LiquidBlob *liq_blobs;
+  int liq_blob_del_queue_count;
+  int *liq_blob_del_queue;
 
   LiquidForce *liq_forces;
 
@@ -116,6 +120,9 @@ SolidBlob *solid_blob_create(BlobSim *bs, float radius, const HMM_Vec3 *pos,
 // returned pointer may not always be valid.
 LiquidBlob *liquid_blob_create(BlobSim *bs, LiquidType type, float radius,
                                const HMM_Vec3 *pos, int mat_idx);
+
+// Deletes a liquid blob after a simulation tick
+void liquid_blob_queue_delete(BlobSim *bs, LiquidBlob *b);
 
 void blob_sim_create(BlobSim *bs);
 void blob_sim_destroy(BlobSim *bs);

@@ -127,6 +127,8 @@ static void proj_callback(LiquidBlob *b, uint64_t userdata) {
   if (HMM_LenV3(
           HMM_SubV3(b->pos, global_data.enemy_mdl->transform.Columns[3].XYZ)) <=
       0.5f + b->radius) {
+    liquid_blob_queue_delete(global_data.blob_sim, b);
+
     if (!global_data.enemy_dead) {
       global_data.enemy_dead = true;
       printf("callback\n");
