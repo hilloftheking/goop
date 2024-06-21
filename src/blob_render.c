@@ -51,7 +51,8 @@ void blob_renderer_create(BlobRenderer *br) {
   glBindImageTexture(0, br->sdf_mdl_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY,
                      GL_RGBA8);
 
-  br->blobs_ssbo_size_bytes = sizeof(HMM_Vec4) * BLOB_MAX_COUNT;
+  br->blobs_ssbo_size_bytes =
+      sizeof(HMM_Vec4) * (SOLID_BLOB_MAX_COUNT + LIQUID_BLOB_MAX_COUNT);
   glGenBuffers(1, &br->blobs_ssbo);
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, br->blobs_ssbo);
   glBufferData(GL_SHADER_STORAGE_BUFFER, br->blobs_ssbo_size_bytes, NULL,
@@ -66,7 +67,8 @@ void blob_renderer_create(BlobRenderer *br) {
   br->aspect_ratio = 1.0f;
 
   br->blob_ot = blob_ot_create();
-  br->blobs_lerped = malloc(BLOB_MAX_COUNT * sizeof(*br->blobs_lerped));
+  br->blobs_lerped = malloc((SOLID_BLOB_MAX_COUNT + LIQUID_BLOB_MAX_COUNT) *
+                            sizeof(*br->blobs_lerped));
 }
 
 void blob_renderer_destroy(BlobRenderer *br) {
@@ -96,22 +98,34 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
   blob_ot_reset(br->blob_ot);
 
   // Loop backwards so that new blobs are prioritized in the octree
-  for (int i = bs->blob_count - 1; i >= 0; i--) {
-    HMM_Vec4 *pos_lerp = &br->blobs_lerped[i];
+  for (int i = bs->liq_blob_count - 1; i >= 0; i--) {
+    int ssbo_idx = SOLID_BLOB_MAX_COUNT + i;
+    HMM_Vec4 *pos_lerp = &br->blobs_lerped[ssbo_idx];
+
+    const LiquidBlob *b = &bs->liq_blobs[i];
     for (int x = 0; x < 3; x++) {
-      float diff =
-          bs->blobs[i].pos.Elements[x] - bs->blobs[i].prev_pos.Elements[x];
+      float diff = b->pos.Elements[x] - b->prev_pos.Elements[x];
       float diff_delta =
           diff * (float)((BLOB_TICK_TIME - bs->tick_timer) / BLOB_TICK_TIME);
 
-      pos_lerp->Elements[x] = bs->blobs[i].prev_pos.Elements[x] + diff_delta;
+      pos_lerp->Elements[x] = b->prev_pos.Elements[x] + diff_delta;
     }
 
-    pos_lerp->W =
-        (float)((int)(bs->blobs[i].radius * BLOB_RADIUS_MULT) * BLOB_MAT_COUNT +
-                bs->blobs[i].mat_idx);
+    pos_lerp->W = (float)((int)(b->radius * BLOB_RADIUS_MULT) * BLOB_MAT_COUNT +
+                          b->mat_idx);
 
-    blob_ot_insert(br->blob_ot, &pos_lerp->XYZ, i);
+    blob_ot_insert(br->blob_ot, &pos_lerp->XYZ, ssbo_idx);
+  }
+
+  for (int i = bs->sol_blob_count - 1; i >= 0; i--) {
+    SolidBlob *b = &bs->sol_blobs[i];
+
+    br->blobs_lerped[i].XYZ = b->pos;
+    br->blobs_lerped[i].W =
+        (float)((int)(b->radius * BLOB_RADIUS_MULT) * BLOB_MAT_COUNT +
+                b->mat_idx);
+
+    blob_ot_insert(br->blob_ot, &b->pos, i);
   }
 
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, br->blobs_ssbo);

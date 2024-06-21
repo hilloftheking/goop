@@ -5,21 +5,23 @@
 
 #include "blob.h"
 
-HMM_Vec3 blob_get_attraction_to(Blob *b, Blob *other) {
+HMM_Vec3 blob_get_attraction_to(LiquidBlob *b, LiquidBlob *other) {
   HMM_Vec3 direction = HMM_SubV3(b->pos, other->pos);
   float len = HMM_LenV3(direction);
   if (len == 0.0f)
     return (HMM_Vec3){0};
 
-  float x = fabsf(BLOB_DESIRED_DISTANCE - len);
+  float desired_dist = (b->radius + other->radius) * 0.4f;
 
-  if (x > BLOB_DESIRED_DISTANCE * 2.0f) {
+  float x = fabsf(desired_dist - len);
+
+  if (x > desired_dist * 2.0f) {
     return (HMM_Vec3){0};
   }
 
   float power =
-      fmaxf(0.0f, logf(-5.0f * x * (x - BLOB_DESIRED_DISTANCE) + 1.0f));
-  // float power = fmaxf(0.0f, -2.1f * x * (x - BLOB_DESIRED_DISTANCE));
+      fmaxf(0.0f, logf(-5.0f * x * (x - desired_dist) + 1.0f));
+  // float power = fmaxf(0.0f, -2.1f * x * (x - desired_dist));
 
   direction = HMM_MulV3F(HMM_NormV3(direction), power);
 
@@ -31,13 +33,15 @@ HMM_Vec3 blob_get_attraction_to(Blob *b, Blob *other) {
   return direction;
 }
 
-float blob_get_support_with(Blob *b, Blob *other) {
+float blob_get_support_with(LiquidBlob *b, LiquidBlob *other) {
   HMM_Vec3 direction = HMM_SubV3(b->pos, other->pos);
   float len = HMM_LenV3(direction);
 
-  float x = BLOB_DESIRED_DISTANCE - len;
+  float desired_dist = (b->radius + other->radius) * 0.4f;
 
-  if (fabsf(x) > BLOB_DESIRED_DISTANCE * 2.0f) {
+  float x = desired_dist - len;
+
+  if (fabsf(x) > desired_dist * 2.0f) {
     return 0.0f;
   }
 
@@ -54,30 +58,48 @@ float blob_get_support_with(Blob *b, Blob *other) {
   return fmaxf(0.0f, -1.0f * x * x + 0.4f);
 }
 
-bool blob_is_solid(Blob *b) { return b->type == BLOB_SOLID; }
-
-Blob *blob_create(BlobSim *bs, BlobType type, float radius,
-                  const HMM_Vec3 *pos, int mat_idx) {
-  if (bs->blob_count >= BLOB_MAX_COUNT) {
-    fprintf(stderr, "Blob max count reached\n");
+SolidBlob *solid_blob_create(BlobSim *bs, float radius, const HMM_Vec3 *pos,
+                             int mat_idx) {
+  if (bs->sol_blob_count >= SOLID_BLOB_MAX_COUNT) {
+    fprintf(stderr, "Solid blob max count reached\n");
     return NULL;
   }
 
-  Blob *b = &bs->blobs[bs->blob_count];
+  SolidBlob *b = &bs->sol_blobs[bs->sol_blob_count];
+  b->radius = radius;
+  b->pos = *pos;
+  b->mat_idx = mat_idx;
+
+  bs->sol_blob_count++;
+
+  return b;
+}
+
+LiquidBlob *liquid_blob_create(BlobSim *bs, LiquidType type, float radius,
+                               const HMM_Vec3 *pos, int mat_idx) {
+  if (bs->liq_blob_count >= LIQUID_BLOB_MAX_COUNT) {
+    fprintf(stderr, "Liquid blob max count reached\n");
+    return NULL;
+  }
+
+  LiquidBlob *b = &bs->liq_blobs[bs->liq_blob_count];
   b->type = type;
   b->radius = radius;
   b->pos = *pos;
   b->prev_pos = *pos;
   b->mat_idx = mat_idx;
 
-  bs->blob_count++;
+  bs->liq_blob_count++;
 
   return b;
 }
 
 void blob_sim_create(BlobSim *bs) {
-  bs->blob_count = 0;
-  bs->blobs = malloc(BLOB_MAX_COUNT * sizeof(*bs->blobs));
+  bs->sol_blob_count = 0;
+  bs->sol_blobs = malloc(SOLID_BLOB_MAX_COUNT * sizeof(*bs->sol_blobs));
+
+  bs->liq_blob_count = 0;
+  bs->liq_blobs = malloc(LIQUID_BLOB_MAX_COUNT * sizeof(*bs->liq_blobs));
 
   bs->liq_forces = malloc(BLOB_SIM_MAX_FORCES * sizeof(*bs->liq_forces));
   for (int i = 0; i < BLOB_SIM_MAX_FORCES; i++) {
@@ -88,9 +110,13 @@ void blob_sim_create(BlobSim *bs) {
 }
 
 void blob_sim_destroy(BlobSim *bs) {
-  bs->blob_count = 0;
-  free(bs->blobs);
-  bs->blobs = NULL;
+  bs->sol_blob_count = 0;
+  free(bs->sol_blobs);
+  bs->sol_blobs = NULL;
+
+  bs->liq_blob_count = 0;
+  free(bs->liq_blobs);
+  bs->liq_blobs = NULL;
 
   free(bs->liq_forces);
   bs->liq_forces = NULL;
@@ -153,12 +179,10 @@ void blob_sim_raycast(RaycastResult *r, const BlobSim *bs, HMM_Vec3 ro, HMM_Vec3
     HMM_Vec3 p = HMM_AddV3(ro, HMM_MulV3F(rd_n, traveled));
 
     float dist = 100000.0f;
-    for (int b = 0; b < bs->blob_count; b++) {
-      if (bs->blobs[b].type == BLOB_LIQUID)
-        continue;
-      dist =
-          sminf(dist, dist_sphere(&bs->blobs[b].pos, bs->blobs[b].radius, &p),
-                BLOB_SMOOTH);
+    for (int b = 0; b < bs->sol_blob_count; b++) {
+      dist = sminf(
+          dist, dist_sphere(&bs->sol_blobs[b].pos, bs->sol_blobs[b].radius, &p),
+          BLOB_SMOOTH);
     }
 
     traveled += dist;
@@ -180,56 +204,48 @@ void blob_simulate(BlobSim *bs, double delta) {
     return;
   bs->tick_timer = BLOB_TICK_TIME;
 
-  for (int b = 0; b < bs->blob_count; b++) {
-    if (blob_is_solid(&bs->blobs[b]))
-      continue;
+  for (int i = 0; i < bs->liq_blob_count; i++) {
+    LiquidBlob *b = &bs->liq_blobs[i];
 
-    bs->blobs[b].prev_pos = bs->blobs[b].pos;
+    b->prev_pos = b->pos;
 
     HMM_Vec3 velocity = {0};
 
-    if (bs->blobs[b].type == BLOB_LIQUID) {
-      float anti_grav = 0.0f;
+    float anti_grav = 0.0f;
 
-      for (int ob = 0; ob < bs->blob_count; ob++) {
-        if (ob == b)
-          continue;
-        if (blob_is_solid(&bs->blobs[ob]))
-          continue;
+    for (int j = 0; j < bs->liq_blob_count; j++) {
+      if (j == i)
+        continue;
 
-        HMM_Vec3 attraction =
-            blob_get_attraction_to(&bs->blobs[b], &bs->blobs[ob]);
+      LiquidBlob *ob = &bs->liq_blobs[j];
 
-        velocity = HMM_AddV3(velocity, attraction);
-
-        anti_grav += blob_get_support_with(&bs->blobs[b], &bs->blobs[ob]);
-      }
-
-      velocity.Y -= BLOB_FALL_SPEED * (1.0f - fminf(anti_grav, 1.0f));
+      HMM_Vec3 attraction = blob_get_attraction_to(b, ob);
+      velocity = HMM_AddV3(velocity, attraction);
+      anti_grav += blob_get_support_with(b, ob);
     }
+
+    velocity.Y -= BLOB_FALL_SPEED * (1.0f - fminf(anti_grav, 1.0f));
 
     // Now position + velocity will be the new position before dealing with
     // solid blobs
 
-    bs->blobs[b].pos = HMM_AddV3(bs->blobs[b].pos, velocity);
-    HMM_Vec3 correction = blob_get_correction_from_solids(bs, &bs->blobs[b].pos,
-                                                          bs->blobs[b].radius);
-    bs->blobs[b].pos = HMM_AddV3(bs->blobs[b].pos, correction);
+    b->pos = HMM_AddV3(b->pos, velocity);
+    HMM_Vec3 correction =
+        blob_get_correction_from_solids(bs, &b->pos, b->radius);
+    b->pos = HMM_AddV3(b->pos, correction);
 
     for (int x = 0; x < 3; x++) {
-      bs->blobs[b].pos.Elements[x] =
-          fmaxf(bs->blobs[b].pos.Elements[x],
-                BLOB_SIM_POS.Elements[x] - BLOB_SIM_SIZE * 0.5f);
-      bs->blobs[b].pos.Elements[x] =
-          fminf(bs->blobs[b].pos.Elements[x],
-                BLOB_SIM_POS.Elements[x] + BLOB_SIM_SIZE * 0.5f);
+      b->pos.Elements[x] = fmaxf(b->pos.Elements[x], BLOB_SIM_POS.Elements[x] -
+                                                         BLOB_SIM_SIZE * 0.5f);
+      b->pos.Elements[x] = fminf(b->pos.Elements[x], BLOB_SIM_POS.Elements[x] +
+                                                         BLOB_SIM_SIZE * 0.5f);
     }
   }
 
   for (int i = 0; i < BLOB_SIM_MAX_FORCES; i++) {
     LiquidForce *f = &bs->liq_forces[i];
     if (f->idx >= 0) {
-      HMM_Vec3 *p = &bs->blobs[f->idx].pos;
+      HMM_Vec3 *p = &bs->liq_blobs[f->idx].pos;
       *p = HMM_AddV3(*p, f->force);
 
       f->force = HMM_MulV3F(f->force, 0.8f);
@@ -259,12 +275,9 @@ HMM_Vec3 blob_get_correction_from_solids(BlobSim *bs, const HMM_Vec3 *pos,
   // Use smin to figure out if this blob is touching smoothed solid blobs
   // Also check how much each blob should influence the normal
 
-  for (int ob = 0; ob < bs->blob_count; ob++) {
-    if (bs->blobs[ob].type == BLOB_LIQUID)
-      continue;
-
-    blob_check_blob_at(&min_dist, &correction, &bs->blobs[ob].pos,
-                       bs->blobs[ob].radius, pos, radius, BLOB_SMOOTH);
+  for (int i = 0; i < bs->sol_blob_count; i++) {
+    blob_check_blob_at(&min_dist, &correction, &bs->sol_blobs[i].pos,
+                       bs->sol_blobs[i].radius, pos, radius, BLOB_SMOOTH);
   }
 
   // Is this blob inside of a solid blob?

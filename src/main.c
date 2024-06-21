@@ -140,7 +140,7 @@ int main() {
   for (int i = 0; i < 512; i++) {
     HMM_Vec3 pos = {(rand_float() - 0.5f) * 12.0f, rand_float() * 0.5f,
                     (rand_float() - 0.5f) * 12.0f};
-    blob_create(&blob_sim, BLOB_SOLID, 0.5f, &pos, 1);
+    solid_blob_create(&blob_sim, 0.5f, &pos, 1);
   }
 
   // Player model
@@ -296,7 +296,7 @@ int main() {
           HMM_AddV3(ro, HMM_MulV3F(cam_trans->Columns[2].XYZ, cam_dist));
     }
 
-    // Hold right click to spawn more blobs
+    // Hold right click to create projectiles
 
     if (blob_spawn_cd > 0.0) {
       blob_spawn_cd -= delta;
@@ -306,14 +306,17 @@ int main() {
         blob_spawn_cd <= 0.0) {
       blob_spawn_cd = BLOB_SPAWN_CD;
 
+      float radius = 0.2f + rand_float() * 0.3f;
+
       HMM_Vec3 pos = HMM_AddV3(HMM_MulV3F(cam_trans->Columns[2].XYZ, -5.0f),
                                cam_trans->Columns[3].XYZ);
       pos.Y += 1.0f;
-      blob_create(&blob_sim, BLOB_LIQUID, 0.5f, &pos, 5);
+
+      liquid_blob_create(&blob_sim, LIQUID_PROJECTILE, radius, &pos, 5);
 
       HMM_Vec3 force = HMM_MulV3F(cam_trans->Columns[2].XYZ, -1.5f);
       force = HMM_AddV3(force, (HMM_Vec3){0, 0.5f, 0});
-      blob_sim_add_force(&blob_sim, blob_sim.blob_count - 1, &force);
+      blob_sim_add_force(&blob_sim, blob_sim.liq_blob_count - 1, &force);
     }
 
     // Render scene

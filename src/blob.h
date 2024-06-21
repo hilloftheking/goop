@@ -6,36 +6,45 @@
 
 #include "blob_defines.h"
 
-#define BLOB_MAX_COUNT 1024
-#define BLOB_DESIRED_DISTANCE 0.4f
-#define BLOB_FALL_SPEED 0.5f
+#define SOLID_BLOB_MAX_COUNT 1024
+#define LIQUID_BLOB_MAX_COUNT 1024
 
+#define BLOB_FALL_SPEED 0.5f
 #define BLOB_TICK_TIME 0.1
 
-#define BLOB_SPAWN_CD 0.05
+#define BLOB_SPAWN_CD 0.1
 
-typedef enum BlobType { BLOB_LIQUID = 0, BLOB_SOLID = 1 } BlobType;
+typedef enum LiquidType { LIQUID_BASE, LIQUID_PROJECTILE } LiquidType;
 
-typedef struct Blob {
-  BlobType type;
+typedef struct SolidBlob {
+  float radius;
+  HMM_Vec3 pos;
+  int mat_idx;
+} SolidBlob;
+
+typedef struct LiquidBlob {
+  LiquidType type;
   float radius;
   HMM_Vec3 pos;
   HMM_Vec3 prev_pos; // For interpolation
   int mat_idx;
-} Blob;
+} LiquidBlob;
 
-// Only a few blobs actually keep track of their velocity
+// Only a few liquid blobs actually keep track of their velocity
 #define BLOB_SIM_MAX_FORCES 32
 
-// Associates a blob index with a force
+// Associates a liquid blob index with a force
 typedef struct LiquidForce {
   int idx;
   HMM_Vec3 force;
 } LiquidForce;
 
 typedef struct BlobSim {
-  int blob_count;
-  Blob *blobs;
+  int sol_blob_count;
+  SolidBlob *sol_blobs;
+
+  int liq_blob_count;
+  LiquidBlob *liq_blobs;
 
   LiquidForce *liq_forces;
 
@@ -83,17 +92,20 @@ static const HMM_Vec3 BLOB_SIM_POS = {0, 8, 0};
 static const float BLOB_SIM_SIZE = 16.0f;
 
 // How much force is needed to attract b to other
-HMM_Vec3 blob_get_attraction_to(Blob *b, Blob *other);
+HMM_Vec3 blob_get_attraction_to(LiquidBlob *b, LiquidBlob *other);
 
 // How much anti gravitational force is applied to b from other
-float blob_get_support_with(Blob *b, Blob *other);
+float blob_get_support_with(LiquidBlob *b, LiquidBlob *other);
 
-// Returns true if a blob is solid
-bool blob_is_solid(Blob *b);
+// Creates a solid blob if possible and adds it to the simulation. The
+// returned pointer may not always be valid.
+SolidBlob *solid_blob_create(BlobSim *bs, float radius, const HMM_Vec3 *pos,
+                             int mat_idx);
 
-// Creates a blob if possible and adds it to the simulation
-Blob *blob_create(BlobSim *bs, BlobType type, float radius,
-                  const HMM_Vec3 *pos, int mat_idx);
+// Creates a liquid blob if possible and adds it to the simulation. The
+// returned pointer may not always be valid.
+LiquidBlob *liquid_blob_create(BlobSim *bs, LiquidType type, float radius,
+                               const HMM_Vec3 *pos, int mat_idx);
 
 void blob_sim_create(BlobSim *bs);
 void blob_sim_destroy(BlobSim *bs);
