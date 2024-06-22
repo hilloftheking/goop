@@ -98,11 +98,11 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
   blob_ot_reset(br->blob_ot);
 
   // Loop backwards so that new blobs are prioritized in the octree
-  for (int i = bs->liq_blob_count - 1; i >= 0; i--) {
+  for (int i = bs->liq_blobs.count - 1; i >= 0; i--) {
     int ssbo_idx = SOLID_BLOB_MAX_COUNT + i;
     HMM_Vec4 *pos_lerp = &br->blobs_lerped[ssbo_idx];
 
-    const LiquidBlob *b = &bs->liq_blobs[i];
+    const LiquidBlob *b = fixed_array_get_const(&bs->liq_blobs, i);
     for (int x = 0; x < 3; x++) {
       float diff = b->pos.Elements[x] - b->prev_pos.Elements[x];
       float diff_delta =
@@ -117,8 +117,8 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
     blob_ot_insert(br->blob_ot, &pos_lerp->XYZ, ssbo_idx);
   }
 
-  for (int i = bs->sol_blob_count - 1; i >= 0; i--) {
-    SolidBlob *b = &bs->sol_blobs[i];
+  for (int i = bs->sol_blobs.count - 1; i >= 0; i--) {
+    const SolidBlob *b = fixed_array_get_const(&bs->sol_blobs, i);
 
     br->blobs_lerped[i].XYZ = b->pos;
     br->blobs_lerped[i].W =

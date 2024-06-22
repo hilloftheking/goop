@@ -183,6 +183,7 @@
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="src\fixed_array.h" />
     <ClInclude Include="src\resource.h" />
     <ClInclude Include="src\blob.h" />
     <ClInclude Include="src\blob_defines.h" />
@@ -195,6 +196,7 @@
     <ClInclude Include="src\stb\stb_image.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\fixed_array.c" />
     <ClCompile Include="src\blob.c" />
     <ClCompile Include="src\blob_render.c" />
     <ClCompile Include="src\cube.c" />

@@ -5,6 +5,7 @@
 
 #include "HandmadeMath.h"
 
+#include "fixed_array.h"
 #include "blob_defines.h"
 
 #define SOLID_BLOB_MAX_COUNT 1024
@@ -52,13 +53,9 @@ typedef struct LiquidForce {
 } LiquidForce;
 
 typedef struct BlobSim {
-  int sol_blob_count;
-  SolidBlob *sol_blobs;
-
-  int liq_blob_count;
-  LiquidBlob *liq_blobs;
-  int liq_blob_del_queue_count;
-  int *liq_blob_del_queue;
+  FixedArray sol_blobs;
+  FixedArray liq_blobs;
+  FixedArray liq_blob_del_queue;
 
   LiquidForce *liq_forces;
 

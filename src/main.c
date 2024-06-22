@@ -59,7 +59,7 @@ static void liquify_model(BlobSim *bs, const Model *mdl) {
     for (int x = 0; x < 3; x++) {
       force.Elements[x] = (rand_float() - 0.5f) * 0.5f;
     }
-    blob_sim_add_force(bs, bs->liq_blob_count - 1, &force);
+    blob_sim_add_force(bs, bs->liq_blobs.count - 1, &force);
   }
 }
 
@@ -129,12 +129,14 @@ static void proj_callback(LiquidBlob *b, uint64_t userdata) {
       0.5f + b->radius) {
     liquid_blob_queue_delete(global_data.blob_sim, b);
 
+    /*
     if (!global_data.enemy_dead) {
       global_data.enemy_dead = true;
       printf("callback\n");
 
       liquify_model(global_data.blob_sim, global_data.enemy_mdl);
     }
+    */
   }
 }
 
@@ -347,6 +349,26 @@ int main() {
           HMM_AddV3(ro, HMM_MulV3F(cam_trans->Columns[2].XYZ, cam_dist));
     }
 
+    // Blinking
+
+    const double BLINK_OCCUR = 2.0;
+    const double BLINK_TIME = 0.3;
+    const float EYE_RADIUS = 0.05f;
+    static double t = 0.0;
+    t += delta;
+    player_mdl.blobs[8].radius = EYE_RADIUS;
+    player_mdl.blobs[9].radius = EYE_RADIUS;
+    if (t >= BLINK_OCCUR + BLINK_TIME) {
+      t = 0.0;
+    } else if (t >= BLINK_OCCUR) {
+      float x = (float)(t - BLINK_OCCUR);
+      float r =
+          ((cosf(((2.0f * HMM_PI32) / (float)BLINK_TIME) * x) * 0.5f) + 0.5f) *
+          EYE_RADIUS;
+      player_mdl.blobs[8].radius = r;
+      player_mdl.blobs[9].radius = r;
+    }
+
     // Hold right click to create projectiles
 
     if (blob_spawn_cd > 0.0) {
@@ -369,7 +391,7 @@ int main() {
 
       HMM_Vec3 force = HMM_MulV3F(cam_trans->Columns[2].XYZ, -1.5f);
       force = HMM_AddV3(force, (HMM_Vec3){0, 0.5f, 0});
-      blob_sim_add_force(&blob_sim, blob_sim.liq_blob_count - 1, &force);
+      blob_sim_add_force(&blob_sim, blob_sim.liq_blobs.count - 1, &force);
     }
 
     // Render scene

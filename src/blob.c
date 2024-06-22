@@ -61,59 +61,51 @@ float blob_get_support_with(LiquidBlob *b, LiquidBlob *other) {
 
 SolidBlob *solid_blob_create(BlobSim *bs, float radius, const HMM_Vec3 *pos,
                              int mat_idx) {
-  if (bs->sol_blob_count >= SOLID_BLOB_MAX_COUNT) {
+  SolidBlob *b = fixed_array_append(&bs->sol_blobs, NULL);
+  if (!b) {
     fprintf(stderr, "Solid blob max count reached\n");
     return NULL;
   }
 
-  SolidBlob *b = &bs->sol_blobs[bs->sol_blob_count];
   b->radius = radius;
   b->pos = *pos;
   b->mat_idx = mat_idx;
-
-  bs->sol_blob_count++;
 
   return b;
 }
 
 LiquidBlob *liquid_blob_create(BlobSim *bs, LiquidType type, float radius,
                                const HMM_Vec3 *pos, int mat_idx) {
-  if (bs->liq_blob_count >= LIQUID_BLOB_MAX_COUNT) {
+  LiquidBlob *b = fixed_array_append(&bs->liq_blobs, NULL);
+  if (!b) {
     fprintf(stderr, "Liquid blob max count reached\n");
     return NULL;
   }
 
-  LiquidBlob *b = &bs->liq_blobs[bs->liq_blob_count];
   b->type = type;
   b->radius = radius;
   b->pos = *pos;
   b->prev_pos = *pos;
   b->mat_idx = mat_idx;
 
-  bs->liq_blob_count++;
-
   return b;
 }
 
 void liquid_blob_queue_delete(BlobSim *bs, LiquidBlob *b) {
-  if (bs->liq_blob_del_queue_count >= BLOB_SIM_MAX_DELETIONS) {
+  int *idx = fixed_array_append(&bs->liq_blob_del_queue, NULL);
+  if (!idx) {
     fprintf(stderr, "Too many blobs being deleted\n");
     return;
   }
 
-  int idx = b - bs->liq_blobs;
-  bs->liq_blob_del_queue[bs->liq_blob_del_queue_count++] = idx;
+  *idx = b - (LiquidBlob *)bs->liq_blobs.data;
 }
 
 void blob_sim_create(BlobSim *bs) {
-  bs->sol_blob_count = 0;
-  bs->sol_blobs = malloc(SOLID_BLOB_MAX_COUNT * sizeof(*bs->sol_blobs));
-
-  bs->liq_blob_count = 0;
-  bs->liq_blobs = malloc(LIQUID_BLOB_MAX_COUNT * sizeof(*bs->liq_blobs));
-  bs->liq_blob_del_queue_count = 0;
-  bs->liq_blob_del_queue =
-      malloc(BLOB_SIM_MAX_DELETIONS * sizeof(*bs->liq_blob_del_queue));
+  fixed_array_create(&bs->sol_blobs, sizeof(SolidBlob), SOLID_BLOB_MAX_COUNT);
+  fixed_array_create(&bs->liq_blobs, sizeof(LiquidBlob), LIQUID_BLOB_MAX_COUNT);
+  fixed_array_create(&bs->liq_blob_del_queue, sizeof(int),
+                     BLOB_SIM_MAX_DELETIONS);
 
   bs->liq_forces = malloc(BLOB_SIM_MAX_FORCES * sizeof(*bs->liq_forces));
   for (int i = 0; i < BLOB_SIM_MAX_FORCES; i++) {
@@ -124,13 +116,9 @@ void blob_sim_create(BlobSim *bs) {
 }
 
 void blob_sim_destroy(BlobSim *bs) {
-  bs->sol_blob_count = 0;
-  free(bs->sol_blobs);
-  bs->sol_blobs = NULL;
-
-  bs->liq_blob_count = 0;
-  free(bs->liq_blobs);
-  bs->liq_blobs = NULL;
+  fixed_array_destroy(&bs->sol_blobs);
+  fixed_array_destroy(&bs->liq_blobs);
+  fixed_array_destroy(&bs->liq_blob_del_queue);
 
   free(bs->liq_forces);
   bs->liq_forces = NULL;
@@ -193,10 +181,9 @@ void blob_sim_raycast(RaycastResult *r, const BlobSim *bs, HMM_Vec3 ro, HMM_Vec3
     HMM_Vec3 p = HMM_AddV3(ro, HMM_MulV3F(rd_n, traveled));
 
     float dist = 100000.0f;
-    for (int b = 0; b < bs->sol_blob_count; b++) {
-      dist = sminf(
-          dist, dist_sphere(&bs->sol_blobs[b].pos, bs->sol_blobs[b].radius, &p),
-          BLOB_SMOOTH);
+    for (int j = 0; j < bs->sol_blobs.count; j++) {
+      const SolidBlob *b = fixed_array_get_const(&bs->sol_blobs, j);
+      dist = sminf(dist, dist_sphere(&b->pos, b->radius, &p), BLOB_SMOOTH);
     }
 
     traveled += dist;
@@ -218,8 +205,8 @@ void blob_simulate(BlobSim *bs, double delta) {
     return;
   bs->tick_timer = BLOB_TICK_TIME;
 
-  for (int i = 0; i < bs->liq_blob_count; i++) {
-    LiquidBlob *b = &bs->liq_blobs[i];
+  for (int i = 0; i < bs->liq_blobs.count; i++) {
+    LiquidBlob *b = fixed_array_get(&bs->liq_blobs, i);
 
     b->prev_pos = b->pos;
 
@@ -227,11 +214,11 @@ void blob_simulate(BlobSim *bs, double delta) {
 
     float anti_grav = 0.0f;
 
-    for (int j = 0; j < bs->liq_blob_count; j++) {
+    for (int j = 0; j < bs->liq_blobs.count; j++) {
       if (j == i)
         continue;
 
-      LiquidBlob *ob = &bs->liq_blobs[j];
+      LiquidBlob *ob = fixed_array_get(&bs->liq_blobs, j);
 
       HMM_Vec3 attraction = blob_get_attraction_to(b, ob);
       velocity = HMM_AddV3(velocity, attraction);
@@ -263,7 +250,8 @@ void blob_simulate(BlobSim *bs, double delta) {
   for (int i = 0; i < BLOB_SIM_MAX_FORCES; i++) {
     LiquidForce *f = &bs->liq_forces[i];
     if (f->idx >= 0) {
-      HMM_Vec3 *p = &bs->liq_blobs[f->idx].pos;
+      HMM_Vec3 *p =
+          &((LiquidBlob *)fixed_array_get(&bs->liq_blobs, f->idx))->pos;
       *p = HMM_AddV3(*p, f->force);
 
       f->force = HMM_MulV3F(f->force, 0.8f);
@@ -274,12 +262,10 @@ void blob_simulate(BlobSim *bs, double delta) {
   }
 
   // Deletion queue
-  for (int di = 0; di < bs->liq_blob_del_queue_count; di++) {
+  for (int di = 0; di < bs->liq_blob_del_queue.count; di++) {
     // Move everything after this blob to the left
-    int blob_idx = bs->liq_blob_del_queue[di];
-    int last_idx = bs->liq_blob_count - 1;
-    int cpy_size = (last_idx - blob_idx) * sizeof(*bs->liq_blobs);
-    memmove(bs->liq_blobs + blob_idx, bs->liq_blobs + blob_idx + 1, cpy_size);
+    int blob_idx = *(int *)fixed_array_get(&bs->liq_blob_del_queue, di);
+    fixed_array_remove(&bs->liq_blobs, blob_idx);
 
     // Decrement blob indices in liquid forces
     for (int fi = 0; fi < BLOB_SIM_MAX_FORCES; fi++) {
@@ -293,17 +279,15 @@ void blob_simulate(BlobSim *bs, double delta) {
     }
 
     // Also decrement blob indices in the deletion queue
-    for (int dj = di + 1; dj < bs->liq_blob_del_queue_count; dj++) {
-      if (bs->liq_blob_del_queue[dj] > blob_idx) {
-        bs->liq_blob_del_queue[dj]--;
+    for (int dj = di + 1; dj < bs->liq_blob_del_queue.count; dj++) {
+      int *other_idx = fixed_array_get(&bs->liq_blob_del_queue, dj);
+      if (*other_idx > blob_idx) {
+        (*other_idx)--;
       }
     }
-
-    // Finally update the blob count
-    bs->liq_blob_count--;
   }
   // Clear deletion queue
-  bs->liq_blob_del_queue_count = 0;
+  bs->liq_blob_del_queue.count = 0;
 }
 
 static void blob_check_blob_at(float *min_dist, HMM_Vec3 *correction,
@@ -325,9 +309,10 @@ HMM_Vec3 blob_get_correction_from_solids(BlobSim *bs, const HMM_Vec3 *pos,
   // Use smin to figure out if this blob is touching smoothed solid blobs
   // Also check how much each blob should influence the normal
 
-  for (int i = 0; i < bs->sol_blob_count; i++) {
-    blob_check_blob_at(&min_dist, &correction, &bs->sol_blobs[i].pos,
-                       bs->sol_blobs[i].radius, pos, radius, BLOB_SMOOTH);
+  for (int i = 0; i < bs->sol_blobs.count; i++) {
+    SolidBlob *b = fixed_array_get(&bs->sol_blobs, i);
+    blob_check_blob_at(&min_dist, &correction, &b->pos, b->radius, pos, radius,
+                       BLOB_SMOOTH);
   }
 
   // Is this blob inside of a solid blob?
