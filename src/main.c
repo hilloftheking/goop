@@ -123,22 +123,22 @@ static void glfw_fatal_error() {
   exit(-1);
 }
 
-static void proj_callback(LiquidBlob *b, uint64_t userdata) {
+/*
+static void proj_callback(Projectile *p, uint64_t userdata) {
   if (HMM_LenV3(
           HMM_SubV3(b->pos, global_data.enemy_mdl->transform.Columns[3].XYZ)) <=
       0.5f + b->radius) {
     liquid_blob_queue_delete(global_data.blob_sim, b);
 
-    /*
     if (!global_data.enemy_dead) {
       global_data.enemy_dead = true;
       printf("callback\n");
 
       liquify_model(global_data.blob_sim, global_data.enemy_mdl);
     }
-    */
   }
 }
+*/
 
 int main() {
   if (!glfwInit())
@@ -385,13 +385,10 @@ int main() {
                                cam_trans->Columns[3].XYZ);
       pos.Y += 1.0f;
 
-      LiquidBlob *b =
-          liquid_blob_create(&blob_sim, LIQUID_PROJECTILE, radius, &pos, 5);
-      b->projectile.callback = proj_callback;
+      HMM_Vec3 force = HMM_MulV3F(cam_trans->Columns[2].XYZ, -15.0f);
+      force = HMM_AddV3(force, (HMM_Vec3){0, 5.0f, 0});
 
-      HMM_Vec3 force = HMM_MulV3F(cam_trans->Columns[2].XYZ, -1.5f);
-      force = HMM_AddV3(force, (HMM_Vec3){0, 0.5f, 0});
-      blob_sim_add_force(&blob_sim, blob_sim.liq_blobs.count - 1, &force);
+      Projectile *p = projectile_create(&blob_sim, radius, &pos, 5, &force);
     }
 
     // Render scene

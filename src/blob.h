@@ -10,13 +10,14 @@
 
 #define SOLID_BLOB_MAX_COUNT 1024
 #define LIQUID_BLOB_MAX_COUNT 1024
+#define PROJECTILE_MAX_COUNT 1024
 
 #define BLOB_FALL_SPEED 0.5f
 #define BLOB_TICK_TIME 0.1
 
 #define BLOB_SPAWN_CD 0.05
 
-typedef enum LiquidType { LIQUID_BASE, LIQUID_PROJECTILE } LiquidType;
+typedef enum LiquidType { LIQUID_BASE } LiquidType;
 
 typedef struct SolidBlob {
   float radius;
@@ -24,22 +25,26 @@ typedef struct SolidBlob {
   int mat_idx;
 } SolidBlob;
 
-typedef struct LiquidBlob LiquidBlob;
-typedef void (*ProjectileCallback)(LiquidBlob *, uint64_t);
-
 typedef struct LiquidBlob {
   LiquidType type;
   float radius;
   HMM_Vec3 pos;
   HMM_Vec3 prev_pos; // For interpolation
   int mat_idx;
-  union {
-    struct {
-      ProjectileCallback callback;
-      uint64_t userdata;
-    } projectile;
-  };
 } LiquidBlob;
+
+typedef struct Projectile Projectile;
+typedef void (*ProjectileCallback)(Projectile *, uint64_t);
+
+typedef struct Projectile {
+  float radius;
+  HMM_Vec3 pos;
+  HMM_Vec3 prev_pos; // For interpolation
+  int mat_idx;
+  HMM_Vec3 vel;
+  ProjectileCallback callback;
+  uint64_t userdata;
+} Projectile;
 
 // Only a few liquid blobs actually keep track of their velocity
 #define BLOB_SIM_MAX_FORCES 32
@@ -55,6 +60,8 @@ typedef struct LiquidForce {
 typedef struct BlobSim {
   FixedArray sol_blobs;
   FixedArray liq_blobs;
+  FixedArray projectiles;
+
   FixedArray liq_blob_del_queue;
 
   LiquidForce *liq_forces;
@@ -117,6 +124,11 @@ SolidBlob *solid_blob_create(BlobSim *bs, float radius, const HMM_Vec3 *pos,
 // returned pointer may not always be valid.
 LiquidBlob *liquid_blob_create(BlobSim *bs, LiquidType type, float radius,
                                const HMM_Vec3 *pos, int mat_idx);
+
+// Creates a projectile if possible and adds it to the simulation. The returned
+// pointer may not always be valid.
+Projectile *projectile_create(BlobSim *bs, float radius, const HMM_Vec3 *pos,
+                              int mat_idx, const HMM_Vec3 *vel);
 
 // Deletes a liquid blob after a simulation tick
 void liquid_blob_queue_delete(BlobSim *bs, LiquidBlob *b);

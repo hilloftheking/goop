@@ -91,6 +91,25 @@ LiquidBlob *liquid_blob_create(BlobSim *bs, LiquidType type, float radius,
   return b;
 }
 
+Projectile *projectile_create(BlobSim *bs, float radius, const HMM_Vec3 *pos,
+                              int mat_idx, const HMM_Vec3 *vel) {
+  Projectile *p = fixed_array_append(&bs->projectiles, NULL);
+  if (!p) {
+    fprintf(stderr, "Projectile max count reached\n");
+    return NULL;
+  }
+
+  p->radius = radius;
+  p->pos = *pos;
+  p->prev_pos = *pos;
+  p->mat_idx = mat_idx;
+  p->vel = *vel;
+  p->callback = NULL;
+  p->userdata = 0;
+
+  return p;
+}
+
 void liquid_blob_queue_delete(BlobSim *bs, LiquidBlob *b) {
   int *idx = fixed_array_append(&bs->liq_blob_del_queue, NULL);
   if (!idx) {
@@ -104,6 +123,8 @@ void liquid_blob_queue_delete(BlobSim *bs, LiquidBlob *b) {
 void blob_sim_create(BlobSim *bs) {
   fixed_array_create(&bs->sol_blobs, sizeof(SolidBlob), SOLID_BLOB_MAX_COUNT);
   fixed_array_create(&bs->liq_blobs, sizeof(LiquidBlob), LIQUID_BLOB_MAX_COUNT);
+  fixed_array_create(&bs->projectiles, sizeof(Projectile),
+                     PROJECTILE_MAX_COUNT);
   fixed_array_create(&bs->liq_blob_del_queue, sizeof(int),
                      BLOB_SIM_MAX_DELETIONS);
 
@@ -118,6 +139,7 @@ void blob_sim_create(BlobSim *bs) {
 void blob_sim_destroy(BlobSim *bs) {
   fixed_array_destroy(&bs->sol_blobs);
   fixed_array_destroy(&bs->liq_blobs);
+  fixed_array_destroy(&bs->projectiles);
   fixed_array_destroy(&bs->liq_blob_del_queue);
 
   free(bs->liq_forces);
@@ -205,6 +227,7 @@ void blob_simulate(BlobSim *bs, double delta) {
     return;
   bs->tick_timer = BLOB_TICK_TIME;
 
+  // Liquid blobs
   for (int i = 0; i < bs->liq_blobs.count; i++) {
     LiquidBlob *b = fixed_array_get(&bs->liq_blobs, i);
 
@@ -241,12 +264,9 @@ void blob_simulate(BlobSim *bs, double delta) {
       b->pos.Elements[x] = fminf(b->pos.Elements[x], BLOB_SIM_POS.Elements[x] +
                                                          BLOB_SIM_SIZE * 0.5f);
     }
-
-    if (b->type == LIQUID_PROJECTILE) {
-      b->projectile.callback(b, b->projectile.userdata);
-    }
   }
 
+  // Liquid blob forces
   for (int i = 0; i < BLOB_SIM_MAX_FORCES; i++) {
     LiquidForce *f = &bs->liq_forces[i];
     if (f->idx >= 0) {
@@ -259,6 +279,20 @@ void blob_simulate(BlobSim *bs, double delta) {
         f->idx = -1;
       }
     }
+  }
+
+  // Projectiles
+  for (int i = 0; i < bs->projectiles.count; i++) {
+    Projectile *p = fixed_array_get(&bs->projectiles, i);
+
+    p->prev_pos = p->pos;
+
+    const HMM_Vec3 PROJ_GRAV = {0, -9.8f / 10.0f, 0};
+    p->vel = HMM_AddV3(p->vel, PROJ_GRAV);
+    p->pos = HMM_AddV3(p->pos, HMM_MulV3F(p->vel, 0.1f));
+
+    if (p->callback)
+      p->callback(p, p->userdata);
   }
 
   // Deletion queue
