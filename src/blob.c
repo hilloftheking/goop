@@ -20,8 +20,7 @@ HMM_Vec3 blob_get_attraction_to(LiquidBlob *b, LiquidBlob *other) {
     return (HMM_Vec3){0};
   }
 
-  float power =
-      fmaxf(0.0f, logf(-50.0f * x * (x - desired_dist) + 1.0f));
+  float power = fmaxf(0.0f, logf(-50.0f * x * (x - desired_dist) + 1.0f));
 
   direction = HMM_MulV3F(HMM_NormV3(direction), power);
 
@@ -58,72 +57,82 @@ float blob_get_support_with(LiquidBlob *b, LiquidBlob *other) {
   return fmaxf(0.0f, -1.0f * x * x + 0.4f);
 }
 
-SolidBlob *solid_blob_create(BlobSim *bs, float radius, const HMM_Vec3 *pos,
-                             int mat_idx) {
-  SolidBlob *b = fixed_array_append(&bs->sol_blobs, NULL);
+SolidBlob *solid_blob_create(BlobSim *bs) {
+  SolidBlob *b = fixed_array_append(&bs->solids, NULL);
   if (!b) {
     fprintf(stderr, "Solid blob max count reached\n");
     return NULL;
   }
 
-  b->radius = radius;
-  b->pos = *pos;
-  b->mat_idx = mat_idx;
+  b->radius = BLOB_DEFAULT_RADIUS;
+  b->pos = HMM_V3(0, 0, 0);
+  b->mat_idx = 0;
 
   return b;
 }
 
-LiquidBlob *liquid_blob_create(BlobSim *bs, LiquidType type, float radius,
-                               const HMM_Vec3 *pos, int mat_idx) {
-  LiquidBlob *b = fixed_array_append(&bs->liq_blobs, NULL);
+LiquidBlob *liquid_blob_create(BlobSim *bs) {
+  LiquidBlob *b = fixed_array_append(&bs->liquids, NULL);
   if (!b) {
     fprintf(stderr, "Liquid blob max count reached\n");
     return NULL;
   }
 
-  b->type = type;
-  b->radius = radius;
-  b->pos = *pos;
-  b->mat_idx = mat_idx;
+  b->type = LIQUID_BASE;
+  b->radius = BLOB_DEFAULT_RADIUS;
+  b->pos = HMM_V3(0, 0, 0);
+  b->mat_idx = 0;
 
   return b;
 }
 
-Projectile *projectile_create(BlobSim *bs, float radius, const HMM_Vec3 *pos,
-                              int mat_idx, const HMM_Vec3 *vel) {
+Projectile *projectile_create(BlobSim *bs) {
   Projectile *p = fixed_array_append(&bs->projectiles, NULL);
   if (!p) {
     fprintf(stderr, "Projectile max count reached\n");
     return NULL;
   }
 
-  p->radius = radius;
-  p->pos = *pos;
-  p->mat_idx = mat_idx;
-  p->vel = *vel;
+  p->radius = BLOB_DEFAULT_RADIUS;
+  p->pos = HMM_V3(0, 0, 0);
+  p->mat_idx = 0;
+  p->vel = HMM_V3(0, 0, 0);
   p->callback = NULL;
   p->userdata = 0;
+  p->delete_timer = PROJECTILE_DEFAULT_DELETE_TIME;
 
   return p;
 }
 
-void liquid_blob_queue_delete(BlobSim *bs, LiquidBlob *b) {
-  int *idx = fixed_array_append(&bs->liq_blob_del_queue, NULL);
+void blob_queue_delete(BlobSim *bs, BlobType type, void *b) {
+  int *idx = fixed_array_append(&bs->del_queues[type], NULL);
   if (!idx) {
     fprintf(stderr, "Too many blobs being deleted\n");
     return;
   }
 
-  *idx = b - (LiquidBlob *)bs->liq_blobs.data;
+  switch (type) {
+  case BLOB_SOLID:
+    *idx = (SolidBlob *)b - (SolidBlob *)bs->solids.data;
+    break;
+  case BLOB_LIQUID:
+    *idx = (LiquidBlob *)b - (LiquidBlob *)bs->solids.data;
+    break;
+  case BLOB_PROJECTILE:
+    *idx = (Projectile *)b - (Projectile *)bs->projectiles.data;
+    break;
+  }
 }
 
 void blob_sim_create(BlobSim *bs) {
-  fixed_array_create(&bs->sol_blobs, sizeof(SolidBlob), SOLID_BLOB_MAX_COUNT);
-  fixed_array_create(&bs->liq_blobs, sizeof(LiquidBlob), LIQUID_BLOB_MAX_COUNT);
+  fixed_array_create(&bs->solids, sizeof(SolidBlob), BLOB_SIM_MAX_SOLIDS);
+  fixed_array_create(&bs->liquids, sizeof(LiquidBlob), BLOB_SIM_MAX_LIQUIDS);
   fixed_array_create(&bs->projectiles, sizeof(Projectile),
-                     PROJECTILE_MAX_COUNT);
-  fixed_array_create(&bs->liq_blob_del_queue, sizeof(int),
-                     BLOB_SIM_MAX_DELETIONS);
+                     BLOB_SIM_MAX_PROJECTILES);
+
+  for (int i = 0; i < BLOB_TYPE_COUNT; i++) {
+    fixed_array_create(&bs->del_queues[i], sizeof(int), BLOB_SIM_MAX_DELETIONS);
+  }
 
   bs->liq_forces = malloc(BLOB_SIM_MAX_FORCES * sizeof(*bs->liq_forces));
   for (int i = 0; i < BLOB_SIM_MAX_FORCES; i++) {
@@ -132,10 +141,13 @@ void blob_sim_create(BlobSim *bs) {
 }
 
 void blob_sim_destroy(BlobSim *bs) {
-  fixed_array_destroy(&bs->sol_blobs);
-  fixed_array_destroy(&bs->liq_blobs);
+  fixed_array_destroy(&bs->solids);
+  fixed_array_destroy(&bs->liquids);
   fixed_array_destroy(&bs->projectiles);
-  fixed_array_destroy(&bs->liq_blob_del_queue);
+
+  for (int i = 0; i < BLOB_TYPE_COUNT; i++) {
+    fixed_array_destroy(&bs->del_queues[i]);
+  }
 
   free(bs->liq_forces);
   bs->liq_forces = NULL;
@@ -152,7 +164,10 @@ void blob_sim_create_mdl(Model *mdl, BlobSim *bs, const ModelBlob *mdl_blob_src,
   }
 }
 
-void blob_sim_add_force(BlobSim *bs, int blob_idx, const HMM_Vec3 *force) {
+void blob_sim_liquid_apply_force(BlobSim *bs, const LiquidBlob *b,
+                                 const HMM_Vec3 *force) {
+  int blob_idx = b - (LiquidBlob *)bs->liquids.data;
+
   for (int i = 0; i < BLOB_SIM_MAX_FORCES; i++) {
     LiquidForce *f = &bs->liq_forces[i];
     if (f->idx == -1) {
@@ -181,7 +196,8 @@ static float dist_sphere(const HMM_Vec3 *c, float r, const HMM_Vec3 *p) {
   return HMM_LenV3(d) - r;
 }
 
-void blob_sim_raycast(RaycastResult *r, const BlobSim *bs, HMM_Vec3 ro, HMM_Vec3 rd) {
+void blob_sim_raycast(RaycastResult *r, const BlobSim *bs, HMM_Vec3 ro,
+                      HMM_Vec3 rd) {
   r->has_hit = false;
 
   float ray_dist = HMM_LenV3(rd);
@@ -196,8 +212,8 @@ void blob_sim_raycast(RaycastResult *r, const BlobSim *bs, HMM_Vec3 ro, HMM_Vec3
     HMM_Vec3 p = HMM_AddV3(ro, HMM_MulV3F(rd_n, traveled));
 
     float dist = 100000.0f;
-    for (int j = 0; j < bs->sol_blobs.count; j++) {
-      const SolidBlob *b = fixed_array_get_const(&bs->sol_blobs, j);
+    for (int j = 0; j < bs->solids.count; j++) {
+      const SolidBlob *b = fixed_array_get_const(&bs->solids, j);
       dist = sminf(dist, dist_sphere(&b->pos, b->radius, &p), BLOB_SMOOTH);
     }
 
@@ -215,28 +231,28 @@ void blob_sim_raycast(RaycastResult *r, const BlobSim *bs, HMM_Vec3 ro, HMM_Vec3
 
 void blob_simulate(BlobSim *bs, double delta) {
   // Liquid blobs
-  for (int i = 0; i < bs->liq_blobs.count; i++) {
-    LiquidBlob *b = fixed_array_get(&bs->liq_blobs, i);
+  for (int i = 0; i < bs->liquids.count; i++) {
+    LiquidBlob *b = fixed_array_get(&bs->liquids, i);
 
     HMM_Vec3 velocity = {0};
 
     float anti_grav = 0.0f;
 
-    for (int j = 0; j < bs->liq_blobs.count; j++) {
+    for (int j = 0; j < bs->liquids.count; j++) {
       if (j == i)
         continue;
 
-      LiquidBlob *ob = fixed_array_get(&bs->liq_blobs, j);
+      LiquidBlob *ob = fixed_array_get(&bs->liquids, j);
 
       HMM_Vec3 attraction = blob_get_attraction_to(b, ob);
       velocity = HMM_AddV3(velocity, attraction);
       anti_grav += blob_get_support_with(b, ob);
     }
 
-    velocity.Y -= BLOB_FALL_SPEED * (1.0f - fminf(anti_grav, 1.0f));
+    velocity.Y -= LIQUID_FALL_SPEED * (1.0f - fminf(anti_grav, 1.0f));
 
-    // Now position + velocity * delta will be the new position before dealing with
-    // solid blobs
+    // Now position + velocity * delta will be the new position before dealing
+    // with solid blobs
 
     b->pos = HMM_AddV3(b->pos, HMM_MulV3F(velocity, (float)delta));
     HMM_Vec3 correction =
@@ -255,8 +271,7 @@ void blob_simulate(BlobSim *bs, double delta) {
   for (int i = 0; i < BLOB_SIM_MAX_FORCES; i++) {
     LiquidForce *f = &bs->liq_forces[i];
     if (f->idx >= 0) {
-      HMM_Vec3 *p =
-          &((LiquidBlob *)fixed_array_get(&bs->liq_blobs, f->idx))->pos;
+      HMM_Vec3 *p = &((LiquidBlob *)fixed_array_get(&bs->liquids, f->idx))->pos;
       *p = HMM_AddV3(*p, f->force);
 
       f->force = HMM_MulV3F(f->force, 0.8f);
@@ -274,42 +289,72 @@ void blob_simulate(BlobSim *bs, double delta) {
     p->vel = HMM_AddV3(p->vel, HMM_MulV3F(PROJ_GRAV, (float)delta));
     p->pos = HMM_AddV3(p->pos, HMM_MulV3F(p->vel, (float)delta));
 
-    if (p->callback)
+    HMM_Vec3 correction =
+        blob_get_correction_from_solids(bs, &p->pos, p->radius);
+    if (HMM_LenV3(correction) > 0.0f) {
+      blob_queue_delete(bs, BLOB_PROJECTILE, p);
+    }
+
+    p->delete_timer -= (float)delta;
+    if (p->delete_timer <= 0.0f) {
+      blob_queue_delete(bs, BLOB_PROJECTILE, p);
+    }
+
+    if (p->callback) {
       p->callback(p, p->userdata);
+    }
   }
 
-  // Deletion queue
-  for (int di = 0; di < bs->liq_blob_del_queue.count; di++) {
-    // Move everything after this blob to the left
-    int blob_idx = *(int *)fixed_array_get(&bs->liq_blob_del_queue, di);
-    fixed_array_remove(&bs->liq_blobs, blob_idx);
+  // Deletion queues
+  FixedArray *const blob_arrays[] = {&bs->solids, &bs->liquids,
+                                     &bs->projectiles};
+  for (int bt = 0; bt < BLOB_TYPE_COUNT; bt++) {
+    FixedArray *ba = blob_arrays[bt];
+    FixedArray *del_queue = &bs->del_queues[bt];
 
-    // Decrement blob indices in liquid forces
-    for (int fi = 0; fi < BLOB_SIM_MAX_FORCES; fi++) {
-      LiquidForce *f = &bs->liq_forces[fi];
-      if (f->idx == blob_idx) {
-        // If this liquid force applies to the current blob, stop it
-        f->idx = -1;
-      } else if (f->idx > blob_idx) {
-        f->idx--;
+    for (int di = 0; di < del_queue->count; di++) {
+      int blob_idx = *(int *)fixed_array_get(del_queue, di);
+      if (blob_idx == -1) {
+        // This deletion was invalidated
+        continue;
+      }
+
+      fixed_array_remove(ba, blob_idx);
+
+      // Decrement blob indices in deletion queue after this one. Or invalidate
+      // it if it is the same as the current index
+      for (int dj = di + 1; dj < del_queue->count; dj++) {
+        int *other_idx = fixed_array_get(del_queue, dj);
+        if (*other_idx > blob_idx) {
+          (*other_idx)--;
+        } else if (*other_idx == blob_idx) {
+          *other_idx = -1;
+        }
+      }
+
+      // Indices in liquid forces must be adjusted as well
+      if (bt == BLOB_LIQUID) {
+        for (int fi = 0; fi < BLOB_SIM_MAX_FORCES; fi++) {
+          LiquidForce *f = &bs->liq_forces[fi];
+          if (f->idx > blob_idx) {
+            f->idx--;
+          } else if (f->idx == blob_idx) {
+            // If this liquid force applies to the current blob, stop it
+            f->idx = -1;
+          }
+        }
       }
     }
 
-    // Also decrement blob indices in the deletion queue
-    for (int dj = di + 1; dj < bs->liq_blob_del_queue.count; dj++) {
-      int *other_idx = fixed_array_get(&bs->liq_blob_del_queue, dj);
-      if (*other_idx > blob_idx) {
-        (*other_idx)--;
-      }
-    }
+    // Clear this queue
+    del_queue->count = 0;
   }
-  // Clear deletion queue
-  bs->liq_blob_del_queue.count = 0;
 }
 
 static void blob_check_blob_at(float *min_dist, HMM_Vec3 *correction,
-                               const HMM_Vec3 *bpos, float bradius, const HMM_Vec3 *pos,
-                               float radius, float smooth) {
+                               const HMM_Vec3 *bpos, float bradius,
+                               const HMM_Vec3 *pos, float radius,
+                               float smooth) {
   *min_dist = sminf(*min_dist, dist_sphere(bpos, bradius, pos), smooth);
 
   HMM_Vec3 dir = HMM_SubV3(*pos, *bpos);
@@ -326,8 +371,8 @@ HMM_Vec3 blob_get_correction_from_solids(BlobSim *bs, const HMM_Vec3 *pos,
   // Use smin to figure out if this blob is touching smoothed solid blobs
   // Also check how much each blob should influence the normal
 
-  for (int i = 0; i < bs->sol_blobs.count; i++) {
-    SolidBlob *b = fixed_array_get(&bs->sol_blobs, i);
+  for (int i = 0; i < bs->solids.count; i++) {
+    SolidBlob *b = fixed_array_get(&bs->solids, i);
     blob_check_blob_at(&min_dist, &correction, &b->pos, b->radius, pos, radius,
                        BLOB_SMOOTH);
   }

@@ -53,7 +53,7 @@ void blob_renderer_create(BlobRenderer *br) {
 
   br->blobs_ssbo_size_bytes =
       sizeof(HMM_Vec4) *
-      (SOLID_BLOB_MAX_COUNT + LIQUID_BLOB_MAX_COUNT + PROJECTILE_MAX_COUNT);
+      (BLOB_SIM_MAX_SOLIDS + BLOB_SIM_MAX_LIQUIDS + BLOB_SIM_MAX_PROJECTILES);
   glGenBuffers(1, &br->blobs_ssbo);
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, br->blobs_ssbo);
   glBufferData(GL_SHADER_STORAGE_BUFFER, br->blobs_ssbo_size_bytes, NULL,
@@ -69,7 +69,7 @@ void blob_renderer_create(BlobRenderer *br) {
 
   br->blob_ot = blob_ot_create();
   br->blobs_lerped = malloc(
-      (SOLID_BLOB_MAX_COUNT + LIQUID_BLOB_MAX_COUNT + PROJECTILE_MAX_COUNT) *
+      (BLOB_SIM_MAX_SOLIDS + BLOB_SIM_MAX_LIQUIDS + BLOB_SIM_MAX_PROJECTILES) *
       sizeof(*br->blobs_lerped));
 }
 
@@ -117,8 +117,8 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
   }
 
   // Liquids
-  for (int i = bs->liq_blobs.count - 1; i >= 0; i--) {
-    const LiquidBlob *b = fixed_array_get_const(&bs->liq_blobs, i);
+  for (int i = bs->liquids.count - 1; i >= 0; i--) {
+    const LiquidBlob *b = fixed_array_get_const(&bs->liquids, i);
 
     br->blobs_lerped[ssbo_idx].XYZ = b->pos;
     br->blobs_lerped[ssbo_idx].W =
@@ -130,8 +130,8 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
   }
 
   // Solids
-  for (int i = bs->sol_blobs.count - 1; i >= 0; i--) {
-    const SolidBlob *b = fixed_array_get_const(&bs->sol_blobs, i);
+  for (int i = bs->solids.count - 1; i >= 0; i--) {
+    const SolidBlob *b = fixed_array_get_const(&bs->solids, i);
 
     br->blobs_lerped[ssbo_idx].XYZ = b->pos;
     br->blobs_lerped[ssbo_idx].W =

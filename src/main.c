@@ -33,6 +33,8 @@ static float rand_float() { return ((float)rand() / (float)(RAND_MAX)); }
 #define PLR_SPEED 4.0f
 #define CAM_SENS 0.01f
 
+#define SHOOT_CD 0.05
+
 static HMM_Vec2 cam_rot;
 
 static struct {
@@ -53,13 +55,18 @@ static void liquify_model(BlobSim *bs, const Model *mdl) {
     p.XYZ = mdl->blobs[i].pos;
     p = HMM_MulM4V4(mdl->transform, p);
 
-    liquid_blob_create(bs, LIQUID_BASE, HMM_MAX(0.1f, mdl->blobs[i].radius),
-                       &p.XYZ, mdl->blobs[i].mat_idx);
-    HMM_Vec3 force;
-    for (int x = 0; x < 3; x++) {
-      force.Elements[x] = (rand_float() - 0.5f) * 0.5f;
+    LiquidBlob *b = liquid_blob_create(bs);
+    if (b) {
+      b->type = LIQUID_BASE;
+      b->radius = HMM_MAX(0.1f, mdl->blobs[i].radius);
+      b->pos = p.XYZ;
+      b->mat_idx = mdl->blobs[i].mat_idx;
+      HMM_Vec3 force;
+      for (int x = 0; x < 3; x++) {
+        force.Elements[x] = (rand_float() - 0.5f) * 0.5f;
+      }
+      blob_sim_liquid_apply_force(bs, b, &force);
     }
-    blob_sim_add_force(bs, bs->liq_blobs.count - 1, &force);
   }
 }
 
@@ -123,12 +130,11 @@ static void glfw_fatal_error() {
   exit(-1);
 }
 
-/*
 static void proj_callback(Projectile *p, uint64_t userdata) {
   if (HMM_LenV3(
-          HMM_SubV3(b->pos, global_data.enemy_mdl->transform.Columns[3].XYZ)) <=
-      0.5f + b->radius) {
-    liquid_blob_queue_delete(global_data.blob_sim, b);
+          HMM_SubV3(p->pos, global_data.enemy_mdl->transform.Columns[3].XYZ)) <=
+      0.5f + p->radius) {
+    blob_queue_delete(global_data.blob_sim, BLOB_PROJECTILE, p);
 
     if (!global_data.enemy_dead) {
       global_data.enemy_dead = true;
@@ -138,7 +144,6 @@ static void proj_callback(Projectile *p, uint64_t userdata) {
     }
   }
 }
-*/
 
 int main() {
   if (!glfwInit())
@@ -193,7 +198,12 @@ int main() {
   for (int i = 0; i < 512; i++) {
     HMM_Vec3 pos = {(rand_float() - 0.5f) * 12.0f, rand_float() * 0.5f,
                     (rand_float() - 0.5f) * 12.0f};
-    solid_blob_create(&blob_sim, 0.5f, &pos, 1);
+    SolidBlob *b = solid_blob_create(&blob_sim);
+    if (b) {
+      b->radius = 0.5f;
+      b->pos = pos;
+      b->mat_idx = 1;
+    }
   }
 
   // Player model
@@ -377,7 +387,7 @@ int main() {
 
     if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_2) == GLFW_PRESS &&
         blob_spawn_cd <= 0.0) {
-      blob_spawn_cd = BLOB_SPAWN_CD;
+      blob_spawn_cd = SHOOT_CD;
 
       float radius = 0.2f + rand_float() * 0.3f;
 
@@ -388,8 +398,14 @@ int main() {
       HMM_Vec3 force = HMM_MulV3F(cam_trans->Columns[2].XYZ, -15.0f);
       force = HMM_AddV3(force, (HMM_Vec3){0, 5.0f, 0});
 
-      Projectile *p = projectile_create(&blob_sim, radius, &pos, 5, &force);
-      //LiquidBlob *b = liquid_blob_create(&blob_sim, LIQUID_BASE, 0.5f, &pos, 5);
+      Projectile *p = projectile_create(&blob_sim);
+      if (p) {
+        p->radius = radius;
+        p->pos = pos;
+        p->mat_idx = 5;
+        p->vel = force;
+        p->callback = proj_callback;
+      }
     }
 
     // Render scene

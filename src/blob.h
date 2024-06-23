@@ -8,14 +8,6 @@
 #include "fixed_array.h"
 #include "blob_defines.h"
 
-#define SOLID_BLOB_MAX_COUNT 1024
-#define LIQUID_BLOB_MAX_COUNT 1024
-#define PROJECTILE_MAX_COUNT 1024
-
-#define BLOB_FALL_SPEED 5.0f
-
-#define BLOB_SPAWN_CD 0.05
-
 typedef enum LiquidType { LIQUID_BASE } LiquidType;
 
 typedef struct SolidBlob {
@@ -41,12 +33,22 @@ typedef struct Projectile {
   HMM_Vec3 vel;
   ProjectileCallback callback;
   uint64_t userdata;
+  float delete_timer;
 } Projectile;
+
+#define BLOB_TYPE_COUNT 3
+typedef enum BlobType { BLOB_SOLID, BLOB_LIQUID, BLOB_PROJECTILE } BlobType;
+
+#define BLOB_SIM_MAX_SOLIDS 1024
+#define BLOB_SIM_MAX_LIQUIDS 1024
+#define BLOB_SIM_MAX_PROJECTILES 1024
+
+#define BLOB_SIM_MAX_DELETIONS 128
 
 // Only a few liquid blobs actually keep track of their velocity
 #define BLOB_SIM_MAX_FORCES 32
 
-#define BLOB_SIM_MAX_DELETIONS 128
+#define LIQUID_FALL_SPEED 5.0f
 
 // Associates a liquid blob index with a force
 typedef struct LiquidForce {
@@ -55,11 +57,11 @@ typedef struct LiquidForce {
 } LiquidForce;
 
 typedef struct BlobSim {
-  FixedArray sol_blobs;
-  FixedArray liq_blobs;
+  FixedArray solids;
+  FixedArray liquids;
   FixedArray projectiles;
 
-  FixedArray liq_blob_del_queue;
+  FixedArray del_queues[BLOB_TYPE_COUNT];
 
   LiquidForce *liq_forces;
 } BlobSim;
@@ -104,6 +106,9 @@ typedef BlobOtNode *BlobOt;
 static const HMM_Vec3 BLOB_SIM_POS = {0, 8, 0};
 static const float BLOB_SIM_SIZE = 16.0f;
 
+#define BLOB_DEFAULT_RADIUS 0.5f
+#define PROJECTILE_DEFAULT_DELETE_TIME 5.0f
+
 // How much force is needed to attract b to other
 HMM_Vec3 blob_get_attraction_to(LiquidBlob *b, LiquidBlob *other);
 
@@ -112,21 +117,19 @@ float blob_get_support_with(LiquidBlob *b, LiquidBlob *other);
 
 // Creates a solid blob if possible and adds it to the simulation. The
 // returned pointer may not always be valid.
-SolidBlob *solid_blob_create(BlobSim *bs, float radius, const HMM_Vec3 *pos,
-                             int mat_idx);
+SolidBlob *solid_blob_create(BlobSim *bs);
 
 // Creates a liquid blob if possible and adds it to the simulation. The
 // returned pointer may not always be valid.
-LiquidBlob *liquid_blob_create(BlobSim *bs, LiquidType type, float radius,
-                               const HMM_Vec3 *pos, int mat_idx);
+LiquidBlob *liquid_blob_create(BlobSim *bs);
 
 // Creates a projectile if possible and adds it to the simulation. The returned
 // pointer may not always be valid.
-Projectile *projectile_create(BlobSim *bs, float radius, const HMM_Vec3 *pos,
-                              int mat_idx, const HMM_Vec3 *vel);
+Projectile *projectile_create(BlobSim *bs);
 
-// Deletes a liquid blob after a simulation tick
-void liquid_blob_queue_delete(BlobSim *bs, LiquidBlob *b);
+// Queues a blob to be deleted at the end of a simulation tick. It is fine to
+// call this multiple times for the same blob
+void blob_queue_delete(BlobSim *bs, BlobType type, void *b);
 
 void blob_sim_create(BlobSim *bs);
 void blob_sim_destroy(BlobSim *bs);
@@ -134,7 +137,8 @@ void blob_sim_destroy(BlobSim *bs);
 void blob_sim_create_mdl(Model *mdl, BlobSim *bs, const ModelBlob *mdl_blob_src,
                          int mdl_blob_count);
 
-void blob_sim_add_force(BlobSim *bs, int blob_idx, const HMM_Vec3 *force);
+void blob_sim_liquid_apply_force(BlobSim *bs, const LiquidBlob *b,
+                                 const HMM_Vec3 *force);
 
 // rd should not be normalized
 void blob_sim_raycast(RaycastResult *r, const BlobSim *bs, HMM_Vec3 ro, HMM_Vec3 rd);
