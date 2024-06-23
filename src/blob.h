@@ -12,8 +12,7 @@
 #define LIQUID_BLOB_MAX_COUNT 1024
 #define PROJECTILE_MAX_COUNT 1024
 
-#define BLOB_FALL_SPEED 0.5f
-#define BLOB_TICK_TIME 0.1
+#define BLOB_FALL_SPEED 5.0f
 
 #define BLOB_SPAWN_CD 0.05
 
@@ -29,7 +28,6 @@ typedef struct LiquidBlob {
   LiquidType type;
   float radius;
   HMM_Vec3 pos;
-  HMM_Vec3 prev_pos; // For interpolation
   int mat_idx;
 } LiquidBlob;
 
@@ -39,7 +37,6 @@ typedef void (*ProjectileCallback)(Projectile *, uint64_t);
 typedef struct Projectile {
   float radius;
   HMM_Vec3 pos;
-  HMM_Vec3 prev_pos; // For interpolation
   int mat_idx;
   HMM_Vec3 vel;
   ProjectileCallback callback;
@@ -65,8 +62,6 @@ typedef struct BlobSim {
   FixedArray liq_blob_del_queue;
 
   LiquidForce *liq_forces;
-
-  double tick_timer;
 } BlobSim;
 
 // A blob that belongs to a model

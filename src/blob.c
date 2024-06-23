@@ -21,8 +21,7 @@ HMM_Vec3 blob_get_attraction_to(LiquidBlob *b, LiquidBlob *other) {
   }
 
   float power =
-      fmaxf(0.0f, logf(-5.0f * x * (x - desired_dist) + 1.0f));
-  // float power = fmaxf(0.0f, -2.1f * x * (x - desired_dist));
+      fmaxf(0.0f, logf(-50.0f * x * (x - desired_dist) + 1.0f));
 
   direction = HMM_MulV3F(HMM_NormV3(direction), power);
 
@@ -85,7 +84,6 @@ LiquidBlob *liquid_blob_create(BlobSim *bs, LiquidType type, float radius,
   b->type = type;
   b->radius = radius;
   b->pos = *pos;
-  b->prev_pos = *pos;
   b->mat_idx = mat_idx;
 
   return b;
@@ -101,7 +99,6 @@ Projectile *projectile_create(BlobSim *bs, float radius, const HMM_Vec3 *pos,
 
   p->radius = radius;
   p->pos = *pos;
-  p->prev_pos = *pos;
   p->mat_idx = mat_idx;
   p->vel = *vel;
   p->callback = NULL;
@@ -132,8 +129,6 @@ void blob_sim_create(BlobSim *bs) {
   for (int i = 0; i < BLOB_SIM_MAX_FORCES; i++) {
     bs->liq_forces[i].idx = -1;
   }
-
-  bs->tick_timer = 0.0;
 }
 
 void blob_sim_destroy(BlobSim *bs) {
@@ -144,8 +139,6 @@ void blob_sim_destroy(BlobSim *bs) {
 
   free(bs->liq_forces);
   bs->liq_forces = NULL;
-
-  bs->tick_timer = 0.0;
 }
 
 void blob_sim_create_mdl(Model *mdl, BlobSim *bs, const ModelBlob *mdl_blob_src,
@@ -221,17 +214,9 @@ void blob_sim_raycast(RaycastResult *r, const BlobSim *bs, HMM_Vec3 ro, HMM_Vec3
 }
 
 void blob_simulate(BlobSim *bs, double delta) {
-  bs->tick_timer -= delta;
-
-  if (bs->tick_timer > 0.0)
-    return;
-  bs->tick_timer = BLOB_TICK_TIME;
-
   // Liquid blobs
   for (int i = 0; i < bs->liq_blobs.count; i++) {
     LiquidBlob *b = fixed_array_get(&bs->liq_blobs, i);
-
-    b->prev_pos = b->pos;
 
     HMM_Vec3 velocity = {0};
 
@@ -250,10 +235,10 @@ void blob_simulate(BlobSim *bs, double delta) {
 
     velocity.Y -= BLOB_FALL_SPEED * (1.0f - fminf(anti_grav, 1.0f));
 
-    // Now position + velocity will be the new position before dealing with
+    // Now position + velocity * delta will be the new position before dealing with
     // solid blobs
 
-    b->pos = HMM_AddV3(b->pos, velocity);
+    b->pos = HMM_AddV3(b->pos, HMM_MulV3F(velocity, (float)delta));
     HMM_Vec3 correction =
         blob_get_correction_from_solids(bs, &b->pos, b->radius);
     b->pos = HMM_AddV3(b->pos, correction);
@@ -285,11 +270,9 @@ void blob_simulate(BlobSim *bs, double delta) {
   for (int i = 0; i < bs->projectiles.count; i++) {
     Projectile *p = fixed_array_get(&bs->projectiles, i);
 
-    p->prev_pos = p->pos;
-
-    const HMM_Vec3 PROJ_GRAV = {0, -9.8f / 10.0f, 0};
-    p->vel = HMM_AddV3(p->vel, PROJ_GRAV);
-    p->pos = HMM_AddV3(p->pos, HMM_MulV3F(p->vel, 0.1f));
+    const HMM_Vec3 PROJ_GRAV = {0, -9.8f, 0};
+    p->vel = HMM_AddV3(p->vel, HMM_MulV3F(PROJ_GRAV, (float)delta));
+    p->pos = HMM_AddV3(p->pos, HMM_MulV3F(p->vel, (float)delta));
 
     if (p->callback)
       p->callback(p, p->userdata);

@@ -389,6 +389,7 @@ int main() {
       force = HMM_AddV3(force, (HMM_Vec3){0, 5.0f, 0});
 
       Projectile *p = projectile_create(&blob_sim, radius, &pos, 5, &force);
+      //LiquidBlob *b = liquid_blob_create(&blob_sim, LIQUID_BASE, 0.5f, &pos, 5);
     }
 
     // Render scene

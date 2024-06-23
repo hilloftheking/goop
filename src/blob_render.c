@@ -101,15 +101,13 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
 
   int ssbo_idx = 0;
 
-  float lerp_t = (float)((BLOB_TICK_TIME - bs->tick_timer) / BLOB_TICK_TIME);
-
   // Loop backwards so that new stuff is prioritized in the octree
 
   // Projectiles
   for (int i = bs->projectiles.count - 1; i >= 0; i--) {
     const Projectile *p = fixed_array_get_const(&bs->projectiles, i);
 
-    br->blobs_lerped[ssbo_idx].XYZ = HMM_LerpV3(p->prev_pos, lerp_t, p->pos);
+    br->blobs_lerped[ssbo_idx].XYZ = p->pos;
     br->blobs_lerped[ssbo_idx].W =
         (float)((int)(p->radius * BLOB_RADIUS_MULT) * BLOB_MAT_COUNT +
                 p->mat_idx);
@@ -122,7 +120,7 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
   for (int i = bs->liq_blobs.count - 1; i >= 0; i--) {
     const LiquidBlob *b = fixed_array_get_const(&bs->liq_blobs, i);
 
-    br->blobs_lerped[ssbo_idx].XYZ = HMM_LerpV3(b->prev_pos, lerp_t, b->pos);
+    br->blobs_lerped[ssbo_idx].XYZ = b->pos;
     br->blobs_lerped[ssbo_idx].W =
         (float)((int)(b->radius * BLOB_RADIUS_MULT) * BLOB_MAT_COUNT +
                 b->mat_idx);
