@@ -27,6 +27,8 @@ static void gl_debug_callback(GLenum source, GLenum type, GLuint id,
 
 static float rand_float() { return ((float)rand() / (float)(RAND_MAX)); }
 
+#define DELTA_MIN (1.0/30.0)
+
 #define WIN_RES_X 1024
 #define WIN_RES_Y 768
 
@@ -127,6 +129,7 @@ static void glfw_fatal_error() {
   glfwGetError(&err_desc);
   fprintf(stderr, "[GLFW fatal] %s\n", err_desc);
   glfwTerminate();
+  system("pause");
   exit(-1);
 }
 
@@ -260,6 +263,9 @@ int main() {
       second_timer = 1.0;
     }
 
+    // Avoid extremely high deltas
+    delta = HMM_MIN(delta, DELTA_MIN);
+
     char win_title[100];
     snprintf(win_title, sizeof(win_title), "%d fps  -  %lf ms", fps,
              delta * 1000.0);
@@ -276,9 +282,6 @@ int main() {
 
     if (blob_sim_running)
       blob_simulate(&blob_sim, delta);
-
-    // Avoid extremely high deltas
-    delta = HMM_MIN(delta, 1.0 / 30.0);
 
     // Player movement/physics
 
@@ -405,6 +408,45 @@ int main() {
         p->mat_idx = 5;
         p->vel = force;
         p->callback = proj_callback;
+      }
+    }
+
+    // Enemy behavior
+
+    if (!global_data.enemy_dead) {
+      HMM_Vec3 player_pos = player_mdl.transform.Columns[3].XYZ;
+      player_pos.Y += 2.0f;
+      HMM_Vec3 player_dir =
+          HMM_SubV3(player_pos, angry_mdl.transform.Columns[3].XYZ);
+      player_dir = HMM_NormV3(player_dir);
+
+      float yaw = -atan2f(player_dir.Z, player_dir.X) - HMM_PI32 * 0.5f;
+      float pitch = asinf(player_dir.Y);
+
+      HMM_Mat4 rot_mat = HMM_MulM4(HMM_Rotate_RH(yaw, HMM_V3(0, 1, 0)),
+                                   HMM_Rotate_RH(pitch, HMM_V3(1, 0, 0)));
+      HMM_Quat rot_quat = HMM_M4ToQ_RH(rot_mat);
+      float step = (HMM_PI32 * 1.0f) * (float)delta;
+      rot_quat =
+          HMM_RotateTowardsQ(HMM_M4ToQ_RH(angry_mdl.transform), step, rot_quat);
+      rot_mat = HMM_QToM4(rot_quat);
+      rot_mat.Columns[3] = angry_mdl.transform.Columns[3];
+
+      angry_mdl.transform = rot_mat;
+
+      #define ENEMY_SHOOT_CD 2.0;
+      static double enemy_shoot_timer = ENEMY_SHOOT_CD;
+
+      enemy_shoot_timer -= delta;
+      if (enemy_shoot_timer <= 0.0) {
+        enemy_shoot_timer = ENEMY_SHOOT_CD;
+
+        Projectile *p = projectile_create(&blob_sim);
+        p->radius = 0.2f;
+        p->mat_idx = 0;
+        p->pos = angry_mdl.transform.Columns[3].XYZ;
+        p->vel = HMM_MulV3F(angry_mdl.transform.Columns[2].XYZ, -20.0f);
+        p->delete_timer = 1.0f;
       }
     }
 
