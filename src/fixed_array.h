@@ -14,6 +14,9 @@ void fixed_array_destroy(FixedArray *a);
 void *fixed_array_get(FixedArray *a, int idx);
 const void *fixed_array_get_const(const FixedArray *a, int idx);
 
+// Returns what index a pointer is at
+int fixed_array_get_idx_from_ptr(const FixedArray *a, const void *element);
+
 // Appends element at the end of the array. Can be NULL. Returns pointer to
 // element in array or NULL if failed to append
 void *fixed_array_append(FixedArray *a, void *element);

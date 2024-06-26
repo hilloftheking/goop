@@ -245,14 +245,6 @@
     </CopyFileToFolders>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="assets\bluecloud_bk.jpg" />
-    <Image Include="assets\bluecloud_dn.jpg" />
-    <Image Include="assets\bluecloud_ft.jpg" />
-    <Image Include="assets\bluecloud_lf.jpg" />
-    <Image Include="assets\bluecloud_rt.jpg" />
-    <Image Include="assets\bluecloud_up.jpg" />
-  </ItemGroup>
-  <ItemGroup>
     <ResourceCompile Include="src\resource.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

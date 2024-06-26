@@ -20,7 +20,10 @@ HMM_Vec3 blob_get_attraction_to(LiquidBlob *b, LiquidBlob *other) {
     return (HMM_Vec3){0};
   }
 
-  float power = fmaxf(0.0f, logf(-50.0f * x * (x - desired_dist) + 1.0f));
+  float power =
+      fmaxf(0.0f, logf((-50.0f * fmaxf(1.0f, (other->radius / 0.5f))) * x *
+                           (x - desired_dist) +
+                       1.0f));
 
   direction = HMM_MulV3F(HMM_NormV3(direction), power);
 
@@ -33,6 +36,8 @@ HMM_Vec3 blob_get_attraction_to(LiquidBlob *b, LiquidBlob *other) {
 }
 
 float blob_get_support_with(LiquidBlob *b, LiquidBlob *other) {
+  return 0.0f;
+
   HMM_Vec3 direction = HMM_SubV3(b->pos, other->pos);
   float len = HMM_LenV3(direction);
 
@@ -54,7 +59,8 @@ float blob_get_support_with(LiquidBlob *b, LiquidBlob *other) {
     x *= 1.4f;
   }
 
-  return fmaxf(0.0f, -1.0f * x * x + 0.4f);
+  return fmaxf(0.0f,
+               (-1.0f * fmaxf(1.0f, other->radius / 0.5f)) * x * x + 0.4f);
 }
 
 SolidBlob *solid_blob_create(BlobSim *bs) {
@@ -104,33 +110,15 @@ Projectile *projectile_create(BlobSim *bs) {
   return p;
 }
 
-void blob_queue_delete(BlobSim *bs, BlobType type, void *b) {
-  int *idx = fixed_array_append(&bs->del_queues[type], NULL);
-  if (!idx) {
-    fprintf(stderr, "Too many blobs being deleted\n");
-    return;
-  }
-
-  switch (type) {
-  case BLOB_SOLID:
-    *idx = (SolidBlob *)b - (SolidBlob *)bs->solids.data;
-    break;
-  case BLOB_LIQUID:
-    *idx = (LiquidBlob *)b - (LiquidBlob *)bs->solids.data;
-    break;
-  case BLOB_PROJECTILE:
-    *idx = (Projectile *)b - (Projectile *)bs->projectiles.data;
-    break;
-  }
-}
-
 void blob_sim_create(BlobSim *bs) {
   fixed_array_create(&bs->solids, sizeof(SolidBlob), BLOB_SIM_MAX_SOLIDS);
   fixed_array_create(&bs->liquids, sizeof(LiquidBlob), BLOB_SIM_MAX_LIQUIDS);
   fixed_array_create(&bs->projectiles, sizeof(Projectile),
                      BLOB_SIM_MAX_PROJECTILES);
+  fixed_array_create(&bs->collider_models, sizeof(Model *),
+                     BLOB_SIM_MAX_COLLIDER_MODELS);
 
-  for (int i = 0; i < BLOB_TYPE_COUNT; i++) {
+  for (int i = 0; i < DELETE_MAX; i++) {
     fixed_array_create(&bs->del_queues[i], sizeof(int), BLOB_SIM_MAX_DELETIONS);
   }
 
@@ -144,8 +132,9 @@ void blob_sim_destroy(BlobSim *bs) {
   fixed_array_destroy(&bs->solids);
   fixed_array_destroy(&bs->liquids);
   fixed_array_destroy(&bs->projectiles);
+  fixed_array_destroy(&bs->collider_models);
 
-  for (int i = 0; i < BLOB_TYPE_COUNT; i++) {
+  for (int i = 0; i < DELETE_MAX; i++) {
     fixed_array_destroy(&bs->del_queues[i]);
   }
 
@@ -153,14 +142,28 @@ void blob_sim_destroy(BlobSim *bs) {
   bs->liq_forces = NULL;
 }
 
-void blob_sim_create_mdl(Model *mdl, BlobSim *bs, const ModelBlob *mdl_blob_src,
-                         int mdl_blob_count) {
-  mdl->blobs = malloc(sizeof(*mdl->blobs) * mdl_blob_count);
-  mdl->blob_count = mdl_blob_count;
-  mdl->transform = HMM_M4D(1.0f);
+void blob_sim_queue_delete(BlobSim *bs, DeletionType type, void *b) {
+  int *idx = fixed_array_append(&bs->del_queues[type], NULL);
+  if (!idx) {
+    fprintf(stderr, "Too many blobs being deleted\n");
+    return;
+  }
 
-  for (int i = 0; i < mdl->blob_count; i++) {
-    mdl->blobs[i] = mdl_blob_src[i];
+  switch (type) {
+  case DELETE_SOLID:
+    *idx = fixed_array_get_idx_from_ptr(&bs->solids, b);
+    break;
+  case DELETE_LIQUID:
+    *idx = fixed_array_get_idx_from_ptr(&bs->liquids, b);
+    break;
+  case DELETE_PROJECTILE:
+    *idx = fixed_array_get_idx_from_ptr(&bs->projectiles, b);
+    break;
+  case DELETE_COLLIDER_MODEL:
+    *idx = fixed_array_get_idx_from_ptr(&bs->collider_models, b);
+    break;
+  case DELETE_MAX:
+    break;
   }
 }
 
@@ -272,9 +275,9 @@ void blob_simulate(BlobSim *bs, double delta) {
     LiquidForce *f = &bs->liq_forces[i];
     if (f->idx >= 0) {
       HMM_Vec3 *p = &((LiquidBlob *)fixed_array_get(&bs->liquids, f->idx))->pos;
-      *p = HMM_AddV3(*p, f->force);
+      *p = HMM_AddV3(*p, HMM_MulV3F(f->force, (float)delta));
 
-      f->force = HMM_MulV3F(f->force, 0.8f);
+      f->force = HMM_MulV3F(f->force, 1.0f - 0.9f * (float)delta);
       if (HMM_LenV3(f->force) < 0.1f) {
         f->idx = -1;
       }
@@ -294,13 +297,29 @@ void blob_simulate(BlobSim *bs, double delta) {
     HMM_Vec3 correction =
         blob_get_correction_from_solids(bs, &p->pos, p->radius);
     if (HMM_LenV3(correction) > 0.0f) {
-      blob_queue_delete(bs, BLOB_PROJECTILE, p);
+      blob_sim_queue_delete(bs, DELETE_PROJECTILE, p);
     }
     */
 
+    for (int c = 0; c < bs->collider_models.count; c++) {
+      Model *mdl = *(Model **)fixed_array_get(&bs->collider_models, c);
+
+      for (int bi = 0; bi < mdl->blob_count; bi++) {
+        ModelBlob *b = &mdl->blobs[bi];
+
+        HMM_Vec4 bpv4 = {0, 0, 0, 1};
+        bpv4.XYZ = b->pos;
+
+        HMM_Vec3 bpos = HMM_MulM4V4(mdl->transform, bpv4).XYZ;
+        if (HMM_LenV3(HMM_SubV3(bpos, p->pos)) <= b->radius + p->radius) {
+          printf("colliding :)\n");
+        }
+      }
+    }
+
     p->delete_timer -= (float)delta;
     if (p->delete_timer <= 0.0f) {
-      blob_queue_delete(bs, BLOB_PROJECTILE, p);
+      blob_sim_queue_delete(bs, DELETE_PROJECTILE, p);
     }
 
     if (p->callback) {
@@ -310,8 +329,8 @@ void blob_simulate(BlobSim *bs, double delta) {
 
   // Deletion queues
   FixedArray *const blob_arrays[] = {&bs->solids, &bs->liquids,
-                                     &bs->projectiles};
-  for (int bt = 0; bt < BLOB_TYPE_COUNT; bt++) {
+                                     &bs->projectiles, &bs->collider_models};
+  for (int bt = 0; bt < DELETE_MAX; bt++) {
     FixedArray *ba = blob_arrays[bt];
     FixedArray *del_queue = &bs->del_queues[bt];
 
@@ -336,7 +355,7 @@ void blob_simulate(BlobSim *bs, double delta) {
       }
 
       // Indices in liquid forces must be adjusted as well
-      if (bt == BLOB_LIQUID) {
+      if (bt == DELETE_LIQUID) {
         for (int fi = 0; fi < BLOB_SIM_MAX_FORCES; fi++) {
           LiquidForce *f = &bs->liq_forces[fi];
           if (f->idx > blob_idx) {
@@ -351,6 +370,17 @@ void blob_simulate(BlobSim *bs, double delta) {
 
     // Clear this queue
     del_queue->count = 0;
+  }
+}
+
+void blob_mdl_create(Model *mdl, const ModelBlob *mdl_blob_src,
+                     int mdl_blob_count) {
+  mdl->blobs = malloc(sizeof(*mdl->blobs) * mdl_blob_count);
+  mdl->blob_count = mdl_blob_count;
+  mdl->transform = HMM_M4D(1.0f);
+
+  for (int i = 0; i < mdl->blob_count; i++) {
+    mdl->blobs[i] = mdl_blob_src[i];
   }
 }
 

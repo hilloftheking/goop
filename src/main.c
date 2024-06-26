@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include <glad/glad.h>
 
@@ -68,7 +69,7 @@ static void liquify_model(BlobSim *bs, const Model *mdl) {
       b->mat_idx = mdl->blobs[i].mat_idx;
       HMM_Vec3 force;
       for (int x = 0; x < 3; x++) {
-        force.Elements[x] = (rand_float() - 0.5f) * 0.5f;
+        force.Elements[x] = (rand_float() - 0.5f) * 10.0f;
       }
       blob_sim_liquid_apply_force(bs, b, &force);
     }
@@ -138,7 +139,7 @@ static void proj_callback(Projectile *p, uint64_t userdata) {
   if (HMM_LenV3(
           HMM_SubV3(p->pos, global_data.enemy_mdl->transform.Columns[3].XYZ)) <=
       0.5f + p->radius) {
-    blob_queue_delete(global_data.blob_sim, BLOB_PROJECTILE, p);
+    blob_sim_queue_delete(global_data.blob_sim, DELETE_PROJECTILE, p);
 
     if (!global_data.enemy_dead) {
       global_data.enemy_dead = true;
@@ -150,6 +151,8 @@ static void proj_callback(Projectile *p, uint64_t userdata) {
 }
 
 int main() {
+  srand(time(NULL));
+
   if (!glfwInit())
     glfw_fatal_error();
 
@@ -221,9 +224,11 @@ int main() {
   // Player model
 
   Model player_mdl;
-  blob_sim_create_mdl(&player_mdl, &blob_sim, PLAYER_MDL, ARR_SIZE(PLAYER_MDL));
+  blob_mdl_create(&player_mdl, PLAYER_MDL, ARR_SIZE(PLAYER_MDL));
   player_mdl.transform.Columns[3].Y = 6.0f;
   global_data.player_mdl = &player_mdl;
+
+  fixed_array_append(&blob_sim.collider_models, &(void *){&player_mdl});
 
   HMM_Quat player_quat = {0, 0, 0, 1};
   HMM_Vec3 player_vel = {0};
@@ -232,9 +237,11 @@ int main() {
   // Angry face model
 
   Model angry_mdl;
-  blob_sim_create_mdl(&angry_mdl, &blob_sim, ANGRY_MDL, ARR_SIZE(ANGRY_MDL));
+  blob_mdl_create(&angry_mdl, ANGRY_MDL, ARR_SIZE(ANGRY_MDL));
   angry_mdl.transform.Columns[3].Y = 3.0f;
   global_data.enemy_mdl = &angry_mdl;
+
+  fixed_array_append(&blob_sim.collider_models, &(void *){&angry_mdl});
 
   // Create cube buffers for blob renderer and skybox
   cube_create_buffers();

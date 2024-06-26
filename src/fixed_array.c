@@ -27,6 +27,10 @@ const void *fixed_array_get_const(const FixedArray *a, int idx) {
   return (const char *)a->data + idx * a->element_size;
 }
 
+int fixed_array_get_idx_from_ptr(const FixedArray *a, const void *element) {
+  return ((const char *)element - (const char *)a->data) / a->element_size;
+}
+
 void *fixed_array_append(FixedArray *a, void *element) {
   if (a->count >= a->capacity) {
     return NULL;

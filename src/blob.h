@@ -36,12 +36,18 @@ typedef struct Projectile {
   float delete_timer;
 } Projectile;
 
-#define BLOB_TYPE_COUNT 3
-typedef enum BlobType { BLOB_SOLID, BLOB_LIQUID, BLOB_PROJECTILE } BlobType;
+typedef enum DeletionType {
+  DELETE_SOLID,
+  DELETE_LIQUID,
+  DELETE_PROJECTILE,
+  DELETE_COLLIDER_MODEL,
+  DELETE_MAX
+} DeletionType;
 
 #define BLOB_SIM_MAX_SOLIDS 1024
 #define BLOB_SIM_MAX_LIQUIDS 1024
 #define BLOB_SIM_MAX_PROJECTILES 1024
+#define BLOB_SIM_MAX_COLLIDER_MODELS 128
 
 #define BLOB_SIM_MAX_DELETIONS 128
 
@@ -61,7 +67,9 @@ typedef struct BlobSim {
   FixedArray liquids;
   FixedArray projectiles;
 
-  FixedArray del_queues[BLOB_TYPE_COUNT];
+  FixedArray collider_models;
+
+  FixedArray del_queues[DELETE_MAX];
 
   LiquidForce *liq_forces;
 } BlobSim;
@@ -127,15 +135,12 @@ LiquidBlob *liquid_blob_create(BlobSim *bs);
 // pointer may not always be valid.
 Projectile *projectile_create(BlobSim *bs);
 
-// Queues a blob to be deleted at the end of a simulation tick. It is fine to
-// call this multiple times for the same blob
-void blob_queue_delete(BlobSim *bs, BlobType type, void *b);
-
 void blob_sim_create(BlobSim *bs);
 void blob_sim_destroy(BlobSim *bs);
 
-void blob_sim_create_mdl(Model *mdl, BlobSim *bs, const ModelBlob *mdl_blob_src,
-                         int mdl_blob_count);
+// Queues a blob to be deleted at the end of a simulation tick. It is fine to
+// call this multiple times for the same blob
+void blob_sim_queue_delete(BlobSim *bs, DeletionType type, void *b);
 
 void blob_sim_liquid_apply_force(BlobSim *bs, const LiquidBlob *b,
                                  const HMM_Vec3 *force);
@@ -144,6 +149,9 @@ void blob_sim_liquid_apply_force(BlobSim *bs, const LiquidBlob *b,
 void blob_sim_raycast(RaycastResult *r, const BlobSim *bs, HMM_Vec3 ro, HMM_Vec3 rd);
 
 void blob_simulate(BlobSim *bs, double delta);
+
+void blob_mdl_create(Model *mdl, const ModelBlob *mdl_blob_src,
+                     int mdl_blob_count);
 
 // Returns correction vector to separate a blob at pos from solids
 HMM_Vec3 blob_get_correction_from_solids(BlobSim *bs, const HMM_Vec3 *pos,
