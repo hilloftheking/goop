@@ -185,6 +185,7 @@
   <ItemGroup>
     <ClInclude Include="src\core.h" />
     <ClInclude Include="src\fixed_array.h" />
+    <ClInclude Include="src\level.h" />
     <ClInclude Include="src\resource.h" />
     <ClInclude Include="src\blob.h" />
     <ClInclude Include="src\blob_defines.h" />
@@ -196,6 +197,7 @@
     <ClInclude Include="src\shader_sources.h" />
     <ClInclude Include="src\skybox.h" />
     <ClInclude Include="src\stb\stb_image.h" />
+    <ClInclude Include="src\toml.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\core.c" />
@@ -204,12 +206,14 @@
     <ClCompile Include="src\blob_render.c" />
     <ClCompile Include="src\cube.c" />
     <ClCompile Include="src\glad\glad.c" />
+    <ClCompile Include="src\level.c" />
     <ClCompile Include="src\main.c" />
     <ClCompile Include="src\resource_load.c" />
     <ClCompile Include="src\shader.c" />
     <ClCompile Include="src\shader_sources.c" />
     <ClCompile Include="src\skybox.c" />
     <ClCompile Include="src\stb\stb_image.c" />
+    <ClCompile Include="src\toml.c" />
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="shaders\compute_sdf.comp">

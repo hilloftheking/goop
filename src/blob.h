@@ -157,4 +157,5 @@ BlobOt blob_ot_create();
 
 void blob_ot_reset(BlobOt blob_ot);
 
-void blob_ot_insert(BlobOt blob_ot, const HMM_Vec3 *blob_pos, int blob_idx);
+void blob_ot_insert(BlobOt blob_ot, const HMM_Vec3 *blob_pos, float blob_radius,
+                    int blob_idx);

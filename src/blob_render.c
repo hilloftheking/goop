@@ -70,9 +70,9 @@ void blob_renderer_create(BlobRenderer *br) {
   br->aspect_ratio = 1.0f;
 
   br->blob_ot = blob_ot_create();
-  br->blobs_lerped = malloc(
+  br->blobs_v4 = malloc(
       (BLOB_SIM_MAX_SOLIDS + BLOB_SIM_MAX_LIQUIDS + BLOB_SIM_MAX_PROJECTILES) *
-      sizeof(*br->blobs_lerped));
+      sizeof(*br->blobs_v4));
 
   {
     Resource img;
@@ -158,12 +158,13 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
   for (int i = bs->projectiles.count - 1; i >= 0; i--) {
     const Projectile *p = fixed_array_get_const(&bs->projectiles, i);
 
-    br->blobs_lerped[ssbo_idx].XYZ = p->pos;
-    br->blobs_lerped[ssbo_idx].W =
+    br->blobs_v4[ssbo_idx].XYZ = p->pos;
+    br->blobs_v4[ssbo_idx].W =
         (float)((int)(p->radius * BLOB_RADIUS_MULT) * BLOB_MAT_COUNT +
                 p->mat_idx);
 
-    blob_ot_insert(br->blob_ot, &br->blobs_lerped[ssbo_idx].XYZ, ssbo_idx);
+    blob_ot_insert(br->blob_ot, &br->blobs_v4[ssbo_idx].XYZ, p->radius,
+                   ssbo_idx);
     ssbo_idx++;
   }
 
@@ -171,12 +172,13 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
   for (int i = bs->liquids.count - 1; i >= 0; i--) {
     const LiquidBlob *b = fixed_array_get_const(&bs->liquids, i);
 
-    br->blobs_lerped[ssbo_idx].XYZ = b->pos;
-    br->blobs_lerped[ssbo_idx].W =
+    br->blobs_v4[ssbo_idx].XYZ = b->pos;
+    br->blobs_v4[ssbo_idx].W =
         (float)((int)(b->radius * BLOB_RADIUS_MULT) * BLOB_MAT_COUNT +
                 b->mat_idx);
 
-    blob_ot_insert(br->blob_ot, &br->blobs_lerped[ssbo_idx].XYZ, ssbo_idx);
+    blob_ot_insert(br->blob_ot, &br->blobs_v4[ssbo_idx].XYZ, b->radius,
+                   ssbo_idx);
     ssbo_idx++;
   }
 
@@ -184,18 +186,18 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
   for (int i = bs->solids.count - 1; i >= 0; i--) {
     const SolidBlob *b = fixed_array_get_const(&bs->solids, i);
 
-    br->blobs_lerped[ssbo_idx].XYZ = b->pos;
-    br->blobs_lerped[ssbo_idx].W =
+    br->blobs_v4[ssbo_idx].XYZ = b->pos;
+    br->blobs_v4[ssbo_idx].W =
         (float)((int)(b->radius * BLOB_RADIUS_MULT) * BLOB_MAT_COUNT +
                 b->mat_idx);
 
-    blob_ot_insert(br->blob_ot, &b->pos, ssbo_idx);
+    blob_ot_insert(br->blob_ot, &b->pos, b->radius, ssbo_idx);
     ssbo_idx++;
   }
 
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, br->blobs_ssbo);
   glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, br->blobs_ssbo_size_bytes,
-                  br->blobs_lerped);
+                  br->blobs_v4);
 
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, br->blob_ot_ssbo);
   glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, br->blob_ot_ssbo_size_bytes,

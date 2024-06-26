@@ -460,7 +460,8 @@ static float dist_cube(const HMM_Vec3 *c, float s, const HMM_Vec3 *p) {
 
 static void insert_into_nodes(BlobOt blob_ot, BlobOtNode *node,
                               const HMM_Vec3 *node_pos, float node_size,
-                              const HMM_Vec3 *blob_pos, int blob_idx) {
+                              const HMM_Vec3 *blob_pos, float blob_radius,
+                              int blob_idx) {
   if (node->leaf_blob_count == -1) {
     // This node has child nodes
     for (int i = 0; i < 8; i++) {
@@ -468,12 +469,12 @@ static void insert_into_nodes(BlobOt blob_ot, BlobOtNode *node,
           HMM_AddV3(HMM_MulV3F(ot_quadrants[i], node_size * 0.5f), *node_pos);
       float child_size = node_size * 0.5f;
 
-      float dist = dist_cube(&child_pos, child_size, blob_pos) -
-                   BLOB_MAX_RADIUS - BLOB_SMOOTH - BLOB_SDF_MAX_DIST;
+      float dist = dist_cube(&child_pos, child_size, blob_pos) - blob_radius -
+                   BLOB_SMOOTH - BLOB_SDF_MAX_DIST;
 
       if (dist <= 0.0f) {
         insert_into_nodes(blob_ot, blob_ot + node->indices[i], &child_pos,
-                          child_size, blob_pos, blob_idx);
+                          child_size, blob_pos, blob_radius, blob_idx);
       }
     }
   } else {
@@ -491,8 +492,9 @@ static void insert_into_nodes(BlobOt blob_ot, BlobOtNode *node,
   }
 }
 
-void blob_ot_insert(BlobOt blob_ot, const HMM_Vec3 *blob_pos, int blob_idx) {
+void blob_ot_insert(BlobOt blob_ot, const HMM_Vec3 *blob_pos, float blob_radius,
+                    int blob_idx) {
   BlobOtNode *root = blob_ot + 0;
   insert_into_nodes(blob_ot, root, &BLOB_SIM_POS, BLOB_SIM_SIZE, blob_pos,
-                    blob_idx);
+                    blob_radius, blob_idx);
 }

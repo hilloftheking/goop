@@ -3,8 +3,6 @@
 #ifndef BLOB_DEFINES_H
 #define BLOB_DEFINES_H
 
-#define BLOB_MAX_RADIUS 1.0f
-
 #define BLOB_SMOOTH 0.6f
 #define MODEL_BLOB_SMOOTH 0.1f
 

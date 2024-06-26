@@ -16,7 +16,11 @@
 #include "blob_models.h"
 #include "core.h"
 #include "cube.h"
+#include "level.h"
 #include "skybox.h"
+
+#include "resource.h"
+#include "resource_load.h"
 
 static void gl_debug_callback(GLenum source, GLenum type, GLuint id,
                               GLenum severity, GLsizei length,
@@ -193,6 +197,14 @@ int main() {
   BlobSim blob_sim;
   blob_sim_create(&blob_sim);
   global_data.blob_sim = &blob_sim;
+
+  // Load test level
+  {
+    Resource blvl_rsrc;
+    resource_load(&blvl_rsrc, IDS_TEST, "BLVL");
+    level_load(&blob_sim, blvl_rsrc.data, blvl_rsrc.data_size);
+    resource_destroy(&blvl_rsrc);
+  }
 
   // Ground
   for (int i = 0; i < 512; i++) {

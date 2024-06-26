@@ -9,3 +9,5 @@
 
 #define IDB_WATER 10007
 #define IDB_WATER_NORMAL 10008
+
+#define IDS_TEST 20001
