@@ -9,7 +9,7 @@ typedef BlobOtNode *BlobOt;
 
 typedef struct BlobRenderer {
   unsigned int raymarch_program, compute_program, sdf_tex, sdf_mdl_tex,
-      blobs_ssbo, blob_ot_ssbo;
+      blobs_ssbo, blob_ot_ssbo, water_tex, water_norm_tex;
   int blobs_ssbo_size_bytes, blob_ot_ssbo_size_bytes;
 
   HMM_Mat4 cam_trans, view_mat, proj_mat;

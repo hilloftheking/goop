@@ -5,9 +5,13 @@
 
 #include <glad/glad.h>
 
+#include "stb/stb_image.h"
+
 #include "blob.h"
 #include "blob_render.h"
 #include "cube.h"
+#include "resource.h"
+#include "resource_load.h"
 #include "shader.h"
 #include "shader_sources.h"
 
@@ -26,7 +30,6 @@ void blob_renderer_create(BlobRenderer *br) {
   br->compute_program = create_compute_program(COMPUTE_SDF_COMP_SRC);
 
   glGenTextures(1, &br->sdf_tex);
-  glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_3D, br->sdf_tex);
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -38,7 +41,6 @@ void blob_renderer_create(BlobRenderer *br) {
   glBindImageTexture(0, br->sdf_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA8);
 
   glGenTextures(1, &br->sdf_mdl_tex);
-  glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_3D, br->sdf_mdl_tex);
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -71,6 +73,50 @@ void blob_renderer_create(BlobRenderer *br) {
   br->blobs_lerped = malloc(
       (BLOB_SIM_MAX_SOLIDS + BLOB_SIM_MAX_LIQUIDS + BLOB_SIM_MAX_PROJECTILES) *
       sizeof(*br->blobs_lerped));
+
+  {
+    Resource img;
+    resource_load(&img, IDB_WATER, "JPG");
+
+    int width, height;
+    stbi_uc *pixels = stbi_load_from_memory(img.data, img.data_size, &width,
+                                            &height, NULL, 4);
+
+    glGenTextures(1, &br->water_tex);
+    glBindTexture(GL_TEXTURE_2D, br->water_tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA,
+                 GL_UNSIGNED_BYTE, pixels);
+
+    stbi_image_free(pixels);
+
+    resource_destroy(&img);
+  }
+
+  {
+    Resource img;
+    resource_load(&img, IDB_WATER_NORMAL, "JPG");
+
+    int width, height;
+    stbi_uc *pixels = stbi_load_from_memory(img.data, img.data_size, &width,
+                                            &height, NULL, 4);
+
+    glGenTextures(1, &br->water_norm_tex);
+    glBindTexture(GL_TEXTURE_2D, br->water_norm_tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA,
+                 GL_UNSIGNED_BYTE, pixels);
+
+    stbi_image_free(pixels);
+
+    resource_destroy(&img);
+  }
 }
 
 void blob_renderer_destroy(BlobRenderer *br) {
@@ -81,7 +127,12 @@ void blob_renderer_destroy(BlobRenderer *br) {
 static void draw_sdf_cube(BlobRenderer *br, unsigned int sdf_tex,
                           const HMM_Vec3 *pos, float size,
                           const HMM_Mat4 *transform, float sdf_max_dist) {
+  glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_3D, sdf_tex);
+  glActiveTexture(GL_TEXTURE1);
+  glBindTexture(GL_TEXTURE_2D, br->water_tex);
+  glActiveTexture(GL_TEXTURE2);
+  glBindTexture(GL_TEXTURE_2D, br->water_norm_tex);
 
   HMM_Mat4 model_mat = HMM_M4D(size);
   model_mat.Columns[3].XYZ = *pos;

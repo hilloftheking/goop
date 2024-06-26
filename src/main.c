@@ -14,10 +14,9 @@
 #include "blob.h"
 #include "blob_render.h"
 #include "blob_models.h"
+#include "core.h"
 #include "cube.h"
 #include "skybox.h"
-
-#define ARR_SIZE(a) (sizeof(a) / sizeof(*a))
 
 static void gl_debug_callback(GLenum source, GLenum type, GLuint id,
                               GLenum severity, GLsizei length,
@@ -35,7 +34,7 @@ static float rand_float() { return ((float)rand() / (float)(RAND_MAX)); }
 #define PLR_SPEED 4.0f
 #define CAM_SENS 0.01f
 
-#define SHOOT_CD 0.05
+#define SHOOT_CD 0.01
 
 static HMM_Vec2 cam_rot;
 
@@ -128,9 +127,7 @@ static void glfw_fatal_error() {
   const char *err_desc;
   glfwGetError(&err_desc);
   fprintf(stderr, "[GLFW fatal] %s\n", err_desc);
-  glfwTerminate();
-  system("pause");
-  exit(-1);
+  exit_fatal_error();
 }
 
 static void proj_callback(Projectile *p, uint64_t userdata) {

@@ -289,11 +289,14 @@ void blob_simulate(BlobSim *bs, double delta) {
     p->vel = HMM_AddV3(p->vel, HMM_MulV3F(PROJ_GRAV, (float)delta));
     p->pos = HMM_AddV3(p->pos, HMM_MulV3F(p->vel, (float)delta));
 
+    // TODO: This will be added back when collision checking is less slow
+    /*
     HMM_Vec3 correction =
         blob_get_correction_from_solids(bs, &p->pos, p->radius);
     if (HMM_LenV3(correction) > 0.0f) {
       blob_queue_delete(bs, BLOB_PROJECTILE, p);
     }
+    */
 
     p->delete_timer -= (float)delta;
     if (p->delete_timer <= 0.0f) {

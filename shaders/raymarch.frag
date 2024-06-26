@@ -7,6 +7,8 @@ layout(location = 0) in vec3 local_pos;
 layout(location = 0) out vec4 out_color;
 
 layout(binding = 0) uniform sampler3D sdf_tex;
+layout(binding = 1) uniform sampler2D water_tex;
+layout(binding = 2) uniform sampler2D water_norm_tex;
 
 layout(location = 0) uniform mat4 model_mat;
 layout(location = 1) uniform mat4 view_mat;
@@ -76,6 +78,8 @@ vec4 ray_march(vec3 ro, vec3 rd) {
         return vec4(dat.rgb * 0.5, max(0.01, traveled));
       }
 
+      vec2 uv = (model_mat * vec4(p, 1.0)).xz * 0.1;
+
       // TODO: Getting the normal is kind of expensive
       // Maybe it could be possible to have a low quality normal in the SDF
       vec3 normal = get_normal_at(p);
@@ -93,8 +97,9 @@ vec4 ray_march(vec3 ro, vec3 rd) {
       float light1_val =
           mix(max(0.0, dot(normal, light1_dir)), 1.0, BRIGHTNESS);
       
-      vec3 color = dat.rgb * light0_col * light0_val + dat.rgb * light1_col * light1_val;
+      vec3 albedo = dat.rgb * mix(texture(water_tex, uv).rgb, vec3(1), 0.7);
 
+      vec3 color = albedo * light0_col * light0_val + albedo * light1_col * light1_val;
       return vec4(color, traveled);
     }
 
