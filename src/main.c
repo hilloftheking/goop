@@ -49,7 +49,7 @@ static struct {
 
 static struct {
   bool player_dead;
-  bool enemy_dead;
+  int enemy_health;
   Model *player_mdl;
   Model *enemy_mdl;
   BlobSim *blob_sim;
@@ -71,6 +71,7 @@ static void liquify_model(BlobSim *bs, const Model *mdl) {
       for (int x = 0; x < 3; x++) {
         force.Elements[x] = (rand_float() - 0.5f) * 10.0f;
       }
+      force.Y += 8.0f;
       blob_sim_liquid_apply_force(bs, b, &force);
     }
   }
@@ -111,7 +112,6 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action,
     break;
   case GLFW_KEY_K:
     if (!global_data.player_dead) {
-      printf("Liquifying player\n");
       global_data.player_dead = true;
       liquify_model(global_data.blob_sim, global_data.player_mdl);
     }
@@ -135,17 +135,34 @@ static void glfw_fatal_error() {
   exit_fatal_error();
 }
 
-static void proj_callback(Projectile *p, uint64_t userdata) {
-  if (HMM_LenV3(
-          HMM_SubV3(p->pos, global_data.enemy_mdl->transform.Columns[3].XYZ)) <=
-      0.5f + p->radius) {
+static void proj_callback(Projectile *p, ColliderModel *col_mdl,
+                          uint64_t userdata) {
+  if (col_mdl->mdl == global_data.enemy_mdl) {
+    if (global_data.enemy_health <= 0)
+      return;
+
+    // Blood
+    for (int i = 0; i < 1; i++) {
+      LiquidBlob *b = liquid_blob_create(global_data.blob_sim);
+      b->type = LIQUID_BASE;
+      b->pos = p->pos;
+      b->radius = 0.2f;
+      b->mat_idx = 0;
+
+      HMM_Vec3 force;
+      for (int x = 0; x < 3; x++) {
+        force.Elements[x] = (rand_float() - 0.5f) * 30.0f;
+      }
+      blob_sim_liquid_apply_force(global_data.blob_sim, b, &force);
+    }
+
+    global_data.enemy_health -= 1;
     blob_sim_queue_delete(global_data.blob_sim, DELETE_PROJECTILE, p);
 
-    if (!global_data.enemy_dead) {
-      global_data.enemy_dead = true;
-      printf("callback\n");
-
+    if (global_data.enemy_health <= 0) {
       liquify_model(global_data.blob_sim, global_data.enemy_mdl);
+      blob_sim_queue_delete(global_data.blob_sim, DELETE_COLLIDER_MODEL,
+                            col_mdl);
     }
   }
 }
@@ -228,7 +245,7 @@ int main() {
   player_mdl.transform.Columns[3].Y = 6.0f;
   global_data.player_mdl = &player_mdl;
 
-  fixed_array_append(&blob_sim.collider_models, &(void *){&player_mdl});
+  collider_model_add(&blob_sim, &player_mdl);
 
   HMM_Quat player_quat = {0, 0, 0, 1};
   HMM_Vec3 player_vel = {0};
@@ -240,8 +257,9 @@ int main() {
   blob_mdl_create(&angry_mdl, ANGRY_MDL, ARR_SIZE(ANGRY_MDL));
   angry_mdl.transform.Columns[3].Y = 3.0f;
   global_data.enemy_mdl = &angry_mdl;
+  global_data.enemy_health = 50;
 
-  fixed_array_append(&blob_sim.collider_models, &(void *){&angry_mdl});
+  collider_model_add(&blob_sim, &angry_mdl);
 
   // Create cube buffers for blob renderer and skybox
   cube_create_buffers();
@@ -408,7 +426,7 @@ int main() {
         blob_spawn_cd <= 0.0) {
       blob_spawn_cd = SHOOT_CD;
 
-      float radius = 0.2f + rand_float() * 0.3f;
+      float radius = 0.1f + rand_float() * 0.3f;
 
       HMM_Vec3 pos = HMM_AddV3(HMM_MulV3F(cam_trans->Columns[2].XYZ, -5.0f),
                                cam_trans->Columns[3].XYZ);
@@ -429,7 +447,7 @@ int main() {
 
     // Enemy behavior
 
-    if (!global_data.enemy_dead) {
+    if (global_data.enemy_health > 0) {
       HMM_Vec3 player_pos = player_mdl.transform.Columns[3].XYZ;
       player_pos.Y += 2.0f;
       HMM_Vec3 player_dir =
@@ -479,7 +497,7 @@ int main() {
     blob_render_sim(&blob_renderer, &blob_sim);
     if (!global_data.player_dead)
       blob_render_mdl(&blob_renderer, &blob_sim, &player_mdl);
-    if (!global_data.enemy_dead)
+    if (global_data.enemy_health > 0)
       blob_render_mdl(&blob_renderer, &blob_sim, &angry_mdl);
     glfwSwapBuffers(window);
   }

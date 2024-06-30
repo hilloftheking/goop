@@ -24,7 +24,8 @@ typedef struct LiquidBlob {
 } LiquidBlob;
 
 typedef struct Projectile Projectile;
-typedef void (*ProjectileCallback)(Projectile *, uint64_t);
+typedef struct ColliderModel ColliderModel;
+typedef void (*ProjectileCallback)(Projectile *, ColliderModel *, uint64_t);
 
 typedef struct Projectile {
   float radius;
@@ -35,6 +36,12 @@ typedef struct Projectile {
   uint64_t userdata;
   float delete_timer;
 } Projectile;
+
+typedef struct Model Model;
+
+typedef struct ColliderModel {
+  Model *mdl;
+} ColliderModel;
 
 typedef enum DeletionType {
   DELETE_SOLID,
@@ -52,7 +59,7 @@ typedef enum DeletionType {
 #define BLOB_SIM_MAX_DELETIONS 128
 
 // Only a few liquid blobs actually keep track of their velocity
-#define BLOB_SIM_MAX_FORCES 32
+#define BLOB_SIM_MAX_FORCES 128
 
 #define LIQUID_FALL_SPEED 5.0f
 
@@ -134,6 +141,13 @@ LiquidBlob *liquid_blob_create(BlobSim *bs);
 // Creates a projectile if possible and adds it to the simulation. The returned
 // pointer may not always be valid.
 Projectile *projectile_create(BlobSim *bs);
+
+// Creates a collider model if possible and adds it to the simulation. The
+// returned pointer may not always be valid.
+ColliderModel *collider_model_add(BlobSim *bs, Model *mdl);
+
+// Removes the collider model that uses the same model
+void collider_model_remove(BlobSim *bs, Model *mdl);
 
 void blob_sim_create(BlobSim *bs);
 void blob_sim_destroy(BlobSim *bs);

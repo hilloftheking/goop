@@ -110,12 +110,34 @@ Projectile *projectile_create(BlobSim *bs) {
   return p;
 }
 
+ColliderModel *collider_model_add(BlobSim *bs, Model *mdl) {
+  ColliderModel *cm = fixed_array_append(&bs->collider_models, NULL);
+  if (!cm) {
+    fprintf(stderr, "Collider Model max count reached\n");
+    return NULL;
+  }
+
+  cm->mdl = mdl;
+
+  return cm;
+}
+
+void collider_model_remove(BlobSim *bs, Model *mdl) {
+  for (int i = 0; i < bs->collider_models.count; i++) {
+    ColliderModel *cm = fixed_array_get(&bs->collider_models, i);
+    if (cm->mdl == mdl) {
+      blob_sim_queue_delete(bs, DELETE_COLLIDER_MODEL, cm);
+      return;
+    }
+  }
+}
+
 void blob_sim_create(BlobSim *bs) {
   fixed_array_create(&bs->solids, sizeof(SolidBlob), BLOB_SIM_MAX_SOLIDS);
   fixed_array_create(&bs->liquids, sizeof(LiquidBlob), BLOB_SIM_MAX_LIQUIDS);
   fixed_array_create(&bs->projectiles, sizeof(Projectile),
                      BLOB_SIM_MAX_PROJECTILES);
-  fixed_array_create(&bs->collider_models, sizeof(Model *),
+  fixed_array_create(&bs->collider_models, sizeof(ColliderModel),
                      BLOB_SIM_MAX_COLLIDER_MODELS);
 
   for (int i = 0; i < DELETE_MAX; i++) {
@@ -302,7 +324,8 @@ void blob_simulate(BlobSim *bs, double delta) {
     */
 
     for (int c = 0; c < bs->collider_models.count; c++) {
-      Model *mdl = *(Model **)fixed_array_get(&bs->collider_models, c);
+      ColliderModel *col_mdl = fixed_array_get(&bs->collider_models, c);
+      Model *mdl = col_mdl->mdl;
 
       for (int bi = 0; bi < mdl->blob_count; bi++) {
         ModelBlob *b = &mdl->blobs[bi];
@@ -312,7 +335,10 @@ void blob_simulate(BlobSim *bs, double delta) {
 
         HMM_Vec3 bpos = HMM_MulM4V4(mdl->transform, bpv4).XYZ;
         if (HMM_LenV3(HMM_SubV3(bpos, p->pos)) <= b->radius + p->radius) {
-          printf("colliding :)\n");
+          if (p->callback) {
+            p->callback(p, col_mdl, p->userdata);
+          }
+          break;
         }
       }
     }
@@ -320,10 +346,6 @@ void blob_simulate(BlobSim *bs, double delta) {
     p->delete_timer -= (float)delta;
     if (p->delete_timer <= 0.0f) {
       blob_sim_queue_delete(bs, DELETE_PROJECTILE, p);
-    }
-
-    if (p->callback) {
-      p->callback(p, p->userdata);
     }
   }
 

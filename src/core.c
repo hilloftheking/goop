@@ -11,6 +11,6 @@ void exit_fatal_error() {
   // If GLFW isn't terminated, the window will be frozen
   glfwTerminate();
 
-  system("pause");
+  getchar();
   exit(-1);
 }
