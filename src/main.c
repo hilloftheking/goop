@@ -17,11 +17,14 @@
 #include "blob_models.h"
 #include "core.h"
 #include "cube.h"
+#include "ecs.h"
 #include "level.h"
 #include "skybox.h"
 
 #include "resource.h"
 #include "resource_load.h"
+
+#include "int_map.h"
 
 static void gl_debug_callback(GLenum source, GLenum type, GLuint id,
                               GLenum severity, GLsizei length,
@@ -40,6 +43,7 @@ static float rand_float() { return ((float)rand() / (float)(RAND_MAX)); }
 #define CAM_SENS 0.01f
 
 #define SHOOT_CD 0.01
+#define ENEMY_SHOOT_CD 2.0
 
 static HMM_Vec2 cam_rot;
 
@@ -49,9 +53,7 @@ static struct {
 
 static struct {
   bool player_dead;
-  int enemy_health;
   Model *player_mdl;
-  Model *enemy_mdl;
   BlobSim *blob_sim;
 } global_data;
 
@@ -137,6 +139,7 @@ static void glfw_fatal_error() {
 
 static void proj_callback(Projectile *p, ColliderModel *col_mdl,
                           uint64_t userdata) {
+  /*
   if (col_mdl->mdl == global_data.enemy_mdl) {
     if (global_data.enemy_health <= 0)
       return;
@@ -165,6 +168,7 @@ static void proj_callback(Projectile *p, ColliderModel *col_mdl,
                             col_mdl);
     }
   }
+  */
 }
 
 int main() {
@@ -251,15 +255,37 @@ int main() {
   HMM_Vec3 player_vel = {0};
   HMM_Vec3 player_grav = {0, -9.81f, 0};
 
-  // Angry face model
+  typedef struct EnemyComponent {
+    int health;
+    double shoot_timer;
+    Model mdl;
+  } EnemyComponent;
 
-  Model angry_mdl;
-  blob_mdl_create(&angry_mdl, ANGRY_MDL, ARR_SIZE(ANGRY_MDL));
-  angry_mdl.transform.Columns[3].Y = 3.0f;
-  global_data.enemy_mdl = &angry_mdl;
-  global_data.enemy_health = 50;
+  ecs_register_component(COMPONENT_ENEMY, sizeof(EnemyComponent));
 
-  collider_model_add(&blob_sim, &angry_mdl);
+  for (int i = 0; i < 9; i++) {
+    Entity enemy = entity_create();
+    EnemyComponent *comp = entity_add_component(enemy, COMPONENT_ENEMY);
+    comp->health = 20;
+    comp->shoot_timer = ENEMY_SHOOT_CD;
+    blob_mdl_create(&comp->mdl, ANGRY_MDL, ARR_SIZE(ANGRY_MDL));
+    comp->mdl.transform.Columns[3].X = (i - 4) * 1.5f;
+    comp->mdl.transform.Columns[3].Y = 3.0f;
+    collider_model_add(&blob_sim, &comp->mdl);
+  }
+
+  /*
+  IntMap map;
+  int_map_create(&map);
+  uint64_t key;
+  for (int i = 0; i < 64; i++) {
+    key = rand();
+    uint64_t value = rand();
+    int_map_insert(&map, key, value);
+  }
+  uint64_t *value = int_map_get(&map, key);
+  printf("%d\n", (int)*value);
+  */
 
   // Create cube buffers for blob renderer and skybox
   cube_create_buffers();
@@ -447,41 +473,44 @@ int main() {
 
     // Enemy behavior
 
-    if (global_data.enemy_health > 0) {
-      HMM_Vec3 player_pos = player_mdl.transform.Columns[3].XYZ;
-      player_pos.Y += 2.0f;
-      HMM_Vec3 player_dir =
-          HMM_SubV3(player_pos, angry_mdl.transform.Columns[3].XYZ);
-      player_dir = HMM_NormV3(player_dir);
+    EntityComponent *enemy = component_begin(COMPONENT_ENEMY);
+    while (enemy != component_end(COMPONENT_ENEMY)) {
+      EnemyComponent *c = enemy->component;
+      if (c->health > 0) {
+        HMM_Vec3 player_pos = player_mdl.transform.Columns[3].XYZ;
+        player_pos.Y += 2.0f;
+        HMM_Vec3 player_dir =
+            HMM_SubV3(player_pos, c->mdl.transform.Columns[3].XYZ);
+        player_dir = HMM_NormV3(player_dir);
 
-      float yaw = -atan2f(player_dir.Z, player_dir.X) - HMM_PI32 * 0.5f;
-      float pitch = asinf(player_dir.Y);
+        float yaw = -atan2f(player_dir.Z, player_dir.X) - HMM_PI32 * 0.5f;
+        float pitch = asinf(player_dir.Y);
 
-      HMM_Mat4 rot_mat = HMM_MulM4(HMM_Rotate_RH(yaw, HMM_V3(0, 1, 0)),
-                                   HMM_Rotate_RH(pitch, HMM_V3(1, 0, 0)));
-      HMM_Quat rot_quat = HMM_M4ToQ_RH(rot_mat);
-      float step = (HMM_PI32 * 1.0f) * (float)delta;
-      rot_quat =
-          HMM_RotateTowardsQ(HMM_M4ToQ_RH(angry_mdl.transform), step, rot_quat);
-      rot_mat = HMM_QToM4(rot_quat);
-      rot_mat.Columns[3] = angry_mdl.transform.Columns[3];
+        HMM_Mat4 rot_mat = HMM_MulM4(HMM_Rotate_RH(yaw, HMM_V3(0, 1, 0)),
+                                     HMM_Rotate_RH(pitch, HMM_V3(1, 0, 0)));
+        HMM_Quat rot_quat = HMM_M4ToQ_RH(rot_mat);
+        float step = (HMM_PI32 * 1.0f) * (float)delta;
+        rot_quat = HMM_RotateTowardsQ(HMM_M4ToQ_RH(c->mdl.transform), step,
+                                      rot_quat);
+        rot_mat = HMM_QToM4(rot_quat);
+        rot_mat.Columns[3] = c->mdl.transform.Columns[3];
 
-      angry_mdl.transform = rot_mat;
+        c->mdl.transform = rot_mat;
 
-      #define ENEMY_SHOOT_CD 2.0;
-      static double enemy_shoot_timer = ENEMY_SHOOT_CD;
+        c->shoot_timer -= delta;
+        if (c->shoot_timer <= 0.0) {
+          c->shoot_timer = ENEMY_SHOOT_CD;
 
-      enemy_shoot_timer -= delta;
-      if (enemy_shoot_timer <= 0.0) {
-        enemy_shoot_timer = ENEMY_SHOOT_CD;
-
-        Projectile *p = projectile_create(&blob_sim);
-        p->radius = 0.2f;
-        p->mat_idx = 0;
-        p->pos = angry_mdl.transform.Columns[3].XYZ;
-        p->vel = HMM_MulV3F(angry_mdl.transform.Columns[2].XYZ, -20.0f);
-        p->delete_timer = 1.0f;
+          Projectile *p = projectile_create(&blob_sim);
+          p->radius = 0.2f;
+          p->mat_idx = 0;
+          p->pos = c->mdl.transform.Columns[3].XYZ;
+          p->vel = HMM_MulV3F(c->mdl.transform.Columns[2].XYZ, -20.0f);
+          p->delete_timer = 1.0f;
+        }
       }
+
+      enemy = component_next(COMPONENT_ENEMY, enemy);
     }
 
     // Render scene
@@ -497,8 +526,14 @@ int main() {
     blob_render_sim(&blob_renderer, &blob_sim);
     if (!global_data.player_dead)
       blob_render_mdl(&blob_renderer, &blob_sim, &player_mdl);
-    if (global_data.enemy_health > 0)
-      blob_render_mdl(&blob_renderer, &blob_sim, &angry_mdl);
+    enemy = component_begin(COMPONENT_ENEMY);
+    while (enemy != component_end(COMPONENT_ENEMY)) {
+      EnemyComponent *c = enemy->component;
+      if (c->health > 0) {
+        blob_render_mdl(&blob_renderer, &blob_sim, &c->mdl);
+      }
+      enemy = component_next(COMPONENT_ENEMY, enemy);
+    }
     glfwSwapBuffers(window);
   }
 
