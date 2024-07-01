@@ -1,3 +1,6 @@
+#include <stdio.h>
+
+#include "core.h"
 #include "ecs.h"
 #include "fixed_array.h"
 #include "int_map.h"
@@ -11,7 +14,7 @@ typedef struct RegisteredComponent {
 
 static RegisteredComponent registered_components[COMPONENT_MAX];
 
-#define MAX_COMPONENTS 64
+#define MAX_COMPONENTS 128
 
 void ecs_register_component(ComponentType type, int data_size_bytes) {
   RegisteredComponent *rc = &registered_components[type];
@@ -36,10 +39,41 @@ void *entity_add_component(Entity e, ComponentType type) {
 void *entity_get_component(Entity e, ComponentType type) {
   RegisteredComponent *rc = &registered_components[type];
   uint64_t *p_idx = int_map_get(&rc->entity_to_component, e);
-  if (!p_idx)
+  if (!p_idx) {
+    fprintf(stderr, "Entity %llu does not have component %d\n", e, type);
+    exit_fatal_error();
     return NULL;
+  }
   EntityComponent *ec = fixed_array_get(&rc->components, (int)*p_idx);
   return ec->component;
+}
+
+void *entity_get_component_or_null(Entity e, ComponentType type) {
+  RegisteredComponent *rc = &registered_components[type];
+  uint64_t *p_idx = int_map_get(&rc->entity_to_component, e);
+  if (!p_idx) {
+    return NULL;
+  }
+  EntityComponent *ec = fixed_array_get(&rc->components, (int)*p_idx);
+  return ec->component;
+}
+
+void entity_remove_component(Entity e, ComponentType type) {
+  RegisteredComponent *rc = &registered_components[type];
+  uint64_t *p_idx = int_map_get(&rc->entity_to_component, e);
+  if (!p_idx)
+    return;
+  uint64_t idx = *p_idx;
+  fixed_array_remove(&rc->components, (int)idx);
+  int_map_delete(&rc->entity_to_component, e);
+
+  // Move component indices to the left
+  for (uint64_t i = 0; i < rc->entity_to_component.capacity; i++) {
+    IntMapKV *kv = &rc->entity_to_component.data[i];
+    if (kv->value > idx) {
+      kv->value--;
+    }
+  }
 }
 
 EntityComponent *component_begin(ComponentType type) {

@@ -28,7 +28,7 @@ const void *fixed_array_get_const(const FixedArray *a, int idx) {
 }
 
 int fixed_array_get_idx_from_ptr(const FixedArray *a, const void *element) {
-  return ((const char *)element - (const char *)a->data) / a->element_size;
+  return (int)((const char *)element - (const char *)a->data) / a->element_size;
 }
 
 void *fixed_array_append(FixedArray *a, void *element) {

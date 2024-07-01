@@ -2,11 +2,16 @@
 
 #include <stdint.h>
 
-typedef struct IntMap {
-  uint64_t count;
-  uint64_t capacity;
+typedef struct IntMapKV {
+  uint64_t key;
+  uint64_t value;
+} IntMapKV;
 
-  void *data;
+typedef struct IntMap {
+  int count;
+  int capacity;
+
+  IntMapKV *data;
 } IntMap;
 
 void int_map_create(IntMap *map);

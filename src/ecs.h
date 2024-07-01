@@ -4,7 +4,11 @@
 
 typedef uint64_t Entity;
 
-typedef enum ComponentType { COMPONENT_ENEMY, COMPONENT_MAX } ComponentType;
+typedef enum ComponentType {
+  COMPONENT_MODEL,
+  COMPONENT_ENEMY,
+  COMPONENT_MAX
+} ComponentType;
 
 // Holds entity ID and component data. It stores the entity ID so that it is
 // easily accessible when iterating.
@@ -19,6 +23,8 @@ Entity entity_create();
 
 void *entity_add_component(Entity e, ComponentType type);
 void *entity_get_component(Entity e, ComponentType type);
+void *entity_get_component_or_null(Entity e, ComponentType type);
+void entity_remove_component(Entity e, ComponentType type);
 
 EntityComponent *component_begin(ComponentType type);
 EntityComponent *component_next(ComponentType type, EntityComponent *ec);

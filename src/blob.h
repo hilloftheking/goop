@@ -5,6 +5,7 @@
 
 #include "HandmadeMath.h"
 
+#include "ecs.h"
 #include "fixed_array.h"
 #include "blob_defines.h"
 
@@ -40,7 +41,7 @@ typedef struct Projectile {
 typedef struct Model Model;
 
 typedef struct ColliderModel {
-  Model *mdl;
+  Entity ent;
 } ColliderModel;
 
 typedef enum DeletionType {
@@ -144,10 +145,10 @@ Projectile *projectile_create(BlobSim *bs);
 
 // Creates a collider model if possible and adds it to the simulation. The
 // returned pointer may not always be valid.
-ColliderModel *collider_model_add(BlobSim *bs, Model *mdl);
+ColliderModel *collider_model_add(BlobSim *bs, Entity ent);
 
-// Removes the collider model that uses the same model
-void collider_model_remove(BlobSim *bs, Model *mdl);
+// Removes the collider model corresponding to the entity
+void collider_model_remove(BlobSim *bs, Entity ent);
 
 void blob_sim_create(BlobSim *bs);
 void blob_sim_destroy(BlobSim *bs);

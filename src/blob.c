@@ -110,22 +110,22 @@ Projectile *projectile_create(BlobSim *bs) {
   return p;
 }
 
-ColliderModel *collider_model_add(BlobSim *bs, Model *mdl) {
+ColliderModel *collider_model_add(BlobSim *bs, Entity ent) {
   ColliderModel *cm = fixed_array_append(&bs->collider_models, NULL);
   if (!cm) {
     fprintf(stderr, "Collider Model max count reached\n");
     return NULL;
   }
 
-  cm->mdl = mdl;
+  cm->ent = ent;
 
   return cm;
 }
 
-void collider_model_remove(BlobSim *bs, Model *mdl) {
+void collider_model_remove(BlobSim *bs, Entity ent) {
   for (int i = 0; i < bs->collider_models.count; i++) {
     ColliderModel *cm = fixed_array_get(&bs->collider_models, i);
-    if (cm->mdl == mdl) {
+    if (cm->ent == ent) {
       blob_sim_queue_delete(bs, DELETE_COLLIDER_MODEL, cm);
       return;
     }
@@ -325,7 +325,9 @@ void blob_simulate(BlobSim *bs, double delta) {
 
     for (int c = 0; c < bs->collider_models.count; c++) {
       ColliderModel *col_mdl = fixed_array_get(&bs->collider_models, c);
-      Model *mdl = col_mdl->mdl;
+      Model *mdl = entity_get_component_or_null(col_mdl->ent, COMPONENT_MODEL);
+      if (!mdl)
+        continue;
 
       for (int bi = 0; bi < mdl->blob_count; bi++) {
         ModelBlob *b = &mdl->blobs[bi];
@@ -375,6 +377,18 @@ void blob_simulate(BlobSim *bs, double delta) {
           *other_idx = -1;
         }
       }
+
+      /*
+      if (bt == DELETE_COLLIDER_MODEL) {
+        for (int i = 0; i < bs->collider_models.count; i++) {
+          HMM_Vec3 trans =
+              ((ColliderModel *)fixed_array_get(&bs->collider_models, i))
+                  ->mdl->transform.Columns[3]
+                  .XYZ;
+          printf("(%f, %f, %f)\n", trans.X, trans.Y, trans.Z);
+        }
+      }
+      */
 
       // Indices in liquid forces must be adjusted as well
       if (bt == DELETE_LIQUID) {
