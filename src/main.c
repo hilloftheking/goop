@@ -1,5 +1,6 @@
 #include <math.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -292,7 +293,7 @@ int main() {
   cb_data.br = &blob_renderer;
 
   cam_rot.X = -0.5f;
-  cam_rot.Y = (float)M_PI;
+  cam_rot.Y = HMM_PI32;
 
   uint64_t timer_freq = glfwGetTimerFrequency();
   uint64_t prev_timer = glfwGetTimerValue();

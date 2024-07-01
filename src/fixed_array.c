@@ -15,7 +15,6 @@ void fixed_array_destroy(FixedArray *a) {
   a->capacity = 0;
   a->count = 0;
 
-  free(a->data);
   a->data = NULL;
 }
 

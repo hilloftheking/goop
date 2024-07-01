@@ -14,7 +14,8 @@ typedef enum ComponentType {
 // easily accessible when iterating.
 typedef struct EntityComponent {
   Entity entity;
-  char component[];
+  // Component data. This is aligned to 16 bytes so that SIMD can be used.
+  _Alignas(16) char component[];
 } EntityComponent;
 
 void ecs_register_component(ComponentType type, int data_size_bytes);
