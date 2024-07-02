@@ -43,9 +43,6 @@
     <ClInclude Include="src\resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\stb\stb_image.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\skybox.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -76,6 +73,21 @@
     <ClInclude Include="src\enemies\floater.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="thirdparty\glad\glad.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="thirdparty\GLFW\glfw3.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="thirdparty\GLFW\glfw3native.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="thirdparty\KHR\khrplatform.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="thirdparty\stb\stb_image.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.c">
@@ -87,9 +99,6 @@
     <ClCompile Include="src\shader_sources.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\glad\glad.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\blob_render.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -97,9 +106,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\cube.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\stb\stb_image.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\skybox.c">
@@ -127,6 +133,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\enemies\floater.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="thirdparty\glad\glad.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="thirdparty\stb\stb_image.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

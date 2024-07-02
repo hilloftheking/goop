@@ -94,7 +94,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(ProjectDir)src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)thirdparty;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard_C>stdc11</LanguageStandard_C>
       <DisableSpecificWarnings>4996;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <FloatingPointModel>Precise</FloatingPointModel>
@@ -119,7 +119,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(ProjectDir)src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)thirdparty;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard_C>stdc11</LanguageStandard_C>
       <DisableSpecificWarnings>4996;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <FloatingPointModel>Precise</FloatingPointModel>
@@ -144,7 +144,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(ProjectDir)src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)thirdparty;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard_C>stdc11</LanguageStandard_C>
       <DisableSpecificWarnings>4996;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <FloatingPointModel>Precise</FloatingPointModel>
@@ -169,7 +169,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(ProjectDir)src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)thirdparty;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard_C>stdc11</LanguageStandard_C>
       <DisableSpecificWarnings>4996;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <FloatingPointModel>Precise</FloatingPointModel>
@@ -206,8 +206,12 @@
     <ClInclude Include="src\shader.h" />
     <ClInclude Include="src\shader_sources.h" />
     <ClInclude Include="src\skybox.h" />
-    <ClInclude Include="src\stb\stb_image.h" />
     <ClInclude Include="src\toml.h" />
+    <ClInclude Include="thirdparty\glad\glad.h" />
+    <ClInclude Include="thirdparty\GLFW\glfw3.h" />
+    <ClInclude Include="thirdparty\GLFW\glfw3native.h" />
+    <ClInclude Include="thirdparty\KHR\khrplatform.h" />
+    <ClInclude Include="thirdparty\stb\stb_image.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\core.c" />
@@ -217,7 +221,6 @@
     <ClCompile Include="src\blob.c" />
     <ClCompile Include="src\blob_render.c" />
     <ClCompile Include="src\cube.c" />
-    <ClCompile Include="src\glad\glad.c" />
     <ClCompile Include="src\int_map.c" />
     <ClCompile Include="src\level.c" />
     <ClCompile Include="src\main.c" />
@@ -225,8 +228,9 @@
     <ClCompile Include="src\shader.c" />
     <ClCompile Include="src\shader_sources.c" />
     <ClCompile Include="src\skybox.c" />
-    <ClCompile Include="src\stb\stb_image.c" />
     <ClCompile Include="src\toml.c" />
+    <ClCompile Include="thirdparty\glad\glad.c" />
+    <ClCompile Include="thirdparty\stb\stb_image.c" />
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="shaders\compute_sdf.comp">
