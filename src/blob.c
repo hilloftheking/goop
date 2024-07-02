@@ -6,6 +6,18 @@
 
 #include "blob.h"
 
+#define LIQUID_FALL_SPEED 5.0f
+
+#define BLOB_RAY_MAX_STEPS 32
+#define BLOB_RAY_INTERSECT 0.001f
+
+#define BLOB_OT_MAX_SUBDIVISIONS 3
+// This uses a lot of memory
+#define BLOB_OT_LEAF_MAX_BLOB_COUNT 512
+
+#define BLOB_DEFAULT_RADIUS 0.5f
+#define PROJECTILE_DEFAULT_DELETE_TIME 5.0f
+
 HMM_Vec3 blob_get_attraction_to(LiquidBlob *b, LiquidBlob *other) {
   HMM_Vec3 direction = HMM_SubV3(b->pos, other->pos);
   float len = HMM_LenV3(direction);
@@ -75,6 +87,15 @@ SolidBlob *solid_blob_create(BlobSim *bs) {
   b->mat_idx = 0;
 
   return b;
+}
+
+void solid_blob_set_radius_pos(BlobSim *bs, SolidBlob *b, float radius,
+                               const HMM_Vec3 *pos) {
+  b->radius = radius;
+  b->pos = *pos;
+
+  int blob_idx = fixed_array_get_idx_from_ptr(&bs->solids, b);
+  blob_ot_insert(&bs->solid_ot, pos, radius, blob_idx);
 }
 
 LiquidBlob *liquid_blob_create(BlobSim *bs) {
@@ -148,6 +169,8 @@ void blob_sim_create(BlobSim *bs) {
   for (int i = 0; i < BLOB_SIM_MAX_FORCES; i++) {
     bs->liq_forces[i].idx = -1;
   }
+
+  blob_ot_create(&bs->solid_ot);
 }
 
 void blob_sim_destroy(BlobSim *bs) {
@@ -162,6 +185,8 @@ void blob_sim_destroy(BlobSim *bs) {
 
   free(bs->liq_forces);
   bs->liq_forces = NULL;
+
+  blob_ot_destroy(&bs->solid_ot);
 }
 
 void blob_sim_queue_delete(BlobSim *bs, DeletionType type, void *b) {
@@ -191,7 +216,7 @@ void blob_sim_queue_delete(BlobSim *bs, DeletionType type, void *b) {
 
 void blob_sim_liquid_apply_force(BlobSim *bs, const LiquidBlob *b,
                                  const HMM_Vec3 *force) {
-  int blob_idx = b - (LiquidBlob *)bs->liquids.data;
+  int blob_idx = fixed_array_get_idx_from_ptr(&bs->liquids, b);
 
   for (int i = 0; i < BLOB_SIM_MAX_FORCES; i++) {
     LiquidForce *f = &bs->liq_forces[i];
@@ -314,14 +339,16 @@ void blob_simulate(BlobSim *bs, double delta) {
     p->vel = HMM_AddV3(p->vel, HMM_MulV3F(PROJ_GRAV, (float)delta));
     p->pos = HMM_AddV3(p->pos, HMM_MulV3F(p->vel, (float)delta));
 
-    // TODO: This will be added back when collision checking is less slow
-    /*
     HMM_Vec3 correction =
         blob_get_correction_from_solids(bs, &p->pos, p->radius);
     if (HMM_LenV3(correction) > 0.0f) {
-      blob_sim_queue_delete(bs, DELETE_PROJECTILE, p);
+      HMM_Vec3 n = HMM_NormV3(correction);
+      HMM_Vec3 u = HMM_MulV3F(n, HMM_DotV3(p->vel, n));
+      HMM_Vec3 w = HMM_SubV3(p->vel, u);
+      const float f = 0.8f;
+      const float r = 0.7f;
+      p->vel = HMM_SubV3(HMM_MulV3F(w, f), HMM_MulV3F(u, r));
     }
-    */
 
     for (int c = 0; c < bs->collider_models.count; c++) {
       ColliderModel *col_mdl = fixed_array_get(&bs->collider_models, c);
@@ -437,6 +464,55 @@ static void blob_check_blob_at(float *min_dist, HMM_Vec3 *correction,
   *correction = HMM_AddV3(*correction, HMM_MulV3F(HMM_NormV3(dir), influence));
 }
 
+static HMM_Vec3 ot_quadrants[8] = {{0.5f, 0.5f, 0.5f},   {0.5f, 0.5f, -0.5f},
+                                   {0.5f, -0.5f, 0.5f},  {0.5f, -0.5f, -0.5f},
+                                   {-0.5f, 0.5f, 0.5f},  {-0.5f, 0.5f, -0.5f},
+                                   {-0.5f, -0.5f, 0.5f}, {-0.5f, -0.5f, -0.5f}};
+
+static float dist_cube(const HMM_Vec3 *c, float s, const HMM_Vec3 *p) {
+  HMM_Vec3 d;
+  for (int i = 0; i < 3; i++) {
+    d.Elements[i] =
+        HMM_MAX(0.0f, HMM_ABS(p->Elements[i] - c->Elements[i]) - s * 0.5f);
+  }
+  return HMM_LenV3(d);
+}
+
+static void blob_get_correction_from_solids_recursive(
+    BlobSim *bs, float *min_dist, HMM_Vec3 *correction, const HMM_Vec3 *pos,
+    float radius, BlobOtNode *node, const HMM_Vec3 *npos, float nsize,
+    bool *checked) {
+  if (node->leaf_blob_count == -1) {
+    // This node has child nodes
+    for (int i = 0; i < 8; i++) {
+      HMM_Vec3 child_pos =
+          HMM_AddV3(HMM_MulV3F(ot_quadrants[i], nsize * 0.5f), *npos);
+      float child_size = nsize * 0.5f;
+
+      float dist = dist_cube(&child_pos, child_size, pos) - radius;
+
+      if (dist <= 0.0f) {
+        blob_get_correction_from_solids_recursive(
+            bs, min_dist, correction, pos, radius,
+            bs->solid_ot.root + node->indices[i], &child_pos, child_size,
+            checked);
+      }
+    }
+  } else {
+    // This is a leaf node, loop through all the solids in it
+
+    for (int i = 0; i < node->leaf_blob_count; i++) {
+      int bidx = node->indices[i];
+      if (!checked[bidx]) {
+        checked[bidx] = true;
+        SolidBlob *b = fixed_array_get(&bs->solids, bidx);
+        blob_check_blob_at(min_dist, correction, &b->pos, b->radius, pos,
+                           radius, BLOB_SMOOTH);
+      }
+    }
+  }
+}
+
 HMM_Vec3 blob_get_correction_from_solids(BlobSim *bs, const HMM_Vec3 *pos,
                                          float radius) {
   HMM_Vec3 correction = {0};
@@ -446,11 +522,10 @@ HMM_Vec3 blob_get_correction_from_solids(BlobSim *bs, const HMM_Vec3 *pos,
   // Use smin to figure out if this blob is touching smoothed solid blobs
   // Also check how much each blob should influence the normal
 
-  for (int i = 0; i < bs->solids.count; i++) {
-    SolidBlob *b = fixed_array_get(&bs->solids, i);
-    blob_check_blob_at(&min_dist, &correction, &b->pos, b->radius, pos, radius,
-                       BLOB_SMOOTH);
-  }
+  bool checked[BLOB_SIM_MAX_SOLIDS] = {0};
+  blob_get_correction_from_solids_recursive(
+      bs, &min_dist, &correction, pos, radius, bs->solid_ot.root, &BLOB_SIM_POS,
+      BLOB_SIM_SIZE, checked);
 
   // Is this blob inside of a solid blob?
   if (min_dist < radius) {
@@ -478,25 +553,25 @@ int blob_ot_get_alloc_size() {
   return total_size;
 }
 
-static void setup_test_octree(BlobOt blob_ot) {
-  BlobOtNode *first = blob_ot + 0;
+static void setup_test_octree(BlobOt *bot) {
+  BlobOtNode *first = bot->root;
   first->leaf_blob_count = -1;
 
   int current_idx = 9;
   for (int i = 0; i < 8; i++) {
-    BlobOtNode *second = blob_ot + current_idx;
+    BlobOtNode *second = bot->root + current_idx;
     second->leaf_blob_count = -1;
     first->indices[i] = current_idx;
     current_idx += 9;
 
     for (int j = 0; j < 8; j++) {
-      BlobOtNode *third = blob_ot + current_idx;
+      BlobOtNode *third = bot->root + current_idx;
       third->leaf_blob_count = -1;
       second->indices[j] = current_idx;
       current_idx += 9;
 
       for (int k = 0; k < 8; k++) {
-        BlobOtNode *leaf = blob_ot + current_idx;
+        BlobOtNode *leaf = bot->root + current_idx;
         leaf->leaf_blob_count = 0;
         third->indices[k] = current_idx;
         current_idx += 1 + BLOB_OT_LEAF_MAX_BLOB_COUNT;
@@ -505,48 +580,38 @@ static void setup_test_octree(BlobOt blob_ot) {
   }
 }
 
-BlobOt blob_ot_create() {
+void blob_ot_create(BlobOt *bot) {
   int alloc_size = blob_ot_get_alloc_size();
-  BlobOt blob_ot = malloc(alloc_size);
+  bot->root = malloc(alloc_size);
+  bot->max_dist_to_leaf = 0.0f;
 
-  setup_test_octree(blob_ot);
-
-  return blob_ot;
+  setup_test_octree(bot);
 }
 
-void blob_ot_reset(BlobOt blob_ot) { setup_test_octree(blob_ot); }
-
-static HMM_Vec3 ot_quadrants[8] = {{0.5f, 0.5f, 0.5f},   {0.5f, 0.5f, -0.5f},
-                                   {0.5f, -0.5f, 0.5f},  {0.5f, -0.5f, -0.5f},
-                                   {-0.5f, 0.5f, 0.5f},  {-0.5f, 0.5f, -0.5f},
-                                   {-0.5f, -0.5f, 0.5f}, {-0.5f, -0.5f, -0.5f}};
-
-static float dist_cube(const HMM_Vec3 *c, float s, const HMM_Vec3 *p) {
-  HMM_Vec3 d;
-  for (int i = 0; i < 3; i++) {
-    d.Elements[i] =
-        fmaxf(0.0f, fabsf(p->Elements[i] - c->Elements[i]) - s * 0.5f);
-  }
-  return HMM_LenV3(d);
+void blob_ot_destroy(BlobOt *bot) {
+  free(bot->root);
+  bot->root = NULL;
 }
 
-static void insert_into_nodes(BlobOt blob_ot, BlobOtNode *node,
-                              const HMM_Vec3 *node_pos, float node_size,
-                              const HMM_Vec3 *blob_pos, float blob_radius,
-                              int blob_idx) {
+void blob_ot_reset(BlobOt *bot) { setup_test_octree(bot); }
+
+static void insert_into_nodes(BlobOt *bot, BlobOtNode *node,
+                              const HMM_Vec3 *npos, float nsize,
+                              const HMM_Vec3 *bpos, float bradius,
+                              int bidx) {
   if (node->leaf_blob_count == -1) {
     // This node has child nodes
     for (int i = 0; i < 8; i++) {
       HMM_Vec3 child_pos =
-          HMM_AddV3(HMM_MulV3F(ot_quadrants[i], node_size * 0.5f), *node_pos);
-      float child_size = node_size * 0.5f;
+          HMM_AddV3(HMM_MulV3F(ot_quadrants[i], nsize * 0.5f), *npos);
+      float child_size = nsize * 0.5f;
 
-      float dist = dist_cube(&child_pos, child_size, blob_pos) - blob_radius -
-                   BLOB_SMOOTH - BLOB_SDF_MAX_DIST;
+      float dist = dist_cube(&child_pos, child_size, bpos) - bradius -
+                   BLOB_SMOOTH - bot->max_dist_to_leaf;
 
       if (dist <= 0.0f) {
-        insert_into_nodes(blob_ot, blob_ot + node->indices[i], &child_pos,
-                          child_size, blob_pos, blob_radius, blob_idx);
+        insert_into_nodes(bot, bot->root + node->indices[i], &child_pos,
+                          child_size, bpos, bradius, bidx);
       }
     }
   } else {
@@ -560,13 +625,12 @@ static void insert_into_nodes(BlobOt blob_ot, BlobOtNode *node,
       return;
     }
 
-    node->indices[node->leaf_blob_count++] = blob_idx;
+    node->indices[node->leaf_blob_count++] = bidx;
   }
 }
 
-void blob_ot_insert(BlobOt blob_ot, const HMM_Vec3 *blob_pos, float blob_radius,
-                    int blob_idx) {
-  BlobOtNode *root = blob_ot + 0;
-  insert_into_nodes(blob_ot, root, &BLOB_SIM_POS, BLOB_SIM_SIZE, blob_pos,
-                    blob_radius, blob_idx);
+void blob_ot_insert(BlobOt *bot, const HMM_Vec3 *bpos, float bradius,
+                    int bidx) {
+  insert_into_nodes(bot, bot->root, &BLOB_SIM_POS, BLOB_SIM_SIZE, bpos, bradius,
+                    bidx);
 }

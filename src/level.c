@@ -62,8 +62,8 @@ void level_load(BlobSim *bs, const char *data, int data_size) {
       break;
 
     SolidBlob *b = solid_blob_create(bs);
-    b->radius = (float)radius.u.d;
-    b->pos = parse_vec3(pos_xyz);
+    HMM_Vec3 pos = parse_vec3(pos_xyz);
+    solid_blob_set_radius_pos(bs, b, (float)radius.u.d, &pos);
     b->mat_idx = (int)mat_idx.u.i;
   }
 

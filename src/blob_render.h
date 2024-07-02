@@ -4,8 +4,7 @@
 
 #include "HandmadeMath.h"
 
-typedef struct BlobOtNode BlobOtNode;
-typedef BlobOtNode *BlobOt;
+#include "blob.h"
 
 typedef struct BlobRenderer {
   unsigned int raymarch_program, compute_program, sdf_tex, sdf_mdl_tex,

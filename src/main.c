@@ -168,8 +168,7 @@ int main() {
                     (rand_float() - 0.5f) * 12.0f};
     SolidBlob *b = solid_blob_create(&blob_sim);
     if (b) {
-      b->radius = 0.5f;
-      b->pos = pos;
+      solid_blob_set_radius_pos(&blob_sim, b, 0.5f, &pos);
       b->mat_idx = 1;
     }
   }

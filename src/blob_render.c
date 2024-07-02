@@ -69,7 +69,9 @@ void blob_renderer_create(BlobRenderer *br) {
 
   br->aspect_ratio = 1.0f;
 
-  br->blob_ot = blob_ot_create();
+  blob_ot_create(&br->blob_ot);
+  br->blob_ot.max_dist_to_leaf = BLOB_SDF_MAX_DIST;
+
   br->blobs_v4 = malloc(
       (BLOB_SIM_MAX_SOLIDS + BLOB_SIM_MAX_LIQUIDS + BLOB_SIM_MAX_PROJECTILES) *
       sizeof(*br->blobs_v4));
@@ -148,7 +150,7 @@ static void draw_sdf_cube(BlobRenderer *br, unsigned int sdf_tex,
 }
 
 void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
-  blob_ot_reset(br->blob_ot);
+  blob_ot_reset(&br->blob_ot);
 
   int ssbo_idx = 0;
 
@@ -163,7 +165,7 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
         (float)((int)(p->radius * BLOB_RADIUS_MULT) * BLOB_MAT_COUNT +
                 p->mat_idx);
 
-    blob_ot_insert(br->blob_ot, &br->blobs_v4[ssbo_idx].XYZ, p->radius,
+    blob_ot_insert(&br->blob_ot, &br->blobs_v4[ssbo_idx].XYZ, p->radius,
                    ssbo_idx);
     ssbo_idx++;
   }
@@ -177,7 +179,7 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
         (float)((int)(b->radius * BLOB_RADIUS_MULT) * BLOB_MAT_COUNT +
                 b->mat_idx);
 
-    blob_ot_insert(br->blob_ot, &br->blobs_v4[ssbo_idx].XYZ, b->radius,
+    blob_ot_insert(&br->blob_ot, &br->blobs_v4[ssbo_idx].XYZ, b->radius,
                    ssbo_idx);
     ssbo_idx++;
   }
@@ -191,7 +193,7 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
         (float)((int)(b->radius * BLOB_RADIUS_MULT) * BLOB_MAT_COUNT +
                 b->mat_idx);
 
-    blob_ot_insert(br->blob_ot, &b->pos, b->radius, ssbo_idx);
+    blob_ot_insert(&br->blob_ot, &b->pos, b->radius, ssbo_idx);
     ssbo_idx++;
   }
 
@@ -201,7 +203,7 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
 
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, br->blob_ot_ssbo);
   glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, br->blob_ot_ssbo_size_bytes,
-                  br->blob_ot);
+                  br->blob_ot.root);
 
   glBindImageTexture(0, br->sdf_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA8);
   glUseProgram(br->compute_program);

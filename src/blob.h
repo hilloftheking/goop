@@ -62,13 +62,27 @@ typedef enum DeletionType {
 // Only a few liquid blobs actually keep track of their velocity
 #define BLOB_SIM_MAX_FORCES 128
 
-#define LIQUID_FALL_SPEED 5.0f
-
 // Associates a liquid blob index with a force
 typedef struct LiquidForce {
   int idx;
   HMM_Vec3 force;
 } LiquidForce;
+
+typedef struct BlobOtNode {
+  // Blob count if this node is a leaf. Otherwise, it is -1
+  int leaf_blob_count;
+  // Indices of blobs if this is a leaf. Otherwise, it is the 8 indices into
+  // the octree of this node's children
+  int indices[];
+} BlobOtNode;
+
+// Octree
+typedef struct BlobOt {
+  BlobOtNode *root;
+  // At what distance should a blob be added to a leaf? This is useful for
+  // calculating a signed distance field. Default is 0
+  float max_dist_to_leaf;
+} BlobOt;
 
 typedef struct BlobSim {
   FixedArray solids;
@@ -80,6 +94,9 @@ typedef struct BlobSim {
   FixedArray del_queues[DELETE_MAX];
 
   LiquidForce *liq_forces;
+  
+  // Store solids in an octree to speed up checking for collisions
+  BlobOt solid_ot;
 } BlobSim;
 
 // A blob that belongs to a model
@@ -94,9 +111,6 @@ typedef struct Model {
   ModelBlob *blobs;
 } Model;
 
-#define BLOB_RAY_MAX_STEPS 32
-#define BLOB_RAY_INTERSECT 0.001f
-
 typedef struct RaycastResult {
   bool has_hit;
   HMM_Vec3 hit;
@@ -104,25 +118,8 @@ typedef struct RaycastResult {
   float traveled;
 } RaycastResult;
 
-#define BLOB_OT_MAX_SUBDIVISIONS 3
-// This uses a lot of memory
-#define BLOB_OT_LEAF_MAX_BLOB_COUNT 512
-
-typedef struct BlobOtNode {
-  // Blob count if this node is a leaf. Otherwise, it is -1
-  int leaf_blob_count;
-  // Indices of blobs if this is a leaf. Otherwise, it is the 8 indices into
-  // the octree of this node's children
-  int indices[];
-} BlobOtNode;
-
-typedef BlobOtNode *BlobOt;
-
 static const HMM_Vec3 BLOB_SIM_POS = {0, 8, 0};
 static const float BLOB_SIM_SIZE = 16.0f;
-
-#define BLOB_DEFAULT_RADIUS 0.5f
-#define PROJECTILE_DEFAULT_DELETE_TIME 5.0f
 
 // How much force is needed to attract b to other
 HMM_Vec3 blob_get_attraction_to(LiquidBlob *b, LiquidBlob *other);
@@ -133,6 +130,10 @@ float blob_get_support_with(LiquidBlob *b, LiquidBlob *other);
 // Creates a solid blob if possible and adds it to the simulation. The
 // returned pointer may not always be valid.
 SolidBlob *solid_blob_create(BlobSim *bs);
+
+// Updates a solid's radius and position, and updates the octree
+void solid_blob_set_radius_pos(BlobSim *bs, SolidBlob *b, float radius,
+                               const HMM_Vec3 *pos);
 
 // Creates a liquid blob if possible and adds it to the simulation. The
 // returned pointer may not always be valid.
@@ -176,9 +177,10 @@ HMM_Vec3 blob_get_correction_from_solids(BlobSim *bs, const HMM_Vec3 *pos,
 int blob_ot_get_alloc_size();
 
 // Allocates an octree with the max possible size
-BlobOt blob_ot_create();
+void blob_ot_create(BlobOt *bot);
 
-void blob_ot_reset(BlobOt blob_ot);
+void blob_ot_destroy(BlobOt *bot);
 
-void blob_ot_insert(BlobOt blob_ot, const HMM_Vec3 *blob_pos, float blob_radius,
-                    int blob_idx);
+void blob_ot_reset(BlobOt *bot);
+
+void blob_ot_insert(BlobOt *bot, const HMM_Vec3 *bpos, float bradius, int bidx);
