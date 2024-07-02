@@ -227,7 +227,8 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
                 BLOB_SDF_MAX_DIST);
 }
 
-void blob_render_mdl(BlobRenderer *br, const BlobSim *bs, const Model *mdl) {
+void blob_render_mdl(BlobRenderer *br, const BlobSim *bs, const Model *mdl,
+                     const HMM_Mat4 *trans) {
   HMM_Vec4 model_blob_v4[128];
   HMM_Vec3 model_blob_min = {100, 100, 100};
   HMM_Vec3 model_blob_max = {-100, -100, -100};
@@ -277,6 +278,6 @@ void blob_render_mdl(BlobRenderer *br, const BlobSim *bs, const Model *mdl) {
 
   glUseProgram(br->raymarch_program);
   glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-  draw_sdf_cube(br, br->sdf_mdl_tex, &model_blob_pos, model_blob_size,
-                &mdl->transform, MODEL_BLOB_SDF_MAX_DIST);
+  draw_sdf_cube(br, br->sdf_mdl_tex, &model_blob_pos, model_blob_size, trans,
+                MODEL_BLOB_SDF_MAX_DIST);
 }

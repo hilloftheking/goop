@@ -191,6 +191,7 @@
   <ItemGroup>
     <ClInclude Include="src\core.h" />
     <ClInclude Include="src\ecs.h" />
+    <ClInclude Include="src\enemies\floater.h" />
     <ClInclude Include="src\fixed_array.h" />
     <ClInclude Include="src\HandmadeMath.h" />
     <ClInclude Include="src\int_map.h" />
@@ -211,6 +212,7 @@
   <ItemGroup>
     <ClCompile Include="src\core.c" />
     <ClCompile Include="src\ecs.c" />
+    <ClCompile Include="src\enemies\floater.c" />
     <ClCompile Include="src\fixed_array.c" />
     <ClCompile Include="src\blob.c" />
     <ClCompile Include="src\blob_render.c" />

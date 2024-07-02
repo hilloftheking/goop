@@ -28,6 +28,14 @@ Entity entity_create() {
   return id++;
 }
 
+void entity_destroy(Entity e) {
+  for (int i = 0; i < COMPONENT_MAX; i++) {
+    if (entity_get_component_or_null(e, i)) {
+      entity_remove_component(e, i);
+    }
+  }
+}
+
 void *entity_add_component(Entity e, ComponentType type) {
   RegisteredComponent *rc = &registered_components[type];
   int_map_insert(&rc->entity_to_component, e, rc->components.count);

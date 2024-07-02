@@ -25,7 +25,7 @@
 #include "resource.h"
 #include "resource_load.h"
 
-#include "int_map.h"
+#include "enemies/floater.h"
 
 static void gl_debug_callback(GLenum source, GLenum type, GLuint id,
                               GLenum severity, GLsizei length,
@@ -44,7 +44,6 @@ static float rand_float() { return ((float)rand() / (float)(RAND_MAX)); }
 #define CAM_SENS 0.01f
 
 #define SHOOT_CD 0.01
-#define ENEMY_SHOOT_CD 2.0
 
 static HMM_Vec2 cam_rot;
 
@@ -52,22 +51,19 @@ static struct {
   BlobRenderer *br;
 } cb_data;
 
-static struct {
-  bool player_dead;
-  Model *player_mdl;
-  BlobSim *blob_sim;
-} global_data;
-
-typedef struct Enemy {
+typedef struct Player {
   int health;
   double shoot_timer;
-} Enemy;
+} Player;
 
-static void liquify_model(BlobSim *bs, const Model *mdl) {
+static void liquify_model(BlobSim *bs, Entity e) {
+  HMM_Mat4 *trans = entity_get_component(e, COMPONENT_TRANSFORM);
+  Model *mdl = entity_get_component(e, COMPONENT_MODEL);
+
   for (int i = 0; i < mdl->blob_count; i++) {
     HMM_Vec4 p = {0, 0, 0, 1};
     p.XYZ = mdl->blobs[i].pos;
-    p = HMM_MulM4V4(mdl->transform, p);
+    p = HMM_MulM4V4(*trans, p);
 
     LiquidBlob *b = liquid_blob_create(bs);
     if (b) {
@@ -118,12 +114,15 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action,
     vsync_enabled ^= true;
     glfwSwapInterval((int)vsync_enabled);
     break;
-  case GLFW_KEY_K:
-    if (!global_data.player_dead) {
-      global_data.player_dead = true;
-      liquify_model(global_data.blob_sim, global_data.player_mdl);
+  case GLFW_KEY_K: {
+    EntityComponent *player_ec = component_begin(COMPONENT_PLAYER);
+    Player *player_ent = (Player *)player_ec->component;
+    if (player_ent->health > 0) {
+      player_ent->health = 0;
+      liquify_model(global.blob_sim, player_ec->entity);
+      entity_remove_component(player_ec->entity, COMPONENT_MODEL);
     }
-    break;
+  } break;
   }
 }
 
@@ -146,7 +145,7 @@ static void glfw_fatal_error() {
 static void proj_callback(Projectile *p, ColliderModel *col_mdl,
                           uint64_t userdata) {
   Entity ent = col_mdl->ent;
-  Enemy *enemy = entity_get_component(ent, COMPONENT_ENEMY);
+  Floater *enemy = entity_get_component(ent, COMPONENT_ENEMY_FLOATER);
 
   if (!enemy || enemy->health <= 0) {
     return;
@@ -154,7 +153,7 @@ static void proj_callback(Projectile *p, ColliderModel *col_mdl,
 
   // Blood
   for (int i = 0; i < 1; i++) {
-    LiquidBlob *b = liquid_blob_create(global_data.blob_sim);
+    LiquidBlob *b = liquid_blob_create(global.blob_sim);
     b->type = LIQUID_BASE;
     b->pos = p->pos;
     b->radius = 0.2f;
@@ -164,23 +163,28 @@ static void proj_callback(Projectile *p, ColliderModel *col_mdl,
     for (int x = 0; x < 3; x++) {
       force.Elements[x] = (rand_float() - 0.5f) * 30.0f;
     }
-    blob_sim_liquid_apply_force(global_data.blob_sim, b, &force);
+    blob_sim_liquid_apply_force(global.blob_sim, b, &force);
   }
 
   enemy->health -= 1;
-  blob_sim_queue_delete(global_data.blob_sim, DELETE_PROJECTILE, p);
+  blob_sim_queue_delete(global.blob_sim, DELETE_PROJECTILE, p);
 
   if (enemy->health <= 0) {
     Model *mdl = entity_get_component(ent, COMPONENT_MODEL);
-    liquify_model(global_data.blob_sim, mdl);
-    blob_sim_queue_delete(global_data.blob_sim, DELETE_COLLIDER_MODEL, col_mdl);
+    liquify_model(global.blob_sim, ent);
+    blob_sim_queue_delete(global.blob_sim, DELETE_COLLIDER_MODEL, col_mdl);
 
-    entity_remove_component(ent, COMPONENT_ENEMY);
-    entity_remove_component(ent, COMPONENT_MODEL);
+    blob_mdl_destroy(mdl);
+    entity_destroy(ent);
   }
 }
 
 int main() {
+  ecs_register_component(COMPONENT_TRANSFORM, sizeof(HMM_Mat4));
+  ecs_register_component(COMPONENT_MODEL, sizeof(Model));
+  ecs_register_component(COMPONENT_PLAYER, sizeof(Player));
+  ecs_register_component(COMPONENT_ENEMY_FLOATER, sizeof(Floater));
+
   unsigned int seed = time(NULL);
   srand(seed);
 
@@ -230,7 +234,7 @@ int main() {
 
   BlobSim blob_sim;
   blob_sim_create(&blob_sim);
-  global_data.blob_sim = &blob_sim;
+  global.blob_sim = &blob_sim;
 
   // Load test level
   {
@@ -254,32 +258,23 @@ int main() {
 
   // Player model
 
-  Model player_mdl;
-  blob_mdl_create(&player_mdl, PLAYER_MDL, ARR_SIZE(PLAYER_MDL));
-  player_mdl.transform.Columns[3].Y = 6.0f;
-  global_data.player_mdl = &player_mdl;
+  Entity player_ent = entity_create();
+  {
+    HMM_Mat4 *transform = entity_add_component(player_ent, COMPONENT_TRANSFORM);
+    *transform = HMM_M4D(1.0f);
+    transform->Columns[3].Y = 6.0f;
+
+    Player *player = entity_add_component(player_ent, COMPONENT_PLAYER);
+    player->shoot_timer = SHOOT_CD;
+
+    Model *mdl = entity_add_component(player_ent, COMPONENT_MODEL);
+    blob_mdl_create(mdl, PLAYER_MDL, ARR_SIZE(PLAYER_MDL));
+  }
+  global.player_ent = player_ent;
 
   HMM_Quat player_quat = {0, 0, 0, 1};
   HMM_Vec3 player_vel = {0};
   HMM_Vec3 player_grav = {0, -9.81f, 0};
-
-  ecs_register_component(COMPONENT_MODEL, sizeof(Model));
-  ecs_register_component(COMPONENT_ENEMY, sizeof(Enemy));
-
-  for (int i = 0; i < 9; i++) {
-    Entity ent = entity_create();
-
-    Enemy *enemy = entity_add_component(ent, COMPONENT_ENEMY);
-    enemy->health = 20;
-    enemy->shoot_timer = ENEMY_SHOOT_CD;
-
-    Model *mdl = entity_add_component(ent, COMPONENT_MODEL);
-    blob_mdl_create(mdl, ANGRY_MDL, ARR_SIZE(ANGRY_MDL));
-    mdl->transform.Columns[3].X = (i - 4) * 1.5f;
-    mdl->transform.Columns[3].Y = 3.0f;
-
-    collider_model_add(&blob_sim, ent);
-  }
 
   // Create cube buffers for blob renderer and skybox
   cube_create_buffers();
@@ -301,8 +296,6 @@ int main() {
   int fps = 0;
   int frames_this_second = 0;
   double second_timer = 1.0;
-
-  double blob_spawn_cd = 0.0;
 
   while (!glfwWindowShouldClose(window)) {
     uint64_t timer_val = glfwGetTimerValue();
@@ -331,6 +324,7 @@ int main() {
 
     // Avoid extremely high deltas
     delta = HMM_MIN(delta, DELTA_MIN);
+    global.curr_delta = delta;
 
     // Simulate blobs
 
@@ -338,6 +332,8 @@ int main() {
       blob_simulate(&blob_sim, delta);
 
     // Player movement/physics
+
+    HMM_Mat4 *plr_trans = entity_get_component(player_ent, COMPONENT_TRANSFORM);
 
     HMM_Mat4 *cam_trans = &blob_renderer.cam_trans;
     *cam_trans = HMM_M4D(1.0f);
@@ -370,16 +366,16 @@ int main() {
       player_quat = HMM_RotateTowardsQ(player_quat, step, HMM_M4ToQ_RH(rot_mat));
       rot_mat = HMM_QToM4(player_quat);
 
-      player_mdl.transform.Columns[0] = rot_mat.Columns[0];
-      player_mdl.transform.Columns[1] = rot_mat.Columns[1];
-      player_mdl.transform.Columns[2] = rot_mat.Columns[2];
+      plr_trans->Columns[0] = rot_mat.Columns[0];
+      plr_trans->Columns[1] = rot_mat.Columns[1];
+      plr_trans->Columns[2] = rot_mat.Columns[2];
     }
 
     player_vel.X = 0;
     player_vel.Z = 0;
     player_vel = HMM_AddV3(player_vel, HMM_MulV3F(player_grav, (float)delta));
     player_vel = HMM_AddV3(player_vel, HMM_MulV3F(dir.XYZ, PLR_SPEED));
-    HMM_Vec3 test_pos = HMM_AddV3(player_mdl.transform.Columns[3].XYZ,
+    HMM_Vec3 test_pos = HMM_AddV3(plr_trans->Columns[3].XYZ,
                                   HMM_MulV3F(player_vel, (float)delta));
     HMM_Vec3 test_pos_with_offset = HMM_AddV3(test_pos, (HMM_Vec3){0, 0.5f, 0});
     HMM_Vec3 correction =
@@ -387,7 +383,7 @@ int main() {
 
     // Avoid slowly sliding off of mostly flat surfaces
     if (HMM_LenV3(player_vel) > 0.1f) {
-      player_mdl.transform.Columns[3].XYZ = HMM_AddV3(test_pos, correction);
+      plr_trans->Columns[3].XYZ = HMM_AddV3(test_pos, correction);
     }
 
     if (correction.Y && HMM_DotV3(HMM_NormV3(correction), (HMM_Vec3){0, 1, 0}) >
@@ -398,10 +394,10 @@ int main() {
         player_vel.Y = 5.0f;
     }
 
-    // Set camera position after moving player
+    // Set camera position after moving player_ent
     {
-      HMM_Vec3 ro = HMM_AddV3(player_mdl.transform.Columns[3].XYZ,
-                              (HMM_Vec3){0, 2.3f, 0});
+      HMM_Vec3 ro =
+          HMM_AddV3(plr_trans->Columns[3].XYZ, (HMM_Vec3){0, 2.3f, 0});
       float cam_dist = 4.0f;
       HMM_Vec3 rd = HMM_MulV3F(cam_trans->Columns[2].XYZ, cam_dist);
 
@@ -418,13 +414,15 @@ int main() {
 
     // Blinking
 
+    Model *plr_mdl = entity_get_component(player_ent, COMPONENT_MODEL);
+
     const double BLINK_OCCUR = 2.0;
     const double BLINK_TIME = 0.3;
     const float EYE_RADIUS = 0.05f;
     static double t = 0.0;
     t += delta;
-    player_mdl.blobs[8].radius = EYE_RADIUS;
-    player_mdl.blobs[9].radius = EYE_RADIUS;
+    plr_mdl->blobs[8].radius = EYE_RADIUS;
+    plr_mdl->blobs[9].radius = EYE_RADIUS;
     if (t >= BLINK_OCCUR + BLINK_TIME) {
       t = 0.0;
     } else if (t >= BLINK_OCCUR) {
@@ -432,19 +430,21 @@ int main() {
       float r =
           ((cosf(((2.0f * HMM_PI32) / (float)BLINK_TIME) * x) * 0.5f) + 0.5f) *
           EYE_RADIUS;
-      player_mdl.blobs[8].radius = r;
-      player_mdl.blobs[9].radius = r;
+      plr_mdl->blobs[8].radius = r;
+      plr_mdl->blobs[9].radius = r;
     }
 
     // Hold right click to create projectiles
 
-    if (blob_spawn_cd > 0.0) {
-      blob_spawn_cd -= delta;
+    Player *plr = entity_get_component(player_ent, COMPONENT_PLAYER);
+
+    if (plr->shoot_timer > 0.0) {
+      plr->shoot_timer -= delta;
     }
 
     if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_2) == GLFW_PRESS &&
-        blob_spawn_cd <= 0.0) {
-      blob_spawn_cd = SHOOT_CD;
+        plr->shoot_timer <= 0.0) {
+      plr->shoot_timer = SHOOT_CD;
 
       float radius = 0.1f + rand_float() * 0.3f;
 
@@ -467,45 +467,10 @@ int main() {
 
     // Enemy behavior
 
-    EntityComponent *ent_enemy = component_begin(COMPONENT_ENEMY);
-    while (ent_enemy != component_end(COMPONENT_ENEMY)) {
-      Enemy *enemy = ent_enemy->component;
-      Model *mdl = entity_get_component(ent_enemy->entity, COMPONENT_MODEL);
-      if (enemy->health > 0) {
-        HMM_Vec3 player_pos = player_mdl.transform.Columns[3].XYZ;
-        player_pos.Y += 2.0f;
-        HMM_Vec3 player_dir =
-            HMM_SubV3(player_pos, mdl->transform.Columns[3].XYZ);
-        player_dir = HMM_NormV3(player_dir);
-
-        float yaw = -atan2f(player_dir.Z, player_dir.X) - HMM_PI32 * 0.5f;
-        float pitch = asinf(player_dir.Y);
-
-        HMM_Mat4 rot_mat = HMM_MulM4(HMM_Rotate_RH(yaw, HMM_V3(0, 1, 0)),
-                                     HMM_Rotate_RH(pitch, HMM_V3(1, 0, 0)));
-        HMM_Quat rot_quat = HMM_M4ToQ_RH(rot_mat);
-        float step = (HMM_PI32 * 1.0f) * (float)delta;
-        rot_quat =
-            HMM_RotateTowardsQ(HMM_M4ToQ_RH(mdl->transform), step, rot_quat);
-        rot_mat = HMM_QToM4(rot_quat);
-        rot_mat.Columns[3] = mdl->transform.Columns[3];
-
-        mdl->transform = rot_mat;
-
-        enemy->shoot_timer -= delta;
-        if (enemy->shoot_timer <= 0.0) {
-          enemy->shoot_timer = ENEMY_SHOOT_CD;
-
-          Projectile *p = projectile_create(&blob_sim);
-          p->radius = 0.2f;
-          p->mat_idx = 0;
-          p->pos = mdl->transform.Columns[3].XYZ;
-          p->vel = HMM_MulV3F(mdl->transform.Columns[2].XYZ, -20.0f);
-          p->delete_timer = 1.0f;
-        }
-      }
-
-      ent_enemy = component_next(COMPONENT_ENEMY, ent_enemy);
+    for (EntityComponent *ec = component_begin(COMPONENT_ENEMY_FLOATER);
+         ec != component_end(COMPONENT_ENEMY_FLOATER);
+         ec = component_next(COMPONENT_ENEMY_FLOATER, ec)) {
+      floater_process(ec->entity);
     }
 
     // Render scene
@@ -520,14 +485,13 @@ int main() {
 
     blob_render_sim(&blob_renderer, &blob_sim);
 
-    if (!global_data.player_dead)
-      blob_render_mdl(&blob_renderer, &blob_sim, &player_mdl);
-
     for (EntityComponent *ent_model = component_begin(COMPONENT_MODEL);
          ent_model != component_end(COMPONENT_MODEL);
          ent_model = component_next(COMPONENT_MODEL, ent_model)) {
       Model *mdl = ent_model->component;
-      blob_render_mdl(&blob_renderer, &blob_sim, mdl);
+      HMM_Mat4 *trans =
+          entity_get_component(ent_model->entity, COMPONENT_TRANSFORM);
+      blob_render_mdl(&blob_renderer, &blob_sim, mdl, trans);
     }
 
     glfwSwapBuffers(window);

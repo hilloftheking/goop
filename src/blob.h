@@ -92,7 +92,6 @@ typedef struct ModelBlob {
 typedef struct Model {
   int blob_count;
   ModelBlob *blobs;
-  HMM_Mat4 transform;
 } Model;
 
 #define BLOB_RAY_MAX_STEPS 32
@@ -167,6 +166,7 @@ void blob_simulate(BlobSim *bs, double delta);
 
 void blob_mdl_create(Model *mdl, const ModelBlob *mdl_blob_src,
                      int mdl_blob_count);
+void blob_mdl_destroy(Model *mdl);
 
 // Returns correction vector to separate a blob at pos from solids
 HMM_Vec3 blob_get_correction_from_solids(BlobSim *bs, const HMM_Vec3 *pos,

@@ -29,4 +29,5 @@ void blob_renderer_destroy(BlobRenderer *br);
 void blob_render_sim(BlobRenderer *br, const BlobSim *bs);
 
 // This should be called after blob_render_sim()!!!!
-void blob_render_mdl(BlobRenderer *br, const BlobSim *bs, const Model *mdl);
+void blob_render_mdl(BlobRenderer *br, const BlobSim *bs, const Model *mdl,
+                     const HMM_Mat4 *trans);

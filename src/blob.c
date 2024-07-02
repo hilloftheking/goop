@@ -335,7 +335,9 @@ void blob_simulate(BlobSim *bs, double delta) {
         HMM_Vec4 bpv4 = {0, 0, 0, 1};
         bpv4.XYZ = b->pos;
 
-        HMM_Vec3 bpos = HMM_MulM4V4(mdl->transform, bpv4).XYZ;
+        HMM_Mat4 *trans =
+            entity_get_component(col_mdl->ent, COMPONENT_TRANSFORM);
+        HMM_Vec3 bpos = HMM_MulM4V4(*trans, bpv4).XYZ;
         if (HMM_LenV3(HMM_SubV3(bpos, p->pos)) <= b->radius + p->radius) {
           if (p->callback) {
             p->callback(p, col_mdl, p->userdata);
@@ -413,11 +415,15 @@ void blob_mdl_create(Model *mdl, const ModelBlob *mdl_blob_src,
                      int mdl_blob_count) {
   mdl->blobs = malloc(sizeof(*mdl->blobs) * mdl_blob_count);
   mdl->blob_count = mdl_blob_count;
-  mdl->transform = HMM_M4D(1.0f);
 
   for (int i = 0; i < mdl->blob_count; i++) {
     mdl->blobs[i] = mdl_blob_src[i];
   }
+}
+
+void blob_mdl_destroy(Model *mdl) {
+  free(mdl->blobs);
+  mdl->blob_count = 0;
 }
 
 static void blob_check_blob_at(float *min_dist, HMM_Vec3 *correction,

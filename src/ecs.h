@@ -5,8 +5,10 @@
 typedef uint64_t Entity;
 
 typedef enum ComponentType {
+  COMPONENT_TRANSFORM,
   COMPONENT_MODEL,
-  COMPONENT_ENEMY,
+  COMPONENT_PLAYER,
+  COMPONENT_ENEMY_FLOATER,
   COMPONENT_MAX
 } ComponentType;
 
@@ -21,6 +23,7 @@ typedef struct EntityComponent {
 void ecs_register_component(ComponentType type, int data_size_bytes);
 
 Entity entity_create();
+void entity_destroy(Entity e);
 
 void *entity_add_component(Entity e, ComponentType type);
 void *entity_get_component(Entity e, ComponentType type);
