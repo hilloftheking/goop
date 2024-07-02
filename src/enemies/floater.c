@@ -3,6 +3,7 @@
 #include "blob.h"
 #include "blob_models.h"
 #include "core.h"
+#include "creature.h"
 #include "floater.h"
 
 #define SHOOT_CD 2.0
@@ -13,8 +14,11 @@ Entity floater_create() {
   HMM_Mat4 *transform = entity_add_component(ent, COMPONENT_TRANSFORM);
   *transform = HMM_M4D(1.0f);
 
+  Creature *creature = entity_add_component(ent, COMPONENT_CREATURE);
+  creature->health = 20;
+  creature->is_enemy = true;
+
   Floater *floater = entity_add_component(ent, COMPONENT_ENEMY_FLOATER);
-  floater->health = 20;
   floater->shoot_timer = SHOOT_CD;
 
   Model *mdl = entity_add_component(ent, COMPONENT_MODEL);

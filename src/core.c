@@ -17,3 +17,5 @@ void exit_fatal_error() {
   getchar();
   exit(-1);
 }
+
+float rand_float() { return ((float)rand() / (float)(RAND_MAX)); }

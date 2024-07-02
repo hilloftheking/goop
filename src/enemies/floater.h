@@ -3,7 +3,6 @@
 #include "core.h"
 
 typedef struct Floater {
-  int health;
   double shoot_timer;
 } Floater;
 
