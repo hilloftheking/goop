@@ -84,6 +84,20 @@ typedef struct BlobOt {
   float max_dist_to_leaf;
 } BlobOt;
 
+typedef struct BlobOtEnumData BlobOtEnumData;
+
+typedef bool (*BlobOtEnumLeafFunc)(BlobOtEnumData *);
+
+typedef struct BlobOtEnumData {
+  BlobOt *bot;
+  HMM_Vec3 bpos;
+  float bradius;
+  BlobOtEnumLeafFunc callback;
+  void *user_data;
+  // This is modified by the enum function
+  BlobOtNode *curr_leaf;
+} BlobOtEnumData;
+
 typedef struct BlobSim {
   FixedArray solids;
   FixedArray liquids;
@@ -184,3 +198,5 @@ void blob_ot_destroy(BlobOt *bot);
 void blob_ot_reset(BlobOt *bot);
 
 void blob_ot_insert(BlobOt *bot, const HMM_Vec3 *bpos, float bradius, int bidx);
+
+void blob_ot_enum_leaves_at(BlobOtEnumData *enum_data);
