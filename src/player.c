@@ -217,18 +217,24 @@ void player_process(Entity ent) {
 
     const float radius = 0.2f;
 
-    HMM_Vec3 pos = HMM_AddV3(HMM_MulV3F(cam_trans->Columns[2].XYZ, -5.0f),
-                             cam_trans->Columns[3].XYZ);
+    HMM_Vec3 proj_dir = cam_trans->Columns[2].XYZ;
+    proj_dir = HMM_RotateV3AxisAngle_RH(proj_dir, cam_trans->Columns[1].XYZ,
+                                        (rand_float() - 0.5f) * 0.1f);
+    proj_dir = HMM_RotateV3AxisAngle_RH(proj_dir, cam_trans->Columns[0].XYZ,
+                                        (rand_float() - 0.5f) * 0.1f);
+
+    HMM_Vec3 pos =
+        HMM_AddV3(HMM_MulV3F(proj_dir, -5.0f), cam_trans->Columns[3].XYZ);
     pos.Y += 1.0f;
 
-    HMM_Vec3 force = HMM_MulV3F(cam_trans->Columns[2].XYZ, -15.0f);
+    HMM_Vec3 force = HMM_MulV3F(proj_dir, -15.0f);
     force = HMM_AddV3(force, (HMM_Vec3){0, 5.0f, 0});
 
     Projectile *p = projectile_create(global.blob_sim);
     if (p) {
       p->radius = radius;
       p->pos = pos;
-      p->mat_idx = 5;
+      p->mat_idx = 6;
       p->vel = force;
       p->callback = proj_callback;
     }

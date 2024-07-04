@@ -152,24 +152,22 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <CopyFileToFolders Include="shaders\compute_sdf.comp">
-      <Filter>Shaders</Filter>
-    </CopyFileToFolders>
-    <CopyFileToFolders Include="shaders\raymarch.frag">
-      <Filter>Shaders</Filter>
-    </CopyFileToFolders>
-    <CopyFileToFolders Include="shaders\raymarch.vert">
-      <Filter>Shaders</Filter>
-    </CopyFileToFolders>
-    <CopyFileToFolders Include="shaders\skybox.frag">
-      <Filter>Shaders</Filter>
-    </CopyFileToFolders>
-    <CopyFileToFolders Include="shaders\skybox.vert">
-      <Filter>Shaders</Filter>
-    </CopyFileToFolders>
-  </ItemGroup>
-  <ItemGroup>
     <None Include="shaders\embed_shaders.py" />
+    <None Include="shaders\compute_sdf.comp">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="shaders\raymarch.frag">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="shaders\raymarch.vert">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="shaders\skybox.frag">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="shaders\skybox.vert">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="src\resource.rc">

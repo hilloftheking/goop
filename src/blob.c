@@ -11,9 +11,9 @@
 #define BLOB_RAY_MAX_STEPS 32
 #define BLOB_RAY_INTERSECT 0.001f
 
-#define BLOB_OT_MAX_SUBDIVISIONS 3
-// This uses a lot of memory
-#define BLOB_OT_LEAF_MAX_BLOB_COUNT 512
+#define BLOB_OT_MAX_SUBDIVISIONS 4
+// TODO: dynamically increase leaf blob count
+#define BLOB_OT_LEAF_MAX_BLOB_COUNT 256
 
 #define BLOB_DEFAULT_RADIUS 0.5f
 #define PROJECTILE_DEFAULT_DELETE_TIME 5.0f
@@ -227,7 +227,11 @@ void blob_sim_liquid_apply_force(BlobSim *bs, const LiquidBlob *b,
     }
   }
 
-  fprintf(stderr, "Ran out of liquid forces\n");
+  static bool printed_warning = false;
+  if (!printed_warning) {
+    printed_warning = true;
+    fprintf(stderr, "Ran out of liquid forces\n");
+  }
 }
 
 static float clampf(float x, float a, float b) {
@@ -346,7 +350,7 @@ void blob_simulate(BlobSim *bs, double delta) {
       HMM_Vec3 u = HMM_MulV3F(n, HMM_DotV3(p->vel, n));
       HMM_Vec3 w = HMM_SubV3(p->vel, u);
       const float f = 0.95f;
-      const float r = 0.7f;
+      const float r = 0.5f;
       p->vel = HMM_SubV3(HMM_MulV3F(w, f), HMM_MulV3F(u, r));
     }
 
@@ -551,11 +555,18 @@ static void setup_test_octree(BlobOt *bot) {
       second->indices[j] = current_idx;
       current_idx += 9;
 
-      for (int k = 0; k < 8; k++) {
-        BlobOtNode *leaf = bot->root + current_idx;
-        leaf->leaf_blob_count = 0;
-        third->indices[k] = current_idx;
-        current_idx += 1 + BLOB_OT_LEAF_MAX_BLOB_COUNT;
+      for (int j = 0; j < 8; j++) {
+        BlobOtNode *fourth = bot->root + current_idx;
+        fourth->leaf_blob_count = -1;
+        third->indices[j] = current_idx;
+        current_idx += 9;
+
+        for (int k = 0; k < 8; k++) {
+          BlobOtNode *leaf = bot->root + current_idx;
+          leaf->leaf_blob_count = 0;
+          fourth->indices[k] = current_idx;
+          current_idx += 1 + BLOB_OT_LEAF_MAX_BLOB_COUNT;
+        }
       }
     }
   }

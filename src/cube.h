@@ -1,5 +1,3 @@
-// An inside out cube
-
 #pragma once
 
 extern unsigned int cube_vao, cube_vbo, cube_ibo;

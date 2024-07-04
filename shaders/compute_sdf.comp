@@ -27,7 +27,8 @@ vec3 colors[BLOB_MAT_COUNT] = {
   vec3(0.850, 0.767, 0.136), // yellow
   vec3(0.940, 0.561, 0.0658), // orange
   vec3(0.150, 0.0850, 0.00), // black
-  vec3(0.505, 0.706, 0.870) // blue
+  vec3(0.505, 0.706, 0.870), // blue
+  vec3(0.9, 0.9, 0.8) // white
 };
 
 float smin(float a, float b, float k) {

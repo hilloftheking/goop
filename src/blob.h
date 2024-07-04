@@ -133,7 +133,7 @@ typedef struct RaycastResult {
 } RaycastResult;
 
 static const HMM_Vec3 BLOB_SIM_POS = {0, 8, 0};
-static const float BLOB_SIM_SIZE = 16.0f;
+static const float BLOB_SIM_SIZE = 32.0f;
 
 // How much force is needed to attract b to other
 HMM_Vec3 blob_get_attraction_to(LiquidBlob *b, LiquidBlob *other);

@@ -75,18 +75,22 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <EnableClangTidyCodeAnalysis>true</EnableClangTidyCodeAnalysis>
     <ClangTidyChecks>-clang-diagnostic-missing-braces</ClangTidyChecks>
+    <CustomBuildBeforeTargets>BuildGenerateSources</CustomBuildBeforeTargets>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <EnableClangTidyCodeAnalysis>true</EnableClangTidyCodeAnalysis>
     <ClangTidyChecks>-clang-diagnostic-missing-braces</ClangTidyChecks>
+    <CustomBuildBeforeTargets>BuildGenerateSources</CustomBuildBeforeTargets>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <EnableClangTidyCodeAnalysis>true</EnableClangTidyCodeAnalysis>
     <ClangTidyChecks>-clang-diagnostic-missing-braces</ClangTidyChecks>
+    <CustomBuildBeforeTargets>BuildGenerateSources</CustomBuildBeforeTargets>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <EnableClangTidyCodeAnalysis>true</EnableClangTidyCodeAnalysis>
     <ClangTidyChecks>-clang-diagnostic-missing-braces</ClangTidyChecks>
+    <CustomBuildBeforeTargets>BuildGenerateSources</CustomBuildBeforeTargets>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -104,12 +108,18 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>$(ProjectDir)lib\glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
-    <PreBuildEvent>
+    <PreBuildEvent />
+    <PreBuildEvent />
+    <CustomBuildStep>
       <Command>py $(ProjectDir)shaders\embed_shaders.py</Command>
-    </PreBuildEvent>
-    <PreBuildEvent>
+    </CustomBuildStep>
+    <CustomBuildStep>
       <Message>Put minified shaders into source/header</Message>
-    </PreBuildEvent>
+    </CustomBuildStep>
+    <CustomBuildStep>
+      <Inputs>$(ProjectDir)shaders</Inputs>
+      <Outputs>$(ProjectDir)src\shader_sources.c;$(ProjectDir)src\shader_sources.h</Outputs>
+    </CustomBuildStep>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -131,12 +141,18 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>$(ProjectDir)lib\glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
-    <PreBuildEvent>
+    <PreBuildEvent />
+    <PreBuildEvent />
+    <CustomBuildStep>
       <Command>py $(ProjectDir)shaders\embed_shaders.py</Command>
-    </PreBuildEvent>
-    <PreBuildEvent>
+    </CustomBuildStep>
+    <CustomBuildStep>
       <Message>Put minified shaders into source/header</Message>
-    </PreBuildEvent>
+    </CustomBuildStep>
+    <CustomBuildStep>
+      <Inputs>$(ProjectDir)shaders</Inputs>
+      <Outputs>$(ProjectDir)src\shader_sources.c;$(ProjectDir)src\shader_sources.h</Outputs>
+    </CustomBuildStep>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -154,12 +170,18 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>$(ProjectDir)lib\glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
-    <PreBuildEvent>
+    <PreBuildEvent />
+    <PreBuildEvent />
+    <CustomBuildStep>
       <Command>py $(ProjectDir)shaders\embed_shaders.py</Command>
-    </PreBuildEvent>
-    <PreBuildEvent>
+    </CustomBuildStep>
+    <CustomBuildStep>
       <Message>Put minified shaders into source/header</Message>
-    </PreBuildEvent>
+    </CustomBuildStep>
+    <CustomBuildStep>
+      <Inputs>$(ProjectDir)shaders</Inputs>
+      <Outputs>$(ProjectDir)src\shader_sources.c;$(ProjectDir)src\shader_sources.h</Outputs>
+    </CustomBuildStep>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -181,12 +203,18 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>$(ProjectDir)lib\glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
-    <PreBuildEvent>
+    <PreBuildEvent />
+    <PreBuildEvent />
+    <CustomBuildStep>
       <Command>py $(ProjectDir)shaders\embed_shaders.py</Command>
-    </PreBuildEvent>
-    <PreBuildEvent>
+    </CustomBuildStep>
+    <CustomBuildStep>
       <Message>Put minified shaders into source/header</Message>
-    </PreBuildEvent>
+    </CustomBuildStep>
+    <CustomBuildStep>
+      <Inputs>$(ProjectDir)shaders</Inputs>
+      <Outputs>$(ProjectDir)src\shader_sources.c;$(ProjectDir)src\shader_sources.h</Outputs>
+    </CustomBuildStep>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="src\core.h" />
@@ -236,10 +264,10 @@
     <ClCompile Include="thirdparty\stb\stb_image.c" />
   </ItemGroup>
   <ItemGroup>
-    <CopyFileToFolders Include="shaders\compute_sdf.comp">
+    <None Include="shaders\compute_sdf.comp">
       <FileType>Document</FileType>
-    </CopyFileToFolders>
-    <CopyFileToFolders Include="shaders\raymarch.frag">
+    </None>
+    <None Include="shaders\raymarch.frag">
       <DeploymentContent>false</DeploymentContent>
       <FileType>Document</FileType>
       <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -250,19 +278,19 @@
       </DeploymentContent>
       <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
       </DeploymentContent>
-    </CopyFileToFolders>
-    <CopyFileToFolders Include="shaders\raymarch.vert">
+    </None>
+    <None Include="shaders\raymarch.vert">
       <FileType>Document</FileType>
-    </CopyFileToFolders>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\embed_shaders.py" />
-    <CopyFileToFolders Include="shaders\skybox.frag">
+    <None Include="shaders\skybox.frag">
       <FileType>Document</FileType>
-    </CopyFileToFolders>
-    <CopyFileToFolders Include="shaders\skybox.vert">
+    </None>
+    <None Include="shaders\skybox.vert">
       <FileType>Document</FileType>
-    </CopyFileToFolders>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="src\resource.rc" />

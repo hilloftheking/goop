@@ -164,11 +164,11 @@ int main() {
 
   // Ground
   for (int i = 0; i < 512; i++) {
-    HMM_Vec3 pos = {(rand_float() - 0.5f) * 12.0f, rand_float() * 0.5f,
-                    (rand_float() - 0.5f) * 12.0f};
+    HMM_Vec3 pos = {(rand_float() - 0.5f) * 32.0f, rand_float() * 0.5f - 1.0f,
+                    (rand_float() - 0.5f) * 32.0f};
     SolidBlob *b = solid_blob_create(&blob_sim);
     if (b) {
-      solid_blob_set_radius_pos(&blob_sim, b, 0.5f, &pos);
+      solid_blob_set_radius_pos(&blob_sim, b, 2.0f, &pos);
       b->mat_idx = 1;
     }
   }

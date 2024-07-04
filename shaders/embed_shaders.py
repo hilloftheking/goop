@@ -11,8 +11,9 @@ HEADER_OUTPUT = "../src/shader_sources.h"
 
 TEMP_FILE_NAME = ".temp"
 
-GLSLC_EXE = "glslc"
-GLSLC_ARGS = ["--target-env=opengl", "-Werror"]
+GLSLC_EXE = "glslang"
+GLSLC_ARGS = ["-G100", "-Os"]
+GLSLC_LAST_ARG = "-P#extension GL_GOOGLE_include_directive : enable"
 
 SPIRV_CROSS_EXE = "spirv-cross"
 SPIRV_CROSS_ARGS = ["--version", "430", "--no-es"]
@@ -70,7 +71,7 @@ def main():
     for shader_name in shader_paths:
         shader_path = shader_paths[shader_name]
     
-        run_exe(GLSLC_EXE, GLSLC_ARGS + ["-o" + temp_path, shader_path])
+        run_exe(GLSLC_EXE, GLSLC_ARGS + ["-o", temp_path, shader_path, GLSLC_LAST_ARG])
         run_exe(SPIRV_CROSS_EXE, SPIRV_CROSS_ARGS + ["--output", temp_path, temp_path])
         
         minified = minify_glsl(temp_path)
