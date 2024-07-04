@@ -1,0 +1,3 @@
+# Ignore generated files
+shader_sources.c
+shader_sources.h
