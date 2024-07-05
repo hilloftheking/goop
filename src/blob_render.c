@@ -161,7 +161,7 @@ typedef struct RenderSolidData {
 static bool blob_render_sim_solids_ot_leaf(BlobOtEnumData *enum_data) {
   RenderSolidData *data = enum_data->user_data;
   for (int i = 0; i < enum_data->curr_leaf->leaf_blob_count; i++) {
-    int bidx = enum_data->curr_leaf->indices[i];
+    int bidx = enum_data->curr_leaf->offsets[i];
     if (!data->checked[bidx]) {
       data->checked[bidx] = true;
 

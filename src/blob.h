@@ -71,9 +71,9 @@ typedef struct LiquidForce {
 typedef struct BlobOtNode {
   // Blob count if this node is a leaf. Otherwise, it is -1
   int leaf_blob_count;
-  // Indices of blobs if this is a leaf. Otherwise, it is the 8 indices into
-  // the octree of this node's children
-  int indices[];
+  // Indices of blobs if this is a leaf. Otherwise, it is the 8 offsets from this
+  // node to its children
+  int offsets[];
 } BlobOtNode;
 
 // Octree

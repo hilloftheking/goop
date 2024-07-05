@@ -75,7 +75,7 @@ void main() {
         if (dist_cube(child_pos, child_size, p) <= 0.0) {
           node_pos = child_pos;
           node_size = child_size;
-          node_idx = blob_ot[node_idx + 1 + i];
+          node_idx += blob_ot[node_idx + 1 + i];
           node_leaf_blob_count = blob_ot[node_idx];
           found_intersection = true;
           break;

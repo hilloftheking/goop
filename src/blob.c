@@ -486,7 +486,7 @@ typedef struct CorrectionData {
 static bool blob_get_correction_from_solids_ot_leaf(BlobOtEnumData *enum_data) {
   CorrectionData *correction_data = enum_data->user_data;
   for (int i = 0; i < enum_data->curr_leaf->leaf_blob_count; i++) {
-    int bidx = enum_data->curr_leaf->indices[i];
+    int bidx = enum_data->curr_leaf->offsets[i];
     if (!correction_data->checked[bidx]) {
       correction_data->checked[bidx] = true;
       SolidBlob *b = fixed_array_get(&correction_data->bs->solids, bidx);
@@ -553,25 +553,25 @@ static void setup_test_octree(BlobOt *bot) {
   for (int i = 0; i < 8; i++) {
     BlobOtNode *second = bot->root + current_idx;
     second->leaf_blob_count = -1;
-    first->indices[i] = current_idx;
+    first->offsets[i] = (int)(second - first);
     current_idx += 9;
 
     for (int j = 0; j < 8; j++) {
       BlobOtNode *third = bot->root + current_idx;
       third->leaf_blob_count = -1;
-      second->indices[j] = current_idx;
+      second->offsets[j] = (int)(third - second);
       current_idx += 9;
 
       for (int j = 0; j < 8; j++) {
         BlobOtNode *fourth = bot->root + current_idx;
         fourth->leaf_blob_count = -1;
-        third->indices[j] = current_idx;
+        third->offsets[j] = (int)(fourth - third);
         current_idx += 9;
 
         for (int k = 0; k < 8; k++) {
           BlobOtNode *leaf = bot->root + current_idx;
           leaf->leaf_blob_count = 0;
-          fourth->indices[k] = current_idx;
+          fourth->offsets[k] = (int)(leaf - fourth);
           current_idx += 1 + BLOB_OT_LEAF_MAX_BLOB_COUNT;
         }
       }
@@ -606,7 +606,7 @@ static bool blob_ot_insert_into_leaf(BlobOtEnumData *enum_data) {
     return true;
   }
 
-  leaf->indices[leaf->leaf_blob_count++] = *(int *)enum_data->user_data;
+  leaf->offsets[leaf->leaf_blob_count++] = *(int *)enum_data->user_data;
 
   return true;
 }
@@ -638,46 +638,61 @@ static float dist_cube(const HMM_Vec3 *c, float s, const HMM_Vec3 *p) {
   return HMM_LenV3(d);
 }
 
-static bool blob_ot_enum_leaves_sphere_recursive(BlobOtEnumData *enum_data,
-                                             BlobOtNode *node,
-                                             const HMM_Vec3 *npos,
-                                             float nsize) {
-  if (node->leaf_blob_count == -1) {
-    // This node has child nodes
-    for (int i = 0; i < 8; i++) {
-      HMM_Vec3 child_pos =
-          HMM_AddV3(HMM_MulV3F(ot_quadrants[i], nsize * 0.5f), *npos);
-      float child_size = nsize * 0.5f;
+void blob_ot_enum_leaves_sphere(BlobOtEnumData *enum_data) {
+  BlobOtNode *node_stack[BLOB_OT_MAX_SUBDIVISIONS + 1];
+  node_stack[0] = enum_data->bot->root;
+  HMM_Vec3 pos_stack[BLOB_OT_MAX_SUBDIVISIONS + 1];
+  pos_stack[0] = enum_data->bot->root_pos;
+  float size_stack[BLOB_OT_MAX_SUBDIVISIONS + 1];
+  size_stack[0] = enum_data->bot->root_size;
 
-      float dist = dist_cube(&child_pos, child_size, &enum_data->shape_pos) -
-                   enum_data->shape_size;
+  // Have to keep track of how many children have been checked
+  int iter_stack[BLOB_OT_MAX_SUBDIVISIONS + 1];
+  iter_stack[0] = 0;
 
-      if (dist <= 0.0f) {
-        bool ret = blob_ot_enum_leaves_sphere_recursive(
-            enum_data, enum_data->bot->root + node->indices[i], &child_pos,
-            child_size);
-        if (!ret)
-          return false;
+  int node_depth = 1;
+
+  while (node_depth > 0) {
+    // Current node in the stack
+    BlobOtNode *node = node_stack[node_depth - 1];
+    const HMM_Vec3 *npos = &pos_stack[node_depth - 1];
+    float nsize = size_stack[node_depth - 1];
+
+    if (node->leaf_blob_count == -1) {
+      // This node has child nodes
+      int *i = &iter_stack[node_depth - 1];
+      for (; *i < 8; (*i)++) {
+        pos_stack[node_depth] =
+            HMM_AddV3(HMM_MulV3F(ot_quadrants[*i], nsize * 0.5f), *npos);
+        size_stack[node_depth] = nsize * 0.5f;
+
+        float dist = dist_cube(&pos_stack[node_depth], size_stack[node_depth],
+                               &enum_data->shape_pos) -
+                     enum_data->shape_size;
+
+        if (dist <= 0.0f) {
+          node_stack[node_depth] = node + node->offsets[*i];
+          iter_stack[node_depth] = 0;
+          node_depth += 2; // Because there is a decrement at the end of the
+                           // outer loop
+          (*i)++;          // Don't check this child again
+          break;
+        }
+      }
+    } else {
+      // This is a leaf node
+      enum_data->curr_leaf = node;
+      if (!enum_data->callback(enum_data)) {
+        break;
       }
     }
-  } else {
-    // This is a leaf node
 
-    enum_data->curr_leaf = node;
-    return enum_data->callback(enum_data);
+    node_depth--;
   }
-
-  return true;
 }
 
-void blob_ot_enum_leaves_sphere(BlobOtEnumData *enum_data) {
-  blob_ot_enum_leaves_sphere_recursive(enum_data, enum_data->bot->root,
-                                       &enum_data->bot->root_pos,
-                                       enum_data->bot->root_size);
-}
-
-static bool cube_cube_intersect(const HMM_Vec3* pos0, float size0,
-    const HMM_Vec3* pos1, float size1) {
+static bool cube_cube_intersect(const HMM_Vec3 *pos0, float size0,
+                                const HMM_Vec3 *pos1, float size1) {
   float hs0 = size0 * 0.5f;
   float hs1 = size1 * 0.5f;
 
@@ -693,40 +708,55 @@ static bool cube_cube_intersect(const HMM_Vec3* pos0, float size0,
   return true;
 }
 
-static bool blob_ot_enum_leaves_cube_recursive(BlobOtEnumData *enum_data,
-                                               BlobOtNode *node,
-                                               const HMM_Vec3 *npos,
-                                               float nsize) {
-  if (node->leaf_blob_count == -1) {
-    // This node has child nodes
-    for (int i = 0; i < 8; i++) {
-      HMM_Vec3 child_pos =
-          HMM_AddV3(HMM_MulV3F(ot_quadrants[i], nsize * 0.5f), *npos);
-      float child_size = nsize * 0.5f;
+void blob_ot_enum_leaves_cube(BlobOtEnumData *enum_data) {
+  BlobOtNode *node_stack[BLOB_OT_MAX_SUBDIVISIONS + 1];
+  node_stack[0] = enum_data->bot->root;
+  HMM_Vec3 pos_stack[BLOB_OT_MAX_SUBDIVISIONS + 1];
+  pos_stack[0] = enum_data->bot->root_pos;
+  float size_stack[BLOB_OT_MAX_SUBDIVISIONS + 1];
+  size_stack[0] = enum_data->bot->root_size;
 
-      bool intersect = cube_cube_intersect(
-          &child_pos, child_size, &enum_data->shape_pos, enum_data->shape_size);
+  // Have to keep track of how many children have been checked
+  int iter_stack[BLOB_OT_MAX_SUBDIVISIONS + 1];
+  iter_stack[0] = 0;
 
-      if (intersect) {
-        bool ret = blob_ot_enum_leaves_cube_recursive(
-            enum_data, enum_data->bot->root + node->indices[i], &child_pos,
-            child_size);
-        if (!ret)
-          return false;
+  int node_depth = 1;
+
+  while (node_depth > 0) {
+    // Current node in the stack
+    BlobOtNode *node = node_stack[node_depth - 1];
+    const HMM_Vec3 *npos = &pos_stack[node_depth - 1];
+    float nsize = size_stack[node_depth - 1];
+
+    if (node->leaf_blob_count == -1) {
+      // This node has child nodes
+      int *i = &iter_stack[node_depth - 1];
+      for (; *i < 8; (*i)++) {
+        pos_stack[node_depth] =
+            HMM_AddV3(HMM_MulV3F(ot_quadrants[*i], nsize * 0.5f), *npos);
+        size_stack[node_depth] = nsize * 0.5f;
+
+        bool intersect =
+            cube_cube_intersect(&pos_stack[node_depth], size_stack[node_depth],
+                                &enum_data->shape_pos, enum_data->shape_size);
+
+        if (intersect) {
+          node_stack[node_depth] = node + node->offsets[*i];
+          iter_stack[node_depth] = 0;
+          node_depth += 2; // Because there is a decrement at the end of the
+                           // outer loop
+          (*i)++;          // Don't check this child again
+          break;
+        }
+      }
+    } else {
+      // This is a leaf node
+      enum_data->curr_leaf = node;
+      if (!enum_data->callback(enum_data)) {
+        break;
       }
     }
-  } else {
-    // This is a leaf node
 
-    enum_data->curr_leaf = node;
-    return enum_data->callback(enum_data);
+    node_depth--;
   }
-
-  return true;
-}
-
-void blob_ot_enum_leaves_cube(BlobOtEnumData *enum_data) {
-  blob_ot_enum_leaves_cube_recursive(enum_data, enum_data->bot->root,
-                                       &enum_data->bot->root_pos,
-                                       enum_data->bot->root_size);
 }
