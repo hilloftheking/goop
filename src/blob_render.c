@@ -69,6 +69,8 @@ void blob_renderer_create(BlobRenderer *br) {
 
   br->aspect_ratio = 1.0f;
 
+  br->blob_ot.root_pos = HMM_V3(0, 0, 0);
+  br->blob_ot.root_size = BLOB_ACTIVE_SIZE;
   blob_ot_create(&br->blob_ot);
   br->blob_ot.max_dist_to_leaf = BLOB_SDF_MAX_DIST;
 
@@ -149,8 +151,37 @@ static void draw_sdf_cube(BlobRenderer *br, unsigned int sdf_tex,
   cube_draw();
 }
 
+typedef struct RenderSolidData {
+  BlobRenderer *br;
+  const BlobSim *bs;
+  int *ssbo_idx;
+  bool checked[BLOB_SIM_MAX_SOLIDS];
+} RenderSolidData;
+
+static bool blob_render_sim_solids_ot_leaf(BlobOtEnumData *enum_data) {
+  RenderSolidData *data = enum_data->user_data;
+  for (int i = 0; i < enum_data->curr_leaf->leaf_blob_count; i++) {
+    int bidx = enum_data->curr_leaf->indices[i];
+    if (!data->checked[bidx]) {
+      data->checked[bidx] = true;
+
+      const SolidBlob *b = fixed_array_get_const(&data->bs->solids, bidx);
+      data->br->blobs_v4[*data->ssbo_idx].XYZ = b->pos;
+      data->br->blobs_v4[*data->ssbo_idx].W =
+          (float)((int)(b->radius * BLOB_RADIUS_MULT) * BLOB_MAT_COUNT +
+                  b->mat_idx);
+
+      blob_ot_insert(&data->br->blob_ot, &b->pos, b->radius, *data->ssbo_idx);
+      (*data->ssbo_idx)++;
+    }
+  }
+
+  return true;
+}
+
 void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
   blob_ot_reset(&br->blob_ot);
+  br->blob_ot.root_pos = bs->active_pos;
 
   int ssbo_idx = 0;
 
@@ -185,6 +216,25 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
   }
 
   // Solids
+  {
+    RenderSolidData data = {0};
+    data.br = br;
+    data.bs = bs;
+    data.ssbo_idx = &ssbo_idx;
+
+    BlobOtEnumData enum_data;
+    enum_data.bot = (BlobOt *)&bs->solid_ot;
+    enum_data.shape_pos = bs->active_pos;
+    enum_data.shape_size = BLOB_ACTIVE_SIZE;
+    enum_data.user_data = &data;
+    enum_data.callback = blob_render_sim_solids_ot_leaf;
+
+    int before = ssbo_idx;
+    blob_ot_enum_leaves_cube(&enum_data);
+    printf("%d\n", ssbo_idx - before);
+  }
+
+  /*
   for (int i = bs->solids.count - 1; i >= 0; i--) {
     const SolidBlob *b = fixed_array_get_const(&bs->solids, i);
 
@@ -196,6 +246,7 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
     blob_ot_insert(&br->blob_ot, &b->pos, b->radius, ssbo_idx);
     ssbo_idx++;
   }
+  */
 
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, br->blobs_ssbo);
   glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, br->blobs_ssbo_size_bytes,
@@ -208,8 +259,8 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
   glBindImageTexture(0, br->sdf_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA8);
   glUseProgram(br->compute_program);
   glUniform1i(0, -1); // Use the octree
-  glUniform3fv(1, 1, BLOB_SIM_POS.Elements);
-  glUniform1f(2, BLOB_SIM_SIZE);
+  glUniform3fv(1, 1, br->blob_ot.root_pos.Elements);
+  glUniform1f(2, BLOB_ACTIVE_SIZE);
   glUniform1i(3, BLOB_SIM_SDF_RES);
   glUniform1f(4, BLOB_SDF_MAX_DIST);
   glUniform1f(5, BLOB_SMOOTH);
@@ -225,7 +276,7 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
   glUniform3fv(3, 1, br->cam_trans.Elements[3]);
 
   glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-  draw_sdf_cube(br, br->sdf_tex, &BLOB_SIM_POS, BLOB_SIM_SIZE, NULL,
+  draw_sdf_cube(br, br->sdf_tex, &br->blob_ot.root_pos, BLOB_ACTIVE_SIZE, NULL,
                 BLOB_SDF_MAX_DIST);
 }
 

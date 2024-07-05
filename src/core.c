@@ -8,8 +8,7 @@
 Global global;
 
 void exit_fatal_error() {
-  fprintf(stderr, "Exiting due to fatal error\n");
-  __debugbreak();
+  fprintf(stderr, "FATAL ERROR. Press enter to exit\n");
 
   // If GLFW isn't terminated, the window will be frozen
   glfwTerminate();

@@ -82,6 +82,9 @@ typedef struct BlobOt {
   // At what distance should a blob be added to a leaf? This is useful for
   // calculating a signed distance field. Default is 0
   float max_dist_to_leaf;
+
+  HMM_Vec3 root_pos;
+  float root_size;
 } BlobOt;
 
 typedef struct BlobOtEnumData BlobOtEnumData;
@@ -90,8 +93,10 @@ typedef bool (*BlobOtEnumLeafFunc)(BlobOtEnumData *);
 
 typedef struct BlobOtEnumData {
   BlobOt *bot;
-  HMM_Vec3 bpos;
-  float bradius;
+  // Position of sphere or cube being used to find leaves
+  HMM_Vec3 shape_pos;
+  // Size/radius of sphere/cube
+  float shape_size;
   BlobOtEnumLeafFunc callback;
   void *user_data;
   // This is modified by the enum function
@@ -108,6 +113,8 @@ typedef struct BlobSim {
   FixedArray del_queues[DELETE_MAX];
 
   LiquidForce *liq_forces;
+
+  HMM_Vec3 active_pos;
   
   // Store solids in an octree to speed up checking for collisions
   BlobOt solid_ot;
@@ -132,8 +139,10 @@ typedef struct RaycastResult {
   float traveled;
 } RaycastResult;
 
-static const HMM_Vec3 BLOB_SIM_POS = {0, 8, 0};
-static const float BLOB_SIM_SIZE = 32.0f;
+// Size of level cube. Contains inactive blobs
+static const float BLOB_LEVEL_SIZE = 1024.0f;
+// Size of active simulation cube
+static const float BLOB_ACTIVE_SIZE = 32.0f;
 
 // How much force is needed to attract b to other
 HMM_Vec3 blob_get_attraction_to(LiquidBlob *b, LiquidBlob *other);
@@ -199,4 +208,6 @@ void blob_ot_reset(BlobOt *bot);
 
 void blob_ot_insert(BlobOt *bot, const HMM_Vec3 *bpos, float bradius, int bidx);
 
-void blob_ot_enum_leaves_at(BlobOtEnumData *enum_data);
+void blob_ot_enum_leaves_sphere(BlobOtEnumData *enum_data);
+
+void blob_ot_enum_leaves_cube(BlobOtEnumData *enum_data);

@@ -170,6 +170,10 @@ void blob_sim_create(BlobSim *bs) {
     bs->liq_forces[i].idx = -1;
   }
 
+  bs->active_pos = HMM_V3(0, 0, 0);
+
+  bs->solid_ot.root_pos = HMM_V3(0, 0, 0);
+  bs->solid_ot.root_size = BLOB_LEVEL_SIZE;
   blob_ot_create(&bs->solid_ot);
 }
 
@@ -313,12 +317,15 @@ void blob_simulate(BlobSim *bs, double delta) {
         blob_get_correction_from_solids(bs, &b->pos, b->radius);
     b->pos = HMM_AddV3(b->pos, correction);
 
+    // TODO: queue inactive
+    /*
     for (int x = 0; x < 3; x++) {
       b->pos.Elements[x] = fmaxf(b->pos.Elements[x], BLOB_SIM_POS.Elements[x] -
                                                          BLOB_SIM_SIZE * 0.5f);
       b->pos.Elements[x] = fminf(b->pos.Elements[x], BLOB_SIM_POS.Elements[x] +
                                                          BLOB_SIM_SIZE * 0.5f);
     }
+    */
   }
 
   // Liquid blob forces
@@ -483,9 +490,9 @@ static bool blob_get_correction_from_solids_ot_leaf(BlobOtEnumData *enum_data) {
     if (!correction_data->checked[bidx]) {
       correction_data->checked[bidx] = true;
       SolidBlob *b = fixed_array_get(&correction_data->bs->solids, bidx);
-      blob_check_blob_at(&correction_data->min_dist,
-                         &correction_data->correction, &b->pos, b->radius,
-                         &enum_data->bpos, enum_data->bradius, BLOB_SMOOTH);
+      blob_check_blob_at(
+          &correction_data->min_dist, &correction_data->correction, &b->pos,
+          b->radius, &enum_data->shape_pos, enum_data->shape_size, BLOB_SMOOTH);
     }
   }
 
@@ -501,15 +508,15 @@ HMM_Vec3 blob_get_correction_from_solids(BlobSim *bs, const HMM_Vec3 *pos,
 
   BlobOtEnumData enum_data;
   enum_data.bot = &bs->solid_ot;
-  enum_data.bpos = *pos;
-  enum_data.bradius = radius;
+  enum_data.shape_pos = *pos;
+  enum_data.shape_size = radius;
   enum_data.callback = blob_get_correction_from_solids_ot_leaf;
   enum_data.user_data = &correction_data;
 
   // Use smin to figure out if this blob is touching smoothed solid blobs
   // Also check how much each blob should influence the normal
 
-  blob_ot_enum_leaves_at(&enum_data);
+  blob_ot_enum_leaves_sphere(&enum_data);
 
   // Is this blob inside of a solid blob?
   if (correction_data.min_dist < radius) {
@@ -608,12 +615,12 @@ void blob_ot_insert(BlobOt *bot, const HMM_Vec3 *bpos, float bradius,
                     int bidx) {
   BlobOtEnumData enum_data;
   enum_data.bot = bot;
-  enum_data.bpos = *bpos;
-  enum_data.bradius = bradius;
+  enum_data.shape_pos = *bpos;
+  enum_data.shape_size = bradius + BLOB_SMOOTH + bot->max_dist_to_leaf;
   enum_data.callback = blob_ot_insert_into_leaf;
   enum_data.user_data = &bidx;
 
-  blob_ot_enum_leaves_at(&enum_data);
+  blob_ot_enum_leaves_sphere(&enum_data);
 }
 
 // This is also in the compute shader, so be careful if it needs to be changed
@@ -631,7 +638,7 @@ static float dist_cube(const HMM_Vec3 *c, float s, const HMM_Vec3 *p) {
   return HMM_LenV3(d);
 }
 
-static bool blob_ot_enum_leaves_at_recursive(BlobOtEnumData *enum_data,
+static bool blob_ot_enum_leaves_sphere_recursive(BlobOtEnumData *enum_data,
                                              BlobOtNode *node,
                                              const HMM_Vec3 *npos,
                                              float nsize) {
@@ -642,12 +649,11 @@ static bool blob_ot_enum_leaves_at_recursive(BlobOtEnumData *enum_data,
           HMM_AddV3(HMM_MulV3F(ot_quadrants[i], nsize * 0.5f), *npos);
       float child_size = nsize * 0.5f;
 
-      float dist = dist_cube(&child_pos, child_size, &enum_data->bpos) -
-                   enum_data->bradius - BLOB_SMOOTH -
-                   enum_data->bot->max_dist_to_leaf;
+      float dist = dist_cube(&child_pos, child_size, &enum_data->shape_pos) -
+                   enum_data->shape_size;
 
       if (dist <= 0.0f) {
-        bool ret = blob_ot_enum_leaves_at_recursive(
+        bool ret = blob_ot_enum_leaves_sphere_recursive(
             enum_data, enum_data->bot->root + node->indices[i], &child_pos,
             child_size);
         if (!ret)
@@ -664,7 +670,63 @@ static bool blob_ot_enum_leaves_at_recursive(BlobOtEnumData *enum_data,
   return true;
 }
 
-void blob_ot_enum_leaves_at(BlobOtEnumData *enum_data) {
-  blob_ot_enum_leaves_at_recursive(enum_data, enum_data->bot->root,
-                                   &BLOB_SIM_POS, BLOB_SIM_SIZE);
+void blob_ot_enum_leaves_sphere(BlobOtEnumData *enum_data) {
+  blob_ot_enum_leaves_sphere_recursive(enum_data, enum_data->bot->root,
+                                       &enum_data->bot->root_pos,
+                                       enum_data->bot->root_size);
+}
+
+static bool cube_cube_intersect(const HMM_Vec3* pos0, float size0,
+    const HMM_Vec3* pos1, float size1) {
+  float hs0 = size0 * 0.5f;
+  float hs1 = size1 * 0.5f;
+
+  if (pos0->X + hs0 < pos1->X - hs1 || pos1->X + hs1 < pos0->X - hs0)
+    return false;
+
+  if (pos0->Y + hs0 < pos1->Y - hs1 || pos1->Y + hs1 < pos0->Y - hs0)
+    return false;
+
+  if (pos0->Z + hs0 < pos1->Z - hs1 || pos1->Z + hs1 < pos0->Z - hs0)
+    return false;
+
+  return true;
+}
+
+static bool blob_ot_enum_leaves_cube_recursive(BlobOtEnumData *enum_data,
+                                               BlobOtNode *node,
+                                               const HMM_Vec3 *npos,
+                                               float nsize) {
+  if (node->leaf_blob_count == -1) {
+    // This node has child nodes
+    for (int i = 0; i < 8; i++) {
+      HMM_Vec3 child_pos =
+          HMM_AddV3(HMM_MulV3F(ot_quadrants[i], nsize * 0.5f), *npos);
+      float child_size = nsize * 0.5f;
+
+      bool intersect = cube_cube_intersect(
+          &child_pos, child_size, &enum_data->shape_pos, enum_data->shape_size);
+
+      if (intersect) {
+        bool ret = blob_ot_enum_leaves_cube_recursive(
+            enum_data, enum_data->bot->root + node->indices[i], &child_pos,
+            child_size);
+        if (!ret)
+          return false;
+      }
+    }
+  } else {
+    // This is a leaf node
+
+    enum_data->curr_leaf = node;
+    return enum_data->callback(enum_data);
+  }
+
+  return true;
+}
+
+void blob_ot_enum_leaves_cube(BlobOtEnumData *enum_data) {
+  blob_ot_enum_leaves_cube_recursive(enum_data, enum_data->bot->root,
+                                       &enum_data->bot->root_pos,
+                                       enum_data->bot->root_size);
 }

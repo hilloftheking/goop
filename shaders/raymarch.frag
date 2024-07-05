@@ -18,7 +18,7 @@ layout(location = 4) uniform float dist_scale;
 layout(location = 5) uniform float sdf_max_dist;
 
 #define MARCH_STEPS 128
-#define MARCH_INTERSECT 0.001
+#define MARCH_INTERSECT 0.0005
 #define MARCH_MAX_DIST 40.0
 #define MARCH_NORM_STEP 0.2
 

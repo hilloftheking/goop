@@ -239,4 +239,7 @@ void player_process(Entity ent) {
       p->callback = proj_callback;
     }
   }
+
+  // Update blob simulation active cube position
+  global.blob_sim->active_pos = trans->Columns[3].XYZ;
 }

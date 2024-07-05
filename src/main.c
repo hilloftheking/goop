@@ -173,6 +173,16 @@ int main() {
     }
   }
 
+  for (int i = 0; i < 32; i++) {
+    HMM_Vec3 pos = {rand_float() - 0.5f, rand_float() - 0.5f,
+                    -20.0f - i * 2.5f};
+    SolidBlob *b = solid_blob_create(&blob_sim);
+    if (b) {
+      solid_blob_set_radius_pos(&blob_sim, b, 2.0f, &pos);
+      b->mat_idx = 1;
+    }
+  }
+
   // Player
 
   Entity player_ent = player_create();
@@ -261,13 +271,18 @@ int main() {
 
     blob_render_sim(&blob_renderer, &blob_sim);
 
+    HMM_Mat4 *plr_trans =
+        entity_get_component(player_ent, COMPONENT_TRANSFORM);
     for (EntityComponent *ent_model = component_begin(COMPONENT_MODEL);
          ent_model != component_end(COMPONENT_MODEL);
          ent_model = component_next(COMPONENT_MODEL, ent_model)) {
       Model *mdl = ent_model->component;
       HMM_Mat4 *trans =
           entity_get_component(ent_model->entity, COMPONENT_TRANSFORM);
-      blob_render_mdl(&blob_renderer, &blob_sim, mdl, trans);
+      if (HMM_LenV3(HMM_SubV3(trans->Columns[3].XYZ,
+                              plr_trans->Columns[3].XYZ)) < BLOB_ACTIVE_SIZE) {
+        blob_render_mdl(&blob_renderer, &blob_sim, mdl, trans);
+      }
     }
 
     glfwSwapBuffers(window);
