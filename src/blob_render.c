@@ -19,6 +19,19 @@
 __declspec(dllexport) unsigned long NvOptimusEnablement = 1;
 __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 
+static const HMM_Vec3 *render_ot_get_pos_from_idx(BlobOt *bot, int blob_idx) {
+  BlobRenderer *br = bot->userdata;
+
+  return &br->blobs_v4[blob_idx].XYZ;
+}
+
+static float render_ot_get_radius_from_idx(BlobOt *bot, int blob_idx) {
+  BlobRenderer *br = bot->userdata;
+
+  return ((int)br->blobs_v4[blob_idx].W / BLOB_MAT_COUNT) /
+         (float)BLOB_RADIUS_MULT;
+}
+
 void blob_renderer_create(BlobRenderer *br) {
   br->raymarch_program =
       create_shader_program(RAYMARCH_VERT_SRC, RAYMARCH_FRAG_SRC);
@@ -72,6 +85,9 @@ void blob_renderer_create(BlobRenderer *br) {
   br->blob_ot.root_pos = HMM_V3(0, 0, 0);
   br->blob_ot.root_size = BLOB_ACTIVE_SIZE;
   br->blob_ot.max_subdiv = 4;
+  br->blob_ot.userdata = br;
+  br->blob_ot.get_pos_from_idx = render_ot_get_pos_from_idx;
+  br->blob_ot.get_radius_from_idx = render_ot_get_pos_from_idx;
   blob_ot_create(&br->blob_ot);
   br->blob_ot.max_dist_to_leaf = BLOB_SDF_MAX_DIST;
 

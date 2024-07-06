@@ -111,10 +111,10 @@
     <PreBuildEvent />
     <PreBuildEvent />
     <CustomBuildStep>
-      <Command>py $(ProjectDir)shaders\embed_shaders.py</Command>
+      <Command>py $(ProjectDir)embed_shaders.py</Command>
     </CustomBuildStep>
     <CustomBuildStep>
-      <Message>Put minified shaders into source/header</Message>
+      <Message>Put optimized + minified shaders into source/header</Message>
     </CustomBuildStep>
     <CustomBuildStep>
       <Inputs>$(ProjectDir)shaders</Inputs>
@@ -144,10 +144,10 @@
     <PreBuildEvent />
     <PreBuildEvent />
     <CustomBuildStep>
-      <Command>py $(ProjectDir)shaders\embed_shaders.py</Command>
+      <Command>py $(ProjectDir)embed_shaders.py</Command>
     </CustomBuildStep>
     <CustomBuildStep>
-      <Message>Put minified shaders into source/header</Message>
+      <Message>Put optimized + minified shaders into source/header</Message>
     </CustomBuildStep>
     <CustomBuildStep>
       <Inputs>$(ProjectDir)shaders</Inputs>
@@ -173,10 +173,10 @@
     <PreBuildEvent />
     <PreBuildEvent />
     <CustomBuildStep>
-      <Command>py $(ProjectDir)shaders\embed_shaders.py</Command>
+      <Command>py $(ProjectDir)embed_shaders.py</Command>
     </CustomBuildStep>
     <CustomBuildStep>
-      <Message>Put minified shaders into source/header</Message>
+      <Message>Put optimized + minified shaders into source/header</Message>
     </CustomBuildStep>
     <CustomBuildStep>
       <Inputs>$(ProjectDir)shaders</Inputs>
@@ -206,10 +206,10 @@
     <PreBuildEvent />
     <PreBuildEvent />
     <CustomBuildStep>
-      <Command>py $(ProjectDir)shaders\embed_shaders.py</Command>
+      <Command>py $(ProjectDir)embed_shaders.py</Command>
     </CustomBuildStep>
     <CustomBuildStep>
-      <Message>Put minified shaders into source/header</Message>
+      <Message>Put optimized + minified shaders into source/header</Message>
     </CustomBuildStep>
     <CustomBuildStep>
       <Inputs>$(ProjectDir)shaders</Inputs>

@@ -11,7 +11,7 @@
 #define BLOB_RAY_MAX_STEPS 32
 #define BLOB_RAY_INTERSECT 0.001f
 
-#define BLOB_OT_MAX_SUBDIVISIONS 4
+#define BLOB_OT_MAX_SUBDIVISIONS 6
 // TODO: dynamically increase leaf blob count
 #define BLOB_OT_LEAF_MAX_BLOB_COUNT 256
 #define BLOB_OT_LEAF_SUBDIV_BLOB_COUNT 16
@@ -155,6 +155,18 @@ void collider_model_remove(BlobSim *bs, Entity ent) {
   }
 }
 
+static const HMM_Vec3 *solid_ot_get_pos_from_idx(BlobOt *bot, int blob_idx) {
+  BlobSim *bs = bot->userdata;
+  SolidBlob *b = fixed_array_get(&bs->solids, blob_idx);
+  return &b->pos;
+}
+
+static float solid_ot_get_radius_from_idx(BlobOt *bot, int blob_idx) {
+  BlobSim *bs = bot->userdata;
+  SolidBlob *b = fixed_array_get(&bs->solids, blob_idx);
+  return b->radius;
+}
+
 void blob_sim_create(BlobSim *bs) {
   fixed_array_create(&bs->solids, sizeof(SolidBlob), BLOB_SIM_MAX_SOLIDS);
   fixed_array_create(&bs->liquids, sizeof(LiquidBlob), BLOB_SIM_MAX_LIQUIDS);
@@ -174,9 +186,12 @@ void blob_sim_create(BlobSim *bs) {
 
   bs->active_pos = HMM_V3(0, 0, 0);
 
-  bs->solid_ot.max_subdiv = 4;
+  bs->solid_ot.max_subdiv = 6;
   bs->solid_ot.root_pos = HMM_V3(0, 0, 0);
   bs->solid_ot.root_size = BLOB_LEVEL_SIZE;
+  bs->solid_ot.userdata = bs;
+  bs->solid_ot.get_pos_from_idx = solid_ot_get_pos_from_idx;
+  bs->solid_ot.get_radius_from_idx = solid_ot_get_radius_from_idx;
   blob_ot_create(&bs->solid_ot);
 }
 
@@ -598,7 +613,7 @@ static bool blob_ot_insert_ot_leaf(BlobOtEnumData *enum_data) {
 
   leaf->offsets[leaf->leaf_blob_count++] = *(int *)enum_data->user_data;
 
-  if (enum_data->curr_leaf_depth < BLOB_OT_MAX_SUBDIVISIONS &&
+  if (enum_data->curr_leaf_depth < enum_data->bot->max_subdiv &&
       leaf->leaf_blob_count == BLOB_OT_LEAF_SUBDIV_BLOB_COUNT) {
     int reinsert[BLOB_OT_LEAF_SUBDIV_BLOB_COUNT];
     for (int i = 0; i < BLOB_OT_LEAF_SUBDIV_BLOB_COUNT; i++) {
@@ -645,64 +660,63 @@ static bool blob_ot_insert_ot_leaf(BlobOtEnumData *enum_data) {
     enum_data->bot->size_int = new_size_int;
     node->leaf_blob_count = -1;
 
+    // Set up each child right now before inserting nodes into them since they
+    // might get filled up as well
     for (int i = 0; i < 8; i++) {
       node->offsets[i] =
           new_node_size_int + i * (1 + BLOB_OT_LEAF_MAX_BLOB_COUNT);
       BlobOtNode *child = node + node->offsets[i];
       child->leaf_blob_count = 0;
+    }
 
+    // TODO: don't change this stuff, this is nasty
+    HMM_Vec3 old_pos = enum_data->shape_pos;
+    float old_size = enum_data->shape_size;
+    void *old_user_data = enum_data->user_data;
+
+    const HMM_Vec3 *old_leaf_pos = enum_data->curr_leaf_pos;
+    float old_leaf_size = enum_data->curr_leaf_size;
+
+    for (int i = 0; i < 8; i++) {
+      BlobOtNode *child = node + node->offsets[i];
       HMM_Vec3 child_pos = HMM_AddV3(
           HMM_MulV3F(ot_quadrants[i], enum_data->curr_leaf_size * 0.5f),
           *enum_data->curr_leaf_pos);
       float child_size = enum_data->curr_leaf_size * 0.5f;
 
-      
-      // TODO: Need a way to associate an index in the octree with a pos +
-      // radius
       for (int j = 0; j < BLOB_OT_LEAF_SUBDIV_BLOB_COUNT; j++) {
+        enum_data->shape_pos =
+            *enum_data->bot->get_pos_from_idx(enum_data->bot, reinsert[j]);
+        enum_data->shape_size =
+            enum_data->bot->get_radius_from_idx(enum_data->bot, reinsert[j]) +
+            BLOB_SMOOTH + enum_data->bot->max_dist_to_leaf;
         float dist = dist_cube(&child_pos, child_size, &enum_data->shape_pos) -
                      enum_data->shape_size;
 
         if (dist <= 0.0f) {
-          // TODO: Need to account for if this newly created child also got filled
-          if (child->leaf_blob_count < BLOB_OT_LEAF_SUBDIV_BLOB_COUNT - 1) {
-            child->offsets[child->leaf_blob_count++] = reinsert[j];
-          }
-        }
-      }
-    }
+          // TODO: enum_data->bot might be invalidated
+          enum_data->curr_leaf_depth++;
+          enum_data->node_stack[enum_data->curr_leaf_depth] = child;
+          enum_data->curr_leaf = child;
+          enum_data->curr_leaf_pos = &child_pos;
+          enum_data->curr_leaf_size = child_size;
+          enum_data->user_data = &reinsert[j];
 
-    /*
-    // Sanity check
-    BlobOtNode *node_stack[BLOB_OT_MAX_SUBDIVISIONS + 2];
-    node_stack[0] = enum_data->bot->root;
-    int iter_stack[BLOB_OT_MAX_SUBDIVISIONS + 2];
-    iter_stack[0] = 0;
-    int depth = 0;
-    while (depth > 0) {
-      if (depth == BLOB_OT_MAX_SUBDIVISIONS) {
-        printf("Epical!\n");
-      }
-      if (depth > BLOB_OT_MAX_SUBDIVISIONS) {
-        printf("Erm what the sigma\n");
-      }
+          // If the child being inserted into also becomes subdivided, it will
+          // be fine since reinsertion will be done
+          blob_ot_insert_ot_leaf(enum_data);
 
-      BlobOtNode *check_node = node_stack[depth];
-      int *i = &iter_stack[depth];
-      for (; *i < 8; (*i)++) {
-        BlobOtNode *child = check_node + check_node->offsets[*i];
-        if (child->leaf_blob_count == -1) {
-          node_stack[depth + 1] = child;
-          iter_stack[depth + 1] = 0;
-          (*i)++;
-          depth += 2;
-          break;
+          enum_data->curr_leaf_depth--;
         }
       }
 
-      depth--;
+      enum_data->curr_leaf_pos = old_leaf_pos;
+      enum_data->curr_leaf_size = old_leaf_size;
     }
-    */
+
+    enum_data->shape_pos = old_pos;
+    enum_data->shape_size = old_size;
+    enum_data->user_data = old_user_data;
   }
 
   return true;

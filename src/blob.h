@@ -76,6 +76,8 @@ typedef struct BlobOtNode {
   int offsets[];
 } BlobOtNode;
 
+typedef struct BlobOt BlobOt;
+
 // Octree
 typedef struct BlobOt {
   BlobOtNode *root;
@@ -90,6 +92,10 @@ typedef struct BlobOt {
   // Current capacity in ints (sizeof(BlobOtNode) == sizeof(int))
   int capacity_int;
   int size_int;
+
+  void *userdata;
+  const HMM_Vec3 *(*get_pos_from_idx)(BlobOt *, int);
+  float (*get_radius_from_idx)(BlobOt *, int);
 } BlobOt;
 
 typedef struct BlobOtEnumData BlobOtEnumData;

@@ -6,10 +6,11 @@
 import os
 import subprocess
 
-SRC_OUTPUT = "../src/shader_sources.c"
-HEADER_OUTPUT = "../src/shader_sources.h"
+SHADER_DIR = "shaders"
+SRC_OUTPUT = "src/shader_sources.c"
+HEADER_OUTPUT = "src/shader_sources.h"
 
-TEMP_FILE_NAME = ".temp"
+TEMP_FILE_NAME = ".tempshader"
 
 GLSLC_EXE = "glslang"
 GLSLC_ARGS = ["-G100", "-Os"]
@@ -58,9 +59,10 @@ def main():
     shader_paths = {}
 
     parent_dir = os.path.dirname(os.path.realpath(__file__))
+    shader_dir = os.path.join(parent_dir, SHADER_DIR)
     temp_path = os.path.join(parent_dir, TEMP_FILE_NAME)
     
-    content = os.scandir(parent_dir)
+    content = os.scandir(shader_dir)
     for entry in content:
         if entry.is_file() and is_glsl_filename(entry.name):
             shader_paths[entry.name] = entry.path
