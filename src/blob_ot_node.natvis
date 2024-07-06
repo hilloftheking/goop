@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+    <Type Name="BlobOtNode">
+        <DisplayString>{{leaf_blob_count = {leaf_blob_count}}}</DisplayString>
+        <Expand>
+            <Item Name="leaf_blob_count">leaf_blob_count</Item>
+
+            <CustomListItems MaxItemsPerView="8" Condition="leaf_blob_count == -1">
+                <Variable Name="i" InitialValue="0" />
+                <Size>8</Size>
+                <Loop>
+                    <Item>this + offsets[i]</Item>
+                    <Exec>i++</Exec>
+                    <Break Condition="i==8" />
+                </Loop>
+            </CustomListItems>
+
+            <ArrayItems Condition="leaf_blob_count != -1">
+                <Size>leaf_blob_count</Size>
+                <ValuePointer>offsets</ValuePointer>
+            </ArrayItems>
+        </Expand>
+    </Type>
+</AutoVisualizer>

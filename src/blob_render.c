@@ -71,6 +71,7 @@ void blob_renderer_create(BlobRenderer *br) {
 
   br->blob_ot.root_pos = HMM_V3(0, 0, 0);
   br->blob_ot.root_size = BLOB_ACTIVE_SIZE;
+  br->blob_ot.max_subdiv = 4;
   blob_ot_create(&br->blob_ot);
   br->blob_ot.max_dist_to_leaf = BLOB_SDF_MAX_DIST;
 
@@ -234,27 +235,13 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
     printf("%d\n", ssbo_idx - before);
   }
 
-  /*
-  for (int i = bs->solids.count - 1; i >= 0; i--) {
-    const SolidBlob *b = fixed_array_get_const(&bs->solids, i);
-
-    br->blobs_v4[ssbo_idx].XYZ = b->pos;
-    br->blobs_v4[ssbo_idx].W =
-        (float)((int)(b->radius * BLOB_RADIUS_MULT) * BLOB_MAT_COUNT +
-                b->mat_idx);
-
-    blob_ot_insert(&br->blob_ot, &b->pos, b->radius, ssbo_idx);
-    ssbo_idx++;
-  }
-  */
-
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, br->blobs_ssbo);
   glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, br->blobs_ssbo_size_bytes,
                   br->blobs_v4);
 
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, br->blob_ot_ssbo);
-  glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, br->blob_ot_ssbo_size_bytes,
-                  br->blob_ot.root);
+  glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0,
+                  br->blob_ot.size_int * sizeof(int), br->blob_ot.root);
 
   glBindImageTexture(0, br->sdf_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA8);
   glUseProgram(br->compute_program);

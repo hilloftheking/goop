@@ -92,6 +92,8 @@ def main():
         f.write(src_content)
     with open(header_path, "w") as f:
         f.write(header_content)
+
+    os.remove(temp_path)
     
 if __name__ == "__main__":
     main()

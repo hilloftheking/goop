@@ -174,4 +174,7 @@
       <Filter>Resource Files</Filter>
     </ResourceCompile>
   </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="src\blob_ot_node.natvis" />
+  </ItemGroup>
 </Project>

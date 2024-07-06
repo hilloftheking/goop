@@ -83,8 +83,13 @@ typedef struct BlobOt {
   // calculating a signed distance field. Default is 0
   float max_dist_to_leaf;
 
+  int max_subdiv;
   HMM_Vec3 root_pos;
   float root_size;
+
+  // Current capacity in ints (sizeof(BlobOtNode) == sizeof(int))
+  int capacity_int;
+  int size_int;
 } BlobOt;
 
 typedef struct BlobOtEnumData BlobOtEnumData;
@@ -101,6 +106,10 @@ typedef struct BlobOtEnumData {
   void *user_data;
   // This is modified by the enum function
   BlobOtNode *curr_leaf;
+  int curr_leaf_depth;
+  const HMM_Vec3 *curr_leaf_pos;
+  float curr_leaf_size;
+  BlobOtNode **node_stack;
 } BlobOtEnumData;
 
 typedef struct BlobSim {
