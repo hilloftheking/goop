@@ -87,7 +87,7 @@ void blob_renderer_create(BlobRenderer *br) {
   br->blob_ot.max_subdiv = 4;
   br->blob_ot.userdata = br;
   br->blob_ot.get_pos_from_idx = render_ot_get_pos_from_idx;
-  br->blob_ot.get_radius_from_idx = render_ot_get_pos_from_idx;
+  br->blob_ot.get_radius_from_idx = render_ot_get_radius_from_idx;
   blob_ot_create(&br->blob_ot);
   br->blob_ot.max_dist_to_leaf = BLOB_SDF_MAX_DIST;
 
@@ -246,9 +246,7 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
     enum_data.user_data = &data;
     enum_data.callback = blob_render_sim_solids_ot_leaf;
 
-    int before = ssbo_idx;
     blob_ot_enum_leaves_cube(&enum_data);
-    printf("%d\n", ssbo_idx - before);
   }
 
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, br->blobs_ssbo);
