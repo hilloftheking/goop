@@ -21,6 +21,8 @@ layout(location = 3) uniform int sdf_res;
 layout(location = 4) uniform float sdf_max_dist;
 layout(location = 5) uniform float blob_smooth;
 
+layout(location = 6) uniform float blob_ot_root_size;
+
 vec3 colors[BLOB_MAT_COUNT] = {
   vec3(0.41, 0.04, 0.06), // red
   vec3(0.49, 0.8, 0.2), // green
@@ -45,6 +47,15 @@ float dist_cube(vec3 c, float s, vec3 p) {
   return length(max(d, 0.0));
 }
 
+float sd_box_frame(vec3 p, vec3 b, float e) {
+  p = abs(p) - b;
+  vec3 q = abs(p + e) - e;
+  return min(min(
+             length(max(vec3(p.x,q.y,q.z),0.0))+min(max(p.x,max(q.y,q.z)),0.0),
+             length(max(vec3(q.x,p.y,q.z),0.0))+min(max(q.x,max(p.y,q.z)),0.0)),
+             length(max(vec3(q.x,q.y,p.z),0.0))+min(max(q.x,max(q.y,p.z)),0.0));
+}
+
 void main() {
   bool use_octree = blob_count == -1;
 
@@ -61,8 +72,8 @@ void main() {
   float node_size;
   int node_idx, node_leaf_blob_count;
   if (use_octree) {
-    node_pos = sdf_pos;
-    node_size = sdf_size;
+    node_pos = vec3(0);
+    node_size = blob_ot_root_size;
     node_idx = 0;
     node_leaf_blob_count = blob_ot[node_idx];
     while (node_leaf_blob_count == -1) {
@@ -121,6 +132,17 @@ void main() {
     color_total_influence += color_influence;
     color += colors[mat_idx] * color_influence;
   }
+
+  // Debug visualization
+  /*
+  if (use_octree) {
+    float box_dist = sd_box_frame(p - node_pos, vec3(node_size * 0.5), 0.1);
+    if (box_dist < value) {
+      value = box_dist;
+      color = vec3(0, 1, 0);
+      color_total_influence = 1.0;
+    }
+  } */
 
   value = clamp(value, BLOB_SDF_MIN_DIST, sdf_max_dist);
   color /= color_total_influence;

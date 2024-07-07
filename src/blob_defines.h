@@ -17,4 +17,6 @@
 #define MODEL_BLOB_SDF_MAX_DIST 0.5f
 #define BLOB_SDF_MIN_DIST -0.2f
 
+#define BLOB_OT_MAX_SUBDIVISIONS 10
+
 #endif

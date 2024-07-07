@@ -19,19 +19,6 @@
 __declspec(dllexport) unsigned long NvOptimusEnablement = 1;
 __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 
-static const HMM_Vec3 *render_ot_get_pos_from_idx(BlobOt *bot, int blob_idx) {
-  BlobRenderer *br = bot->userdata;
-
-  return &br->blobs_v4[blob_idx].XYZ;
-}
-
-static float render_ot_get_radius_from_idx(BlobOt *bot, int blob_idx) {
-  BlobRenderer *br = bot->userdata;
-
-  return ((int)br->blobs_v4[blob_idx].W / BLOB_MAT_COUNT) /
-         (float)BLOB_RADIUS_MULT;
-}
-
 void blob_renderer_create(BlobRenderer *br) {
   br->raymarch_program =
       create_shader_program(RAYMARCH_VERT_SRC, RAYMARCH_FRAG_SRC);
@@ -74,22 +61,13 @@ void blob_renderer_create(BlobRenderer *br) {
   glBufferData(GL_SHADER_STORAGE_BUFFER, br->blobs_ssbo_size_bytes, NULL,
                GL_DYNAMIC_DRAW);
 
-  br->blob_ot_ssbo_size_bytes = blob_ot_get_alloc_size();
+  br->blob_ot_ssbo_size_bytes = 2400000 * sizeof(int);
   glGenBuffers(1, &br->blob_ot_ssbo);
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, br->blob_ot_ssbo);
   glBufferData(GL_SHADER_STORAGE_BUFFER, br->blob_ot_ssbo_size_bytes, NULL,
                GL_DYNAMIC_DRAW);
 
   br->aspect_ratio = 1.0f;
-
-  br->blob_ot.root_pos = HMM_V3(0, 0, 0);
-  br->blob_ot.root_size = BLOB_ACTIVE_SIZE;
-  br->blob_ot.max_subdiv = 4;
-  br->blob_ot.userdata = br;
-  br->blob_ot.get_pos_from_idx = render_ot_get_pos_from_idx;
-  br->blob_ot.get_radius_from_idx = render_ot_get_radius_from_idx;
-  blob_ot_create(&br->blob_ot);
-  br->blob_ot.max_dist_to_leaf = BLOB_SDF_MAX_DIST;
 
   br->blobs_v4 = malloc(
       (BLOB_SIM_MAX_SOLIDS + BLOB_SIM_MAX_LIQUIDS + BLOB_SIM_MAX_PROJECTILES) *
@@ -168,85 +146,18 @@ static void draw_sdf_cube(BlobRenderer *br, unsigned int sdf_tex,
   cube_draw();
 }
 
-typedef struct RenderSolidData {
-  BlobRenderer *br;
-  const BlobSim *bs;
-  int *ssbo_idx;
-  bool checked[BLOB_SIM_MAX_SOLIDS];
-} RenderSolidData;
-
-static bool blob_render_sim_solids_ot_leaf(BlobOtEnumData *enum_data) {
-  RenderSolidData *data = enum_data->user_data;
-  for (int i = 0; i < enum_data->curr_leaf->leaf_blob_count; i++) {
-    int bidx = enum_data->curr_leaf->offsets[i];
-    if (!data->checked[bidx]) {
-      data->checked[bidx] = true;
-
-      const SolidBlob *b = fixed_array_get_const(&data->bs->solids, bidx);
-      data->br->blobs_v4[*data->ssbo_idx].XYZ = b->pos;
-      data->br->blobs_v4[*data->ssbo_idx].W =
-          (float)((int)(b->radius * BLOB_RADIUS_MULT) * BLOB_MAT_COUNT +
-                  b->mat_idx);
-
-      blob_ot_insert(&data->br->blob_ot, &b->pos, b->radius, *data->ssbo_idx);
-      (*data->ssbo_idx)++;
-    }
-  }
-
-  return true;
-}
-
 void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
-  blob_ot_reset(&br->blob_ot);
-  br->blob_ot.root_pos = bs->active_pos;
-
   int ssbo_idx = 0;
 
-  // Loop backwards so that new stuff is prioritized in the octree
-
-  // Projectiles
-  for (int i = bs->projectiles.count - 1; i >= 0; i--) {
-    const Projectile *p = fixed_array_get_const(&bs->projectiles, i);
-
-    br->blobs_v4[ssbo_idx].XYZ = p->pos;
-    br->blobs_v4[ssbo_idx].W =
-        (float)((int)(p->radius * BLOB_RADIUS_MULT) * BLOB_MAT_COUNT +
-                p->mat_idx);
-
-    blob_ot_insert(&br->blob_ot, &br->blobs_v4[ssbo_idx].XYZ, p->radius,
-                   ssbo_idx);
-    ssbo_idx++;
-  }
-
-  // Liquids
-  for (int i = bs->liquids.count - 1; i >= 0; i--) {
-    const LiquidBlob *b = fixed_array_get_const(&bs->liquids, i);
+  // Solids
+  for (int i = 0; i < bs->solids.count; i++) {
+    const SolidBlob *b = fixed_array_get_const(&bs->solids, i);
 
     br->blobs_v4[ssbo_idx].XYZ = b->pos;
     br->blobs_v4[ssbo_idx].W =
         (float)((int)(b->radius * BLOB_RADIUS_MULT) * BLOB_MAT_COUNT +
                 b->mat_idx);
-
-    blob_ot_insert(&br->blob_ot, &br->blobs_v4[ssbo_idx].XYZ, b->radius,
-                   ssbo_idx);
     ssbo_idx++;
-  }
-
-  // Solids
-  {
-    RenderSolidData data = {0};
-    data.br = br;
-    data.bs = bs;
-    data.ssbo_idx = &ssbo_idx;
-
-    BlobOtEnumData enum_data;
-    enum_data.bot = (BlobOt *)&bs->solid_ot;
-    enum_data.shape_pos = bs->active_pos;
-    enum_data.shape_size = BLOB_ACTIVE_SIZE;
-    enum_data.user_data = &data;
-    enum_data.callback = blob_render_sim_solids_ot_leaf;
-
-    blob_ot_enum_leaves_cube(&enum_data);
   }
 
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, br->blobs_ssbo);
@@ -255,16 +166,17 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
 
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, br->blob_ot_ssbo);
   glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0,
-                  br->blob_ot.size_int * sizeof(int), br->blob_ot.root);
+                  bs->solid_ot.size_int * sizeof(int), bs->solid_ot.root);
 
   glBindImageTexture(0, br->sdf_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA8);
   glUseProgram(br->compute_program);
   glUniform1i(0, -1); // Use the octree
-  glUniform3fv(1, 1, br->blob_ot.root_pos.Elements);
+  glUniform3fv(1, 1, bs->active_pos.Elements);
   glUniform1f(2, BLOB_ACTIVE_SIZE);
   glUniform1i(3, BLOB_SIM_SDF_RES);
   glUniform1f(4, BLOB_SDF_MAX_DIST);
   glUniform1f(5, BLOB_SMOOTH);
+  glUniform1f(6, bs->solid_ot.root_size);
   glDispatchCompute(BLOB_SIM_SDF_RES / BLOB_SDF_LOCAL_GROUP_COUNT,
                     BLOB_SIM_SDF_RES / BLOB_SDF_LOCAL_GROUP_COUNT,
                     BLOB_SIM_SDF_RES / BLOB_SDF_LOCAL_GROUP_COUNT);
@@ -277,7 +189,7 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
   glUniform3fv(3, 1, br->cam_trans.Elements[3]);
 
   glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-  draw_sdf_cube(br, br->sdf_tex, &br->blob_ot.root_pos, BLOB_ACTIVE_SIZE, NULL,
+  draw_sdf_cube(br, br->sdf_tex, &bs->active_pos, BLOB_ACTIVE_SIZE, NULL,
                 BLOB_SDF_MAX_DIST);
 }
 

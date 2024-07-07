@@ -163,10 +163,10 @@ void player_process(Entity ent) {
   if (correction.Y && HMM_DotV3(HMM_NormV3(correction), (HMM_Vec3){0, 1, 0}) >
                           HMM_CosF(45.0f * HMM_DegToRad)) {
     player->vel.Y = 0.0f;
-
-    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
-      player->vel.Y = 5.0f;
   }
+
+  if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+    player->vel.Y = 5.0f;
 
   // Blinking
 

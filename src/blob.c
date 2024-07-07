@@ -11,11 +11,10 @@
 #define BLOB_RAY_MAX_STEPS 32
 #define BLOB_RAY_INTERSECT 0.001f
 
-#define BLOB_OT_MAX_SUBDIVISIONS 6
 // TODO: dynamically increase leaf blob count
 #define BLOB_OT_LEAF_MAX_BLOB_COUNT 256
-#define BLOB_OT_LEAF_SUBDIV_BLOB_COUNT 16
-#define BLOB_OT_DEFAULT_CAPACITY_INT 1200000
+#define BLOB_OT_LEAF_SUBDIV_BLOB_COUNT 8
+#define BLOB_OT_DEFAULT_CAPACITY_INT 2400000
 
 #define BLOB_DEFAULT_RADIUS 0.5f
 #define PROJECTILE_DEFAULT_DELETE_TIME 5.0f
@@ -186,13 +185,15 @@ void blob_sim_create(BlobSim *bs) {
 
   bs->active_pos = HMM_V3(0, 0, 0);
 
-  bs->solid_ot.max_subdiv = 6;
+  bs->solid_ot.max_subdiv = 7;
   bs->solid_ot.root_pos = HMM_V3(0, 0, 0);
   bs->solid_ot.root_size = BLOB_LEVEL_SIZE;
   bs->solid_ot.userdata = bs;
   bs->solid_ot.get_pos_from_idx = solid_ot_get_pos_from_idx;
   bs->solid_ot.get_radius_from_idx = solid_ot_get_radius_from_idx;
   blob_ot_create(&bs->solid_ot);
+  // This octree also gets sent to the GPU
+  bs->solid_ot.max_dist_to_leaf = BLOB_SDF_MAX_DIST;
 }
 
 void blob_sim_destroy(BlobSim *bs) {
@@ -620,9 +621,18 @@ static bool blob_ot_insert_ot_leaf(BlobOtEnumData *enum_data) {
       reinsert[i] = leaf->offsets[i];
     }
 
-    int old_node_size_int = 1 + BLOB_OT_LEAF_MAX_BLOB_COUNT;
+    // If the new leaves are not the last subdivision, there should only be a
+    // max of BLOB_OT_LEAF_SUBDIV_BLOB_COUNT leaves (fingers crossed)
+    int max_blobs_per_child;
+    if (enum_data->curr_leaf_depth < enum_data->bot->max_subdiv - 1) {
+      max_blobs_per_child = BLOB_OT_LEAF_SUBDIV_BLOB_COUNT;
+    } else {
+      max_blobs_per_child = BLOB_OT_LEAF_MAX_BLOB_COUNT;
+    }
+
+    int old_node_size_int = 1 + BLOB_OT_LEAF_SUBDIV_BLOB_COUNT;
     int new_node_size_int = 1 + 8;
-    int children_size_int = (1 + BLOB_OT_LEAF_MAX_BLOB_COUNT) * 8;
+    int children_size_int = (1 + max_blobs_per_child) * 8;
     int size_diff = new_node_size_int + children_size_int - old_node_size_int;
 
     // Adjust offsets in each parent
@@ -664,7 +674,7 @@ static bool blob_ot_insert_ot_leaf(BlobOtEnumData *enum_data) {
     // might get filled up as well
     for (int i = 0; i < 8; i++) {
       node->offsets[i] =
-          new_node_size_int + i * (1 + BLOB_OT_LEAF_MAX_BLOB_COUNT);
+          new_node_size_int + i * (1 + max_blobs_per_child);
       BlobOtNode *child = node + node->offsets[i];
       child->leaf_blob_count = 0;
     }

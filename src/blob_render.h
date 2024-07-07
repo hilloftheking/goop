@@ -15,7 +15,6 @@ typedef struct BlobRenderer {
 
   float aspect_ratio;
 
-  BlobOt blob_ot;
   HMM_Vec4 *blobs_v4;
 } BlobRenderer;
 
