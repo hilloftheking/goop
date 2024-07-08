@@ -5,9 +5,10 @@
 
 #include "HandmadeMath.h"
 
+#include "blob_defines.h"
 #include "ecs.h"
 #include "fixed_array.h"
-#include "blob_defines.h"
+#include "int_map.h"
 
 typedef enum LiquidType { LIQUID_BASE, LIQUID_PROJ } LiquidType;
 
@@ -31,7 +32,6 @@ typedef struct LiquidBlob {
     struct {
       ProjectileCallback callback;
       uint64_t userdata;
-      float delete_timer;
     } proj;
   };
 } LiquidBlob;
@@ -46,6 +46,11 @@ typedef enum DeletionType {
   DELETE_COLLIDER_MODEL,
   DELETE_MAX
 } DeletionType;
+
+typedef struct BlobDeletionTimer {
+  int bidx;
+  double timer;
+} BlobDeletionTimer;
 
 #define BLOB_SIM_MAX_SOLIDS 1024
 #define BLOB_SIM_MAX_LIQUIDS 1024
@@ -108,6 +113,8 @@ typedef struct BlobSim {
   FixedArray liquids;
 
   FixedArray collider_models;
+
+  FixedArray liq_del_timers;
 
   FixedArray del_queues[DELETE_MAX];
 
@@ -173,6 +180,9 @@ void solid_blob_set_radius_pos(BlobSim *bs, SolidBlob *b, float radius,
 void liquid_blob_set_radius_pos(BlobSim *bs, LiquidBlob *b, float radius,
                                 const HMM_Vec3 *pos);
 
+// Deletes b after t seconds (if it doesn't get deleted before then)
+void liquid_blob_delete_after(BlobSim *bs, LiquidBlob *b, double t);
+
 // Creates a collider model if possible and adds it to the simulation. The
 // returned pointer may not always be valid.
 ColliderModel *collider_model_add(BlobSim *bs, Entity ent);
@@ -212,7 +222,7 @@ void blob_ot_reset(BlobOt *bot);
 
 void blob_ot_insert(BlobOt *bot, const HMM_Vec3 *bpos, float bradius, int bidx);
 
-void blob_ot_delete(BlobOt *bot, const HMM_Vec3 *bpos, float bradius, int bidx);
+void blob_ot_remove(BlobOt *bot, const HMM_Vec3 *bpos, float bradius, int bidx);
 
 void blob_ot_enum_leaves_sphere(BlobOtEnumData *enum_data);
 

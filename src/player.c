@@ -236,6 +236,7 @@ void player_process(Entity ent) {
       p->vel = force;
       p->proj.callback = proj_callback;
       liquid_blob_set_radius_pos(global.blob_sim, p, radius, &pos);
+      liquid_blob_delete_after(global.blob_sim, p, 2.0);
     }
   }
 

@@ -97,7 +97,7 @@ uint64_t *int_map_get(IntMap *map, uint64_t key) {
   }
 }
 
-void int_map_delete(IntMap *map, uint64_t key) {
+void int_map_remove(IntMap *map, uint64_t key) {
   IntMapKV *kv = int_map_find_kv(map, key);
 
   if (kv->key != key) {

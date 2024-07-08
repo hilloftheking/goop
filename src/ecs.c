@@ -73,7 +73,7 @@ void entity_remove_component(Entity e, ComponentType type) {
     return;
   uint64_t idx = *p_idx;
   fixed_array_remove(&rc->components, (int)idx);
-  int_map_delete(&rc->entity_to_component, e);
+  int_map_remove(&rc->entity_to_component, e);
 
   // Move component indices to the left
   for (uint64_t i = 0; i < rc->entity_to_component.capacity; i++) {

@@ -114,7 +114,6 @@ LiquidBlob *projectile_create(BlobSim *bs) {
     p->type = LIQUID_PROJ;
     p->proj.callback = NULL;
     p->proj.userdata = 0;
-    p->proj.delete_timer = PROJECTILE_DEFAULT_DELETE_TIME;
   }
 
   return p;
@@ -125,7 +124,7 @@ void solid_blob_set_radius_pos(BlobSim *bs, SolidBlob *b, float radius,
   int blob_idx = fixed_array_get_idx_from_ptr(&bs->solids, b);
 
   if (!HMM_EqV3(b->pos, HMM_V3(INFINITY, INFINITY, INFINITY))) {
-    blob_ot_delete(&bs->solid_ot, &b->pos, b->radius, blob_idx);
+    blob_ot_remove(&bs->solid_ot, &b->pos, b->radius, blob_idx);
   }
   b->radius = radius;
   b->pos = *pos;
@@ -137,11 +136,22 @@ void liquid_blob_set_radius_pos(BlobSim *bs, LiquidBlob *b, float radius,
   int blob_idx = fixed_array_get_idx_from_ptr(&bs->liquids, b);
 
   if (!HMM_EqV3(b->pos, HMM_V3(INFINITY, INFINITY, INFINITY))) {
-    blob_ot_delete(&bs->liquid_ot, &b->pos, b->radius, blob_idx);
+    blob_ot_remove(&bs->liquid_ot, &b->pos, b->radius, blob_idx);
   }
   b->radius = radius;
   b->pos = *pos;
   blob_ot_insert(&bs->liquid_ot, pos, radius, blob_idx);
+}
+
+void liquid_blob_delete_after(BlobSim* bs, LiquidBlob* b, double t) {
+  BlobDeletionTimer *del = fixed_array_append(&bs->liq_del_timers, NULL);
+  if (!del) {
+    fprintf(stderr, "Too many blobs being scheduled for deletion");
+    return;
+  }
+
+  del->bidx = fixed_array_get_idx_from_ptr(&bs->liquids, b);
+  del->timer = t;
 }
 
 ColliderModel *collider_model_add(BlobSim *bs, Entity ent) {
@@ -195,6 +205,9 @@ void blob_sim_create(BlobSim *bs) {
   fixed_array_create(&bs->liquids, sizeof(LiquidBlob), BLOB_SIM_MAX_LIQUIDS);
   fixed_array_create(&bs->collider_models, sizeof(ColliderModel),
                      BLOB_SIM_MAX_COLLIDER_MODELS);
+
+  fixed_array_create(&bs->liq_del_timers, sizeof(BlobDeletionTimer),
+                     BLOB_SIM_MAX_DELETIONS);
 
   for (int i = 0; i < DELETE_MAX; i++) {
     fixed_array_create(&bs->del_queues[i], sizeof(int), BLOB_SIM_MAX_DELETIONS);
@@ -404,11 +417,6 @@ static bool blob_simulate_liquid_ot_leaf(BlobOtEnumData *enum_data) {
           }
         }
       }
-
-      b->proj.delete_timer -= (float)delta;
-      if (b->proj.delete_timer <= 0.0f) {
-        blob_sim_queue_delete(bs, DELETE_LIQUID, b);
-      }
     }
 
     liquid_blob_set_radius_pos(sim_data->bs, b, b->radius, &new_pos);
@@ -438,6 +446,18 @@ void blob_simulate(BlobSim *bs, double delta) {
     blob_ot_enum_leaves_cube(&enum_data);
   }
 
+  // Deletion timers
+  for (int i = 0; i < bs->liq_del_timers.count; i++) {
+    BlobDeletionTimer *del = fixed_array_get(&bs->liq_del_timers, i);
+    del->timer -= delta;
+    if (del->timer <= 0.0) {
+      blob_sim_queue_delete(bs, DELETE_LIQUID,
+                            fixed_array_get(&bs->liquids, del->bidx));
+      fixed_array_remove(&bs->liq_del_timers, i);
+      i--;
+    }
+  }
+
   // Deletion queues
   FixedArray *const blob_arrays[] = {&bs->solids, &bs->liquids,
                                      &bs->collider_models};
@@ -446,18 +466,29 @@ void blob_simulate(BlobSim *bs, double delta) {
     FixedArray *del_queue = &bs->del_queues[bt];
 
     for (int di = 0; di < del_queue->count; di++) {
-      int blob_idx = *(int *)fixed_array_get(del_queue, di);
-      if (blob_idx == -1) {
+      int bidx = *(int *)fixed_array_get(del_queue, di);
+      if (bidx == -1) {
         // This deletion was invalidated
         continue;
       }
 
       if (bt == DELETE_LIQUID) {
+        // Decrement indices in liquid deletion timers
+        for (int dti = 0; dti < bs->liq_del_timers.count; dti++) {
+          BlobDeletionTimer *del = fixed_array_get(&bs->liq_del_timers, dti);
+          if (del->bidx == bidx) {
+            fixed_array_remove(&bs->liq_del_timers, dti);
+            dti--;
+          } else if (del->bidx > bidx) {
+            del->bidx--;
+          }
+        }
+
         // Remove this blob from the octree and decrement any indices
         // TODO: anything but this
-        LiquidBlob *b = fixed_array_get(ba, blob_idx);
+        LiquidBlob *b = fixed_array_get(ba, bidx);
         BlobOt *bot = &bs->liquid_ot;
-        blob_ot_delete(bot, &b->pos, b->radius, blob_idx);
+        blob_ot_remove(bot, &b->pos, b->radius, bidx);
         BlobOtNode *node_stack[BLOB_OT_MAX_SUBDIVISIONS + 1];
         node_stack[0] = bot->root;
         int iter_stack[BLOB_OT_MAX_SUBDIVISIONS + 1];
@@ -477,7 +508,7 @@ void blob_simulate(BlobSim *bs, double delta) {
           } else {
             for (int lbi = 0; lbi < node->leaf_blob_count; lbi++) {
               int other_idx = node->offsets[lbi];
-              if (other_idx > blob_idx) {
+              if (other_idx > bidx) {
                 node->offsets[lbi]--;
               }
             }
@@ -487,18 +518,18 @@ void blob_simulate(BlobSim *bs, double delta) {
         }
       }
 
-      fixed_array_remove(ba, blob_idx);
-
       // Decrement blob indices in deletion queue after this one. Or invalidate
       // it if it is the same as the current index
       for (int dj = di + 1; dj < del_queue->count; dj++) {
         int *other_idx = fixed_array_get(del_queue, dj);
-        if (*other_idx > blob_idx) {
+        if (*other_idx > bidx) {
           (*other_idx)--;
-        } else if (*other_idx == blob_idx) {
+        } else if (*other_idx == bidx) {
           *other_idx = -1;
         }
       }
+
+      fixed_array_remove(ba, bidx);
     }
 
     // Clear this queue
@@ -785,7 +816,7 @@ void blob_ot_insert(BlobOt *bot, const HMM_Vec3 *bpos, float bradius,
   blob_ot_enum_leaves_sphere(&enum_data);
 }
 
-static bool blob_ot_delete_ot_leaf(BlobOtEnumData *enum_data) {
+static bool blob_ot_remove_ot_leaf(BlobOtEnumData *enum_data) {
   BlobOtNode *leaf = enum_data->curr_leaf;
   int bidx = *(int *)enum_data->user_data;
 
@@ -804,13 +835,13 @@ static bool blob_ot_delete_ot_leaf(BlobOtEnumData *enum_data) {
   return true;
 }
 
-void blob_ot_delete(BlobOt *bot, const HMM_Vec3 *bpos, float bradius,
+void blob_ot_remove(BlobOt *bot, const HMM_Vec3 *bpos, float bradius,
                     int bidx) {
   BlobOtEnumData enum_data;
   enum_data.bot = bot;
   enum_data.shape_pos = *bpos;
   enum_data.shape_size = bradius + BLOB_SMOOTH + bot->max_dist_to_leaf;
-  enum_data.callback = blob_ot_delete_ot_leaf;
+  enum_data.callback = blob_ot_remove_ot_leaf;
   enum_data.user_data = &bidx;
 
   blob_ot_enum_leaves_sphere(&enum_data);
