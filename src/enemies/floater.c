@@ -63,7 +63,7 @@ void floater_process(Entity ent) {
       p->vel = HMM_MulV3F(trans->Columns[2].XYZ, -20.0f);
       liquid_blob_set_radius_pos(global.blob_sim, p, 0.2f,
                                  &trans->Columns[3].XYZ);
-      liquid_blob_delete_after(global.blob_sim, p, 1.0);
+      blob_sim_delayed_remove(global.blob_sim, REMOVE_LIQUID, p, 1.0);
     }
   }
 }

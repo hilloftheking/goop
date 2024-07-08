@@ -85,12 +85,12 @@ static void proj_callback(LiquidBlob *p, ColliderModel *col_mdl) {
   }
 
   creature->health -= 1;
-  blob_sim_queue_delete(global.blob_sim, DELETE_LIQUID, p);
+  blob_sim_queue_remove(global.blob_sim, REMOVE_LIQUID, p);
 
   if (creature->health <= 0) {
     Model *mdl = entity_get_component(ent, COMPONENT_MODEL);
     liquify_model(ent);
-    blob_sim_queue_delete(global.blob_sim, DELETE_COLLIDER_MODEL, col_mdl);
+    blob_sim_queue_remove(global.blob_sim, REMOVE_COLLIDER_MODEL, col_mdl);
 
     blob_mdl_destroy(mdl);
     entity_destroy(ent);
@@ -236,7 +236,7 @@ void player_process(Entity ent) {
       p->vel = force;
       p->proj.callback = proj_callback;
       liquid_blob_set_radius_pos(global.blob_sim, p, radius, &pos);
-      liquid_blob_delete_after(global.blob_sim, p, 2.0);
+      blob_sim_delayed_remove(global.blob_sim, REMOVE_LIQUID, p, 2.0);
     }
   }
 

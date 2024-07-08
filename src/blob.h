@@ -40,17 +40,17 @@ typedef struct ColliderModel {
   Entity ent;
 } ColliderModel;
 
-typedef enum DeletionType {
-  DELETE_SOLID,
-  DELETE_LIQUID,
-  DELETE_COLLIDER_MODEL,
-  DELETE_MAX
-} DeletionType;
+typedef enum RemovalType {
+  REMOVE_SOLID,
+  REMOVE_LIQUID,
+  REMOVE_COLLIDER_MODEL,
+  REMOVE_MAX
+} RemovalType;
 
-typedef struct BlobDeletionTimer {
+typedef struct BlobRemoval {
   int bidx;
   double timer;
-} BlobDeletionTimer;
+} BlobRemoval;
 
 #define BLOB_SIM_MAX_SOLIDS 1024
 #define BLOB_SIM_MAX_LIQUIDS 1024
@@ -114,9 +114,7 @@ typedef struct BlobSim {
 
   FixedArray collider_models;
 
-  FixedArray liq_del_timers;
-
-  FixedArray del_queues[DELETE_MAX];
+  FixedArray del_queues[REMOVE_MAX];
 
   HMM_Vec3 active_pos;
   
@@ -180,9 +178,6 @@ void solid_blob_set_radius_pos(BlobSim *bs, SolidBlob *b, float radius,
 void liquid_blob_set_radius_pos(BlobSim *bs, LiquidBlob *b, float radius,
                                 const HMM_Vec3 *pos);
 
-// Deletes b after t seconds (if it doesn't get deleted before then)
-void liquid_blob_delete_after(BlobSim *bs, LiquidBlob *b, double t);
-
 // Creates a collider model if possible and adds it to the simulation. The
 // returned pointer may not always be valid.
 ColliderModel *collider_model_add(BlobSim *bs, Entity ent);
@@ -193,9 +188,11 @@ void collider_model_remove(BlobSim *bs, Entity ent);
 void blob_sim_create(BlobSim *bs);
 void blob_sim_destroy(BlobSim *bs);
 
-// Queues a blob to be deleted at the end of a simulation tick. It is fine to
+// Queues a blob to be removed at the end of a simulation tick. It is fine to
 // call this multiple times for the same blob
-void blob_sim_queue_delete(BlobSim *bs, DeletionType type, void *b);
+BlobRemoval *blob_sim_queue_remove(BlobSim *bs, RemovalType type, void *b);
+BlobRemoval *blob_sim_delayed_remove(BlobSim *bs, RemovalType type, void *b,
+                                      double t);
 
 // rd should not be normalized
 void blob_sim_raycast(RaycastResult *r, const BlobSim *bs, HMM_Vec3 ro, HMM_Vec3 rd);

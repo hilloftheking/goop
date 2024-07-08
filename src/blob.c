@@ -143,17 +143,6 @@ void liquid_blob_set_radius_pos(BlobSim *bs, LiquidBlob *b, float radius,
   blob_ot_insert(&bs->liquid_ot, pos, radius, blob_idx);
 }
 
-void liquid_blob_delete_after(BlobSim* bs, LiquidBlob* b, double t) {
-  BlobDeletionTimer *del = fixed_array_append(&bs->liq_del_timers, NULL);
-  if (!del) {
-    fprintf(stderr, "Too many blobs being scheduled for deletion");
-    return;
-  }
-
-  del->bidx = fixed_array_get_idx_from_ptr(&bs->liquids, b);
-  del->timer = t;
-}
-
 ColliderModel *collider_model_add(BlobSim *bs, Entity ent) {
   ColliderModel *cm = fixed_array_append(&bs->collider_models, NULL);
   if (!cm) {
@@ -170,7 +159,7 @@ void collider_model_remove(BlobSim *bs, Entity ent) {
   for (int i = 0; i < bs->collider_models.count; i++) {
     ColliderModel *cm = fixed_array_get(&bs->collider_models, i);
     if (cm->ent == ent) {
-      blob_sim_queue_delete(bs, DELETE_COLLIDER_MODEL, cm);
+      blob_sim_queue_remove(bs, REMOVE_COLLIDER_MODEL, cm);
       return;
     }
   }
@@ -206,11 +195,9 @@ void blob_sim_create(BlobSim *bs) {
   fixed_array_create(&bs->collider_models, sizeof(ColliderModel),
                      BLOB_SIM_MAX_COLLIDER_MODELS);
 
-  fixed_array_create(&bs->liq_del_timers, sizeof(BlobDeletionTimer),
-                     BLOB_SIM_MAX_DELETIONS);
-
-  for (int i = 0; i < DELETE_MAX; i++) {
-    fixed_array_create(&bs->del_queues[i], sizeof(int), BLOB_SIM_MAX_DELETIONS);
+  for (int i = 0; i < REMOVE_MAX; i++) {
+    fixed_array_create(&bs->del_queues[i], sizeof(BlobRemoval),
+                       BLOB_SIM_MAX_DELETIONS);
   }
 
   bs->active_pos = HMM_V3(0, 0, 0);
@@ -244,7 +231,7 @@ void blob_sim_destroy(BlobSim *bs) {
   fixed_array_destroy(&bs->liquids);
   fixed_array_destroy(&bs->collider_models);
 
-  for (int i = 0; i < DELETE_MAX; i++) {
+  for (int i = 0; i < REMOVE_MAX; i++) {
     fixed_array_destroy(&bs->del_queues[i]);
   }
 
@@ -253,26 +240,39 @@ void blob_sim_destroy(BlobSim *bs) {
   blob_ot_destroy(&bs->liquid_temp_ot);
 }
 
-void blob_sim_queue_delete(BlobSim *bs, DeletionType type, void *b) {
-  int *idx = fixed_array_append(&bs->del_queues[type], NULL);
-  if (!idx) {
+BlobRemoval *blob_sim_queue_remove(BlobSim *bs, RemovalType type, void *b) {
+  BlobRemoval *del = fixed_array_append(&bs->del_queues[type], NULL);
+  if (!del) {
     fprintf(stderr, "Too many blobs being deleted\n");
-    return;
+    return NULL;
   }
 
+  del->timer = 0.0;
+
   switch (type) {
-  case DELETE_SOLID:
-    *idx = fixed_array_get_idx_from_ptr(&bs->solids, b);
+  case REMOVE_SOLID:
+    del->bidx = fixed_array_get_idx_from_ptr(&bs->solids, b);
     break;
-  case DELETE_LIQUID:
-    *idx = fixed_array_get_idx_from_ptr(&bs->liquids, b);
+  case REMOVE_LIQUID:
+    del->bidx = fixed_array_get_idx_from_ptr(&bs->liquids, b);
     break;
-  case DELETE_COLLIDER_MODEL:
-    *idx = fixed_array_get_idx_from_ptr(&bs->collider_models, b);
+  case REMOVE_COLLIDER_MODEL:
+    del->bidx = fixed_array_get_idx_from_ptr(&bs->collider_models, b);
     break;
-  case DELETE_MAX:
+  case REMOVE_MAX:
     break;
   }
+
+  return del;
+}
+
+BlobRemoval *blob_sim_delayed_remove(BlobSim *bs, RemovalType type, void *b,
+                                      double t) {
+  BlobRemoval *del = blob_sim_queue_remove(bs, type, b);
+  if (del) {
+    del->timer = t;
+  }
+  return del;
 }
 
 static float clampf(float x, float a, float b) {
@@ -446,44 +446,22 @@ void blob_simulate(BlobSim *bs, double delta) {
     blob_ot_enum_leaves_cube(&enum_data);
   }
 
-  // Deletion timers
-  for (int i = 0; i < bs->liq_del_timers.count; i++) {
-    BlobDeletionTimer *del = fixed_array_get(&bs->liq_del_timers, i);
-    del->timer -= delta;
-    if (del->timer <= 0.0) {
-      blob_sim_queue_delete(bs, DELETE_LIQUID,
-                            fixed_array_get(&bs->liquids, del->bidx));
-      fixed_array_remove(&bs->liq_del_timers, i);
-      i--;
-    }
-  }
-
   // Deletion queues
   FixedArray *const blob_arrays[] = {&bs->solids, &bs->liquids,
                                      &bs->collider_models};
-  for (int bt = 0; bt < DELETE_MAX; bt++) {
+  for (int bt = 0; bt < REMOVE_MAX; bt++) {
     FixedArray *ba = blob_arrays[bt];
     FixedArray *del_queue = &bs->del_queues[bt];
 
     for (int di = 0; di < del_queue->count; di++) {
-      int bidx = *(int *)fixed_array_get(del_queue, di);
-      if (bidx == -1) {
-        // This deletion was invalidated
+      BlobRemoval *del = fixed_array_get(del_queue, di);
+      del->timer -= delta;
+      if (del->timer > 0.0) {
         continue;
       }
+      int bidx = del->bidx;
 
-      if (bt == DELETE_LIQUID) {
-        // Decrement indices in liquid deletion timers
-        for (int dti = 0; dti < bs->liq_del_timers.count; dti++) {
-          BlobDeletionTimer *del = fixed_array_get(&bs->liq_del_timers, dti);
-          if (del->bidx == bidx) {
-            fixed_array_remove(&bs->liq_del_timers, dti);
-            dti--;
-          } else if (del->bidx > bidx) {
-            del->bidx--;
-          }
-        }
-
+      if (bt == REMOVE_LIQUID) {
         // Remove this blob from the octree and decrement any indices
         // TODO: anything but this
         LiquidBlob *b = fixed_array_get(ba, bidx);
@@ -518,22 +496,27 @@ void blob_simulate(BlobSim *bs, double delta) {
         }
       }
 
-      // Decrement blob indices in deletion queue after this one. Or invalidate
-      // it if it is the same as the current index
-      for (int dj = di + 1; dj < del_queue->count; dj++) {
-        int *other_idx = fixed_array_get(del_queue, dj);
-        if (*other_idx > bidx) {
-          (*other_idx)--;
-        } else if (*other_idx == bidx) {
-          *other_idx = -1;
+      // Decrement blob indices in deletion queue after this one. Or remove it
+      // from the queue if it if it is the same as the current blob index
+      for (int dj = 0; dj < del_queue->count; dj++) {
+        if (dj == di)
+          continue;
+        BlobRemoval *other_del = fixed_array_get(del_queue, dj);
+        if (other_del->bidx > bidx) {
+          other_del->bidx--;
+        } else if (other_del->bidx == bidx) {
+          fixed_array_remove(del_queue, dj);
+          if (dj < di) {
+            di--;
+          }
+          dj--;
         }
       }
 
       fixed_array_remove(ba, bidx);
+      fixed_array_remove(del_queue, di);
+      di--;
     }
-
-    // Clear this queue
-    del_queue->count = 0;
   }
 }
 
