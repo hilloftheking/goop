@@ -9,7 +9,7 @@
 #include "fixed_array.h"
 #include "blob_defines.h"
 
-typedef enum LiquidType { LIQUID_BASE } LiquidType;
+typedef enum LiquidType { LIQUID_BASE, LIQUID_PROJ } LiquidType;
 
 typedef struct SolidBlob {
   float radius;
@@ -17,28 +17,24 @@ typedef struct SolidBlob {
   int mat_idx;
 } SolidBlob;
 
+typedef struct LiquidBlob LiquidBlob;
+typedef struct ColliderModel ColliderModel;
+typedef void (*ProjectileCallback)(LiquidBlob *, ColliderModel *);
+
 typedef struct LiquidBlob {
   LiquidType type;
   float radius;
   HMM_Vec3 pos;
-  int mat_idx;
-} LiquidBlob;
-
-typedef struct Projectile Projectile;
-typedef struct ColliderModel ColliderModel;
-typedef void (*ProjectileCallback)(Projectile *, ColliderModel *, uint64_t);
-
-typedef struct Projectile {
-  float radius;
-  HMM_Vec3 pos;
-  int mat_idx;
   HMM_Vec3 vel;
-  ProjectileCallback callback;
-  uint64_t userdata;
-  float delete_timer;
-} Projectile;
-
-typedef struct Model Model;
+  int mat_idx;
+  union {
+    struct {
+      ProjectileCallback callback;
+      uint64_t userdata;
+      float delete_timer;
+    } proj;
+  };
+} LiquidBlob;
 
 typedef struct ColliderModel {
   Entity ent;
@@ -47,26 +43,15 @@ typedef struct ColliderModel {
 typedef enum DeletionType {
   DELETE_SOLID,
   DELETE_LIQUID,
-  DELETE_PROJECTILE,
   DELETE_COLLIDER_MODEL,
   DELETE_MAX
 } DeletionType;
 
 #define BLOB_SIM_MAX_SOLIDS 1024
 #define BLOB_SIM_MAX_LIQUIDS 1024
-#define BLOB_SIM_MAX_PROJECTILES 1024
 #define BLOB_SIM_MAX_COLLIDER_MODELS 128
 
-#define BLOB_SIM_MAX_DELETIONS 128
-
-// Only a few liquid blobs actually keep track of their velocity
-#define BLOB_SIM_MAX_FORCES 128
-
-// Associates a liquid blob index with a force
-typedef struct LiquidForce {
-  int idx;
-  HMM_Vec3 force;
-} LiquidForce;
+#define BLOB_SIM_MAX_DELETIONS 1024
 
 typedef struct BlobOtNode {
   // Blob count if this node is a leaf. Otherwise, it is -1
@@ -121,21 +106,21 @@ typedef struct BlobOtEnumData {
 typedef struct BlobSim {
   FixedArray solids;
   FixedArray liquids;
-  FixedArray projectiles;
 
   FixedArray collider_models;
 
   FixedArray del_queues[DELETE_MAX];
-
-  LiquidForce *liq_forces;
 
   HMM_Vec3 active_pos;
   
   // Used for collision detection and rendering
   BlobOt solid_ot;
 
-  // Used for rendering
+  // Used for simulation and rendering
   BlobOt liquid_ot;
+
+  // Used to avoid modifying the same octree while traversing it
+  BlobOt liquid_temp_ot;
 } BlobSim;
 
 // A blob that belongs to a model
@@ -158,7 +143,7 @@ typedef struct RaycastResult {
 } RaycastResult;
 
 // Size of level cube. Contains inactive blobs
-static const float BLOB_LEVEL_SIZE = 1024.0f;
+static const float BLOB_LEVEL_SIZE = 512.0f;
 // Size of active simulation cube
 static const float BLOB_ACTIVE_SIZE = 32.0f;
 
@@ -178,7 +163,7 @@ LiquidBlob *liquid_blob_create(BlobSim *bs);
 
 // Creates a projectile if possible and adds it to the simulation. The returned
 // pointer may not always be valid.
-Projectile *projectile_create(BlobSim *bs);
+LiquidBlob *projectile_create(BlobSim *bs);
 
 // Updates a solid's radius and position, and updates the octree
 void solid_blob_set_radius_pos(BlobSim *bs, SolidBlob *b, float radius,
@@ -201,9 +186,6 @@ void blob_sim_destroy(BlobSim *bs);
 // Queues a blob to be deleted at the end of a simulation tick. It is fine to
 // call this multiple times for the same blob
 void blob_sim_queue_delete(BlobSim *bs, DeletionType type, void *b);
-
-void blob_sim_liquid_apply_force(BlobSim *bs, const LiquidBlob *b,
-                                 const HMM_Vec3 *force);
 
 // rd should not be normalized
 void blob_sim_raycast(RaycastResult *r, const BlobSim *bs, HMM_Vec3 ro, HMM_Vec3 rd);

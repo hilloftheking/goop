@@ -57,11 +57,13 @@ void floater_process(Entity ent) {
   if (floater->shoot_timer <= 0.0) {
     floater->shoot_timer = SHOOT_CD;
 
-    Projectile *p = projectile_create(global.blob_sim);
-    p->radius = 0.2f;
-    p->mat_idx = 0;
-    p->pos = trans->Columns[3].XYZ;
-    p->vel = HMM_MulV3F(trans->Columns[2].XYZ, -20.0f);
-    p->delete_timer = 1.0f;
+    LiquidBlob *p = projectile_create(global.blob_sim);
+    if (p) {
+      p->mat_idx = 0;
+      p->vel = HMM_MulV3F(trans->Columns[2].XYZ, -20.0f);
+      p->proj.delete_timer = 1.0f;
+      liquid_blob_set_radius_pos(global.blob_sim, p, 0.2f,
+                                 &trans->Columns[3].XYZ);
+    }
   }
 }

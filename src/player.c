@@ -49,19 +49,18 @@ static void liquify_model(Entity e) {
       b->type = LIQUID_BASE;
       b->mat_idx = mdl->blobs[i].mat_idx;
       liquid_blob_set_radius_pos(global.blob_sim, b,
-                                 HMM_MAX(0.1f, mdl->blobs[i].radius), &p.XYZ);
+                                 HMM_MAX(0.2f, mdl->blobs[i].radius), &p.XYZ);
       HMM_Vec3 force;
       for (int x = 0; x < 3; x++) {
         force.Elements[x] = (rand_float() - 0.5f) * 10.0f;
       }
       force.Y += 8.0f;
-      blob_sim_liquid_apply_force(global.blob_sim, b, &force);
+      b->vel = force;
     }
   }
 }
 
-static void proj_callback(Projectile *p, ColliderModel *col_mdl,
-                          uint64_t userdata) {
+static void proj_callback(LiquidBlob *p, ColliderModel *col_mdl) {
   Entity ent = col_mdl->ent;
   Creature *creature = entity_get_component(ent, COMPONENT_CREATURE);
 
@@ -70,22 +69,23 @@ static void proj_callback(Projectile *p, ColliderModel *col_mdl,
   }
 
   // Blood
-  for (int i = 0; i < 1; i++) {
+  for (int i = 0; i < 4; i++) {
     LiquidBlob *b = liquid_blob_create(global.blob_sim);
-    b->type = LIQUID_BASE;
-    b->pos = p->pos;
-    b->radius = 0.2f;
-    b->mat_idx = 0;
+    if (b) {
+      b->type = LIQUID_BASE;
+      b->mat_idx = 0;
+      liquid_blob_set_radius_pos(global.blob_sim, b, 0.2f, &p->pos);
 
-    HMM_Vec3 force;
-    for (int x = 0; x < 3; x++) {
-      force.Elements[x] = (rand_float() - 0.5f) * 30.0f;
+      HMM_Vec3 force;
+      for (int x = 0; x < 3; x++) {
+        force.Elements[x] = (rand_float() - 0.5f) * 30.0f;
+      }
+      b->vel = force;
     }
-    blob_sim_liquid_apply_force(global.blob_sim, b, &force);
   }
 
   creature->health -= 1;
-  blob_sim_queue_delete(global.blob_sim, DELETE_PROJECTILE, p);
+  blob_sim_queue_delete(global.blob_sim, DELETE_LIQUID, p);
 
   if (creature->health <= 0) {
     Model *mdl = entity_get_component(ent, COMPONENT_MODEL);
@@ -230,13 +230,12 @@ void player_process(Entity ent) {
     HMM_Vec3 force = HMM_MulV3F(proj_dir, -15.0f);
     force = HMM_AddV3(force, (HMM_Vec3){0, 5.0f, 0});
 
-    Projectile *p = projectile_create(global.blob_sim);
+    LiquidBlob *p = projectile_create(global.blob_sim);
     if (p) {
-      p->radius = radius;
-      p->pos = pos;
       p->mat_idx = 6;
       p->vel = force;
-      p->callback = proj_callback;
+      p->proj.callback = proj_callback;
+      liquid_blob_set_radius_pos(global.blob_sim, p, radius, &pos);
     }
   }
 

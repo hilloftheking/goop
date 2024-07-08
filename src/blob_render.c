@@ -201,9 +201,9 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
   glUniform1f(4, BLOB_SDF_MAX_DIST);
   glUniform1f(5, BLOB_SMOOTH);
   glUniform1f(6, bs->solid_ot.root_size);
-  glDispatchCompute(BLOB_SIM_SDF_RES / BLOB_SDF_LOCAL_GROUP_COUNT,
-                    BLOB_SIM_SDF_RES / BLOB_SDF_LOCAL_GROUP_COUNT,
-                    BLOB_SIM_SDF_RES / BLOB_SDF_LOCAL_GROUP_COUNT);
+  glDispatchCompute(BLOB_SIM_SDF_RES / BLOB_SDF_LOCAL_GROUP_COUNT_X,
+                    BLOB_SIM_SDF_RES / BLOB_SDF_LOCAL_GROUP_COUNT_Y,
+                    BLOB_SIM_SDF_RES / BLOB_SDF_LOCAL_GROUP_COUNT_Z);
 
   glBindVertexArray(cube_vao);
 
@@ -262,9 +262,9 @@ void blob_render_mdl(BlobRenderer *br, const BlobSim *bs, const Model *mdl,
   glUniform1i(3, BLOB_MODEL_SDF_RES);
   glUniform1f(4, MODEL_BLOB_SDF_MAX_DIST);
   glUniform1f(5, MODEL_BLOB_SMOOTH);
-  glDispatchCompute(BLOB_MODEL_SDF_RES / BLOB_SDF_LOCAL_GROUP_COUNT,
-                    BLOB_MODEL_SDF_RES / BLOB_SDF_LOCAL_GROUP_COUNT,
-                    BLOB_MODEL_SDF_RES / BLOB_SDF_LOCAL_GROUP_COUNT);
+  glDispatchCompute(BLOB_MODEL_SDF_RES / BLOB_SDF_LOCAL_GROUP_COUNT_X,
+                    BLOB_MODEL_SDF_RES / BLOB_SDF_LOCAL_GROUP_COUNT_Y,
+                    BLOB_MODEL_SDF_RES / BLOB_SDF_LOCAL_GROUP_COUNT_Z);
 
   glUseProgram(br->raymarch_program);
   glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);

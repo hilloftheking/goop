@@ -2,7 +2,7 @@
 
 #include "../src/blob_defines.h"
 
-layout(local_size_x = BLOB_SDF_LOCAL_GROUP_COUNT, local_size_y = BLOB_SDF_LOCAL_GROUP_COUNT, local_size_z = BLOB_SDF_LOCAL_GROUP_COUNT) in;
+layout(local_size_x = BLOB_SDF_LOCAL_GROUP_COUNT_X, local_size_y = BLOB_SDF_LOCAL_GROUP_COUNT_Y, local_size_z = BLOB_SDF_LOCAL_GROUP_COUNT_Z) in;
 
 layout(std430, binding = 0) restrict readonly buffer Solids {
   vec4 solids[];
