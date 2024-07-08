@@ -47,9 +47,9 @@ static void liquify_model(Entity e) {
     LiquidBlob *b = liquid_blob_create(global.blob_sim);
     if (b) {
       b->type = LIQUID_BASE;
-      b->radius = HMM_MAX(0.1f, mdl->blobs[i].radius);
-      b->pos = p.XYZ;
       b->mat_idx = mdl->blobs[i].mat_idx;
+      liquid_blob_set_radius_pos(global.blob_sim, b,
+                                 HMM_MAX(0.1f, mdl->blobs[i].radius), &p.XYZ);
       HMM_Vec3 force;
       for (int x = 0; x < 3; x++) {
         force.Elements[x] = (rand_float() - 0.5f) * 10.0f;

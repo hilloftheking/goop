@@ -131,8 +131,11 @@ typedef struct BlobSim {
 
   HMM_Vec3 active_pos;
   
-  // Store solids in an octree to speed up checking for collisions
+  // Used for collision detection and rendering
   BlobOt solid_ot;
+
+  // Used for rendering
+  BlobOt liquid_ot;
 } BlobSim;
 
 // A blob that belongs to a model
@@ -155,7 +158,7 @@ typedef struct RaycastResult {
 } RaycastResult;
 
 // Size of level cube. Contains inactive blobs
-static const float BLOB_LEVEL_SIZE = 256.0f;
+static const float BLOB_LEVEL_SIZE = 1024.0f;
 // Size of active simulation cube
 static const float BLOB_ACTIVE_SIZE = 32.0f;
 
@@ -169,10 +172,6 @@ float blob_get_support_with(LiquidBlob *b, LiquidBlob *other);
 // returned pointer may not always be valid.
 SolidBlob *solid_blob_create(BlobSim *bs);
 
-// Updates a solid's radius and position, and updates the octree
-void solid_blob_set_radius_pos(BlobSim *bs, SolidBlob *b, float radius,
-                               const HMM_Vec3 *pos);
-
 // Creates a liquid blob if possible and adds it to the simulation. The
 // returned pointer may not always be valid.
 LiquidBlob *liquid_blob_create(BlobSim *bs);
@@ -180,6 +179,14 @@ LiquidBlob *liquid_blob_create(BlobSim *bs);
 // Creates a projectile if possible and adds it to the simulation. The returned
 // pointer may not always be valid.
 Projectile *projectile_create(BlobSim *bs);
+
+// Updates a solid's radius and position, and updates the octree
+void solid_blob_set_radius_pos(BlobSim *bs, SolidBlob *b, float radius,
+                               const HMM_Vec3 *pos);
+
+// Updates a solid's radius and position, and updates the octree
+void liquid_blob_set_radius_pos(BlobSim *bs, LiquidBlob *b, float radius,
+                                const HMM_Vec3 *pos);
 
 // Creates a collider model if possible and adds it to the simulation. The
 // returned pointer may not always be valid.
@@ -222,6 +229,8 @@ void blob_ot_destroy(BlobOt *bot);
 void blob_ot_reset(BlobOt *bot);
 
 void blob_ot_insert(BlobOt *bot, const HMM_Vec3 *bpos, float bradius, int bidx);
+
+void blob_ot_delete(BlobOt *bot, const HMM_Vec3 *bpos, float bradius, int bidx);
 
 void blob_ot_enum_leaves_sphere(BlobOtEnumData *enum_data);
 

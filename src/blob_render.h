@@ -8,14 +8,17 @@
 
 typedef struct BlobRenderer {
   unsigned int raymarch_program, compute_program, sdf_tex, sdf_mdl_tex,
-      blobs_ssbo, blob_ot_ssbo, water_tex, water_norm_tex;
-  int blobs_ssbo_size_bytes, blob_ot_ssbo_size_bytes;
+      solids_ssbo, liquids_ssbo, solid_ot_ssbo, liquid_ot_ssbo, water_tex,
+      water_norm_tex;
+  int solids_ssbo_size_bytes, liquids_ssbo_size_bytes, solid_ot_ssbo_size_bytes,
+      liquid_ot_ssbo_size_bytes;
 
   HMM_Mat4 cam_trans, view_mat, proj_mat;
 
   float aspect_ratio;
 
-  HMM_Vec4 *blobs_v4;
+  HMM_Vec4 *solids_v4;
+  HMM_Vec4 *liquids_v4;
 } BlobRenderer;
 
 typedef struct BlobSim BlobSim;

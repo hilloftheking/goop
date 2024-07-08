@@ -53,25 +53,34 @@ void blob_renderer_create(BlobRenderer *br) {
   glBindImageTexture(0, br->sdf_mdl_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY,
                      GL_RGBA8);
 
-  br->blobs_ssbo_size_bytes =
-      sizeof(HMM_Vec4) *
-      (BLOB_SIM_MAX_SOLIDS + BLOB_SIM_MAX_LIQUIDS + BLOB_SIM_MAX_PROJECTILES);
-  glGenBuffers(1, &br->blobs_ssbo);
-  glBindBuffer(GL_SHADER_STORAGE_BUFFER, br->blobs_ssbo);
-  glBufferData(GL_SHADER_STORAGE_BUFFER, br->blobs_ssbo_size_bytes, NULL,
+  br->solids_ssbo_size_bytes = sizeof(HMM_Vec4) * BLOB_SIM_MAX_SOLIDS;
+  glGenBuffers(1, &br->solids_ssbo);
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, br->solids_ssbo);
+  glBufferData(GL_SHADER_STORAGE_BUFFER, br->solids_ssbo_size_bytes, NULL,
                GL_DYNAMIC_DRAW);
 
-  br->blob_ot_ssbo_size_bytes = 2400000 * sizeof(int);
-  glGenBuffers(1, &br->blob_ot_ssbo);
-  glBindBuffer(GL_SHADER_STORAGE_BUFFER, br->blob_ot_ssbo);
-  glBufferData(GL_SHADER_STORAGE_BUFFER, br->blob_ot_ssbo_size_bytes, NULL,
+  br->liquids_ssbo_size_bytes = sizeof(HMM_Vec4) * BLOB_SIM_MAX_LIQUIDS;
+  glGenBuffers(1, &br->liquids_ssbo);
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, br->liquids_ssbo);
+  glBufferData(GL_SHADER_STORAGE_BUFFER, br->liquids_ssbo_size_bytes, NULL,
+               GL_DYNAMIC_DRAW);
+
+  br->solid_ot_ssbo_size_bytes = 2400000 * sizeof(int);
+  glGenBuffers(1, &br->solid_ot_ssbo);
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, br->solid_ot_ssbo);
+  glBufferData(GL_SHADER_STORAGE_BUFFER, br->solid_ot_ssbo_size_bytes, NULL,
+               GL_DYNAMIC_DRAW);
+
+  br->liquid_ot_ssbo_size_bytes = 2400000 * sizeof(int);
+  glGenBuffers(1, &br->liquid_ot_ssbo);
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, br->liquid_ot_ssbo);
+  glBufferData(GL_SHADER_STORAGE_BUFFER, br->liquid_ot_ssbo_size_bytes, NULL,
                GL_DYNAMIC_DRAW);
 
   br->aspect_ratio = 1.0f;
 
-  br->blobs_v4 = malloc(
-      (BLOB_SIM_MAX_SOLIDS + BLOB_SIM_MAX_LIQUIDS + BLOB_SIM_MAX_PROJECTILES) *
-      sizeof(*br->blobs_v4));
+  br->solids_v4 = malloc(BLOB_SIM_MAX_SOLIDS * sizeof(*br->solids_v4));
+  br->liquids_v4 = malloc(BLOB_SIM_MAX_LIQUIDS * sizeof(*br->liquids_v4));
 
   {
     Resource img;
@@ -147,26 +156,41 @@ static void draw_sdf_cube(BlobRenderer *br, unsigned int sdf_tex,
 }
 
 void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
-  int ssbo_idx = 0;
-
   // Solids
   for (int i = 0; i < bs->solids.count; i++) {
     const SolidBlob *b = fixed_array_get_const(&bs->solids, i);
 
-    br->blobs_v4[ssbo_idx].XYZ = b->pos;
-    br->blobs_v4[ssbo_idx].W =
+    br->solids_v4[i].XYZ = b->pos;
+    br->solids_v4[i].W =
         (float)((int)(b->radius * BLOB_RADIUS_MULT) * BLOB_MAT_COUNT +
                 b->mat_idx);
-    ssbo_idx++;
   }
 
-  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, br->blobs_ssbo);
-  glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, br->blobs_ssbo_size_bytes,
-                  br->blobs_v4);
+  // Liquids
+  for (int i = 0; i < bs->liquids.count; i++) {
+    const LiquidBlob *b = fixed_array_get_const(&bs->liquids, i);
 
-  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, br->blob_ot_ssbo);
+    br->liquids_v4[i].XYZ = b->pos;
+    br->liquids_v4[i].W =
+        (float)((int)(b->radius * BLOB_RADIUS_MULT) * BLOB_MAT_COUNT +
+                b->mat_idx);
+  }
+
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, br->solids_ssbo);
+  glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, br->solids_ssbo_size_bytes,
+                  br->solids_v4);
+
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, br->liquids_ssbo);
+  glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, br->liquids_ssbo_size_bytes,
+                  br->liquids_v4);
+
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, br->solid_ot_ssbo);
   glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0,
                   bs->solid_ot.size_int * sizeof(int), bs->solid_ot.root);
+
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, br->liquid_ot_ssbo);
+  glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0,
+                  bs->liquid_ot.size_int * sizeof(int), bs->liquid_ot.root);
 
   glBindImageTexture(0, br->sdf_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA8);
   glUseProgram(br->compute_program);
@@ -226,7 +250,7 @@ void blob_render_mdl(BlobRenderer *br, const BlobSim *bs, const Model *mdl,
   HMM_Vec3 model_blob_pos =
       HMM_MulV3F(HMM_AddV3(model_blob_min, model_blob_max), 0.5f);
 
-  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, br->blobs_ssbo);
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, br->solids_ssbo);
   glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(model_blob_v4),
                   model_blob_v4);
   glBindImageTexture(0, br->sdf_mdl_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY,

@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "blob.h"
+#include "core.h"
 
 #define LIQUID_FALL_SPEED 5.0f
 
@@ -84,19 +85,10 @@ SolidBlob *solid_blob_create(BlobSim *bs) {
   }
 
   b->radius = BLOB_DEFAULT_RADIUS;
-  b->pos = HMM_V3(0, 0, 0);
+  b->pos = HMM_V3(INFINITY, INFINITY, INFINITY);
   b->mat_idx = 0;
 
   return b;
-}
-
-void solid_blob_set_radius_pos(BlobSim *bs, SolidBlob *b, float radius,
-                               const HMM_Vec3 *pos) {
-  b->radius = radius;
-  b->pos = *pos;
-
-  int blob_idx = fixed_array_get_idx_from_ptr(&bs->solids, b);
-  blob_ot_insert(&bs->solid_ot, pos, radius, blob_idx);
 }
 
 LiquidBlob *liquid_blob_create(BlobSim *bs) {
@@ -108,7 +100,7 @@ LiquidBlob *liquid_blob_create(BlobSim *bs) {
 
   b->type = LIQUID_BASE;
   b->radius = BLOB_DEFAULT_RADIUS;
-  b->pos = HMM_V3(0, 0, 0);
+  b->pos = HMM_V3(INFINITY, INFINITY, INFINITY);
   b->mat_idx = 0;
 
   return b;
@@ -130,6 +122,30 @@ Projectile *projectile_create(BlobSim *bs) {
   p->delete_timer = PROJECTILE_DEFAULT_DELETE_TIME;
 
   return p;
+}
+
+void solid_blob_set_radius_pos(BlobSim *bs, SolidBlob *b, float radius,
+                               const HMM_Vec3 *pos) {
+  int blob_idx = fixed_array_get_idx_from_ptr(&bs->solids, b);
+
+  if (!HMM_EqV3(b->pos, HMM_V3(INFINITY, INFINITY, INFINITY))) {
+    blob_ot_delete(&bs->solid_ot, &b->pos, b->radius, blob_idx);
+  }
+  b->radius = radius;
+  b->pos = *pos;
+  blob_ot_insert(&bs->solid_ot, pos, radius, blob_idx);
+}
+
+void liquid_blob_set_radius_pos(BlobSim *bs, LiquidBlob *b, float radius,
+                                const HMM_Vec3 *pos) {
+  int blob_idx = fixed_array_get_idx_from_ptr(&bs->liquids, b);
+
+  if (!HMM_EqV3(b->pos, HMM_V3(INFINITY, INFINITY, INFINITY))) {
+    blob_ot_delete(&bs->liquid_ot, &b->pos, b->radius, blob_idx);
+  }
+  b->radius = radius;
+  b->pos = *pos;
+  blob_ot_insert(&bs->liquid_ot, pos, radius, blob_idx);
 }
 
 ColliderModel *collider_model_add(BlobSim *bs, Entity ent) {
@@ -166,6 +182,18 @@ static float solid_ot_get_radius_from_idx(BlobOt *bot, int blob_idx) {
   return b->radius;
 }
 
+static const HMM_Vec3 *liquid_ot_get_pos_from_idx(BlobOt *bot, int blob_idx) {
+  BlobSim *bs = bot->userdata;
+  LiquidBlob *b = fixed_array_get(&bs->liquids, blob_idx);
+  return &b->pos;
+}
+
+static float liquid_ot_get_radius_from_idx(BlobOt *bot, int blob_idx) {
+  BlobSim *bs = bot->userdata;
+  LiquidBlob *b = fixed_array_get(&bs->liquids, blob_idx);
+  return b->radius;
+}
+
 void blob_sim_create(BlobSim *bs) {
   fixed_array_create(&bs->solids, sizeof(SolidBlob), BLOB_SIM_MAX_SOLIDS);
   fixed_array_create(&bs->liquids, sizeof(LiquidBlob), BLOB_SIM_MAX_LIQUIDS);
@@ -185,7 +213,7 @@ void blob_sim_create(BlobSim *bs) {
 
   bs->active_pos = HMM_V3(0, 0, 0);
 
-  bs->solid_ot.max_subdiv = 7;
+  bs->solid_ot.max_subdiv = 9;
   bs->solid_ot.root_pos = HMM_V3(0, 0, 0);
   bs->solid_ot.root_size = BLOB_LEVEL_SIZE;
   bs->solid_ot.userdata = bs;
@@ -194,6 +222,15 @@ void blob_sim_create(BlobSim *bs) {
   blob_ot_create(&bs->solid_ot);
   // This octree also gets sent to the GPU
   bs->solid_ot.max_dist_to_leaf = BLOB_SDF_MAX_DIST;
+
+  bs->liquid_ot.max_subdiv = 9;
+  bs->liquid_ot.root_pos = HMM_V3(0, 0, 0);
+  bs->liquid_ot.root_size = BLOB_LEVEL_SIZE;
+  bs->liquid_ot.userdata = bs;
+  bs->liquid_ot.get_pos_from_idx = liquid_ot_get_pos_from_idx;
+  bs->liquid_ot.get_radius_from_idx = liquid_ot_get_radius_from_idx;
+  blob_ot_create(&bs->liquid_ot);
+  bs->liquid_ot.max_dist_to_leaf = BLOB_SDF_MAX_DIST;
 }
 
 void blob_sim_destroy(BlobSim *bs) {
@@ -306,20 +343,38 @@ void blob_sim_raycast(RaycastResult *r, const BlobSim *bs, HMM_Vec3 ro,
   }
 }
 
-void blob_simulate(BlobSim *bs, double delta) {
-  // Liquid blobs
-  for (int i = 0; i < bs->liquids.count; i++) {
-    LiquidBlob *b = fixed_array_get(&bs->liquids, i);
+typedef struct SimulationLiquidData {
+  BlobSim *bs;
+  double delta;
+  bool should_continue;
+  // Keep track of which liquids have been simulated
+  bool simulated[BLOB_SIM_MAX_LIQUIDS];
+} SimulationLiquidData;
+
+bool blob_simulate_liquid_ot_leaf(BlobOtEnumData *enum_data) {
+  BlobOtNode *leaf = enum_data->curr_leaf;
+  SimulationLiquidData *sim_data = enum_data->user_data;
+
+  sim_data->should_continue = false;
+
+  for (int i = 0; i < leaf->leaf_blob_count; i++) {
+    int bidx = leaf->offsets[i];
+    if (sim_data->simulated[bidx]) {
+      continue;
+    }
+    sim_data->simulated[bidx] = true;
+
+    LiquidBlob *b = fixed_array_get(&sim_data->bs->liquids, bidx);
 
     HMM_Vec3 velocity = {0};
 
     float anti_grav = 0.0f;
 
-    for (int j = 0; j < bs->liquids.count; j++) {
+    for (int j = 0; j < sim_data->bs->liquids.count; j++) {
       if (j == i)
         continue;
 
-      LiquidBlob *ob = fixed_array_get(&bs->liquids, j);
+      LiquidBlob *ob = fixed_array_get(&sim_data->bs->liquids, j);
 
       HMM_Vec3 attraction = blob_get_attraction_to(b, ob);
       velocity = HMM_AddV3(velocity, attraction);
@@ -331,28 +386,45 @@ void blob_simulate(BlobSim *bs, double delta) {
     // Now position + velocity * delta will be the new position before dealing
     // with solid blobs
 
-    b->pos = HMM_AddV3(b->pos, HMM_MulV3F(velocity, (float)delta));
+    HMM_Vec3 new_pos =
+        HMM_AddV3(b->pos, HMM_MulV3F(velocity, (float)sim_data->delta));
     HMM_Vec3 correction =
-        blob_get_correction_from_solids(bs, &b->pos, b->radius);
-    b->pos = HMM_AddV3(b->pos, correction);
+        blob_get_correction_from_solids(sim_data->bs, &new_pos, b->radius);
+    new_pos = HMM_AddV3(new_pos, correction);
 
-    // TODO: queue inactive
-    /*
-    for (int x = 0; x < 3; x++) {
-      b->pos.Elements[x] = fmaxf(b->pos.Elements[x], BLOB_SIM_POS.Elements[x] -
-                                                         BLOB_SIM_SIZE * 0.5f);
-      b->pos.Elements[x] = fminf(b->pos.Elements[x], BLOB_SIM_POS.Elements[x] +
-                                                         BLOB_SIM_SIZE * 0.5f);
-    }
-    */
+    liquid_blob_set_radius_pos(sim_data->bs, b, b->radius, &new_pos);
+    sim_data->should_continue = true;
+    return false;
+  }
+
+  return true;
+}
+
+void blob_simulate(BlobSim *bs, double delta) {
+  SimulationLiquidData sim_data = {0};
+  sim_data.bs = bs;
+  sim_data.delta = delta;
+  sim_data.should_continue = true;
+
+  BlobOtEnumData enum_data;
+  enum_data.bot = &bs->liquid_ot;
+  enum_data.shape_pos = bs->active_pos;
+  enum_data.shape_size = BLOB_ACTIVE_SIZE;
+  enum_data.callback = blob_simulate_liquid_ot_leaf;
+  enum_data.user_data = &sim_data;
+
+  // Liquid blobs
+  while (sim_data.should_continue) {
+    blob_ot_enum_leaves_cube(&enum_data);
   }
 
   // Liquid blob forces
   for (int i = 0; i < BLOB_SIM_MAX_FORCES; i++) {
     LiquidForce *f = &bs->liq_forces[i];
     if (f->idx >= 0) {
-      HMM_Vec3 *p = &((LiquidBlob *)fixed_array_get(&bs->liquids, f->idx))->pos;
-      *p = HMM_AddV3(*p, HMM_MulV3F(f->force, (float)delta));
+      LiquidBlob *b = fixed_array_get(&bs->liquids, f->idx);
+      HMM_Vec3 new_pos = HMM_AddV3(b->pos, HMM_MulV3F(f->force, (float)delta));
+      liquid_blob_set_radius_pos(bs, b, b->radius, &new_pos);
 
       f->force = HMM_MulV3F(f->force, 1.0f - 0.9f * (float)delta);
       if (HMM_LenV3(f->force) < 0.1f) {
@@ -649,6 +721,9 @@ static bool blob_ot_insert_ot_leaf(BlobOtEnumData *enum_data) {
     int new_size_int = enum_data->bot->size_int + size_diff;
 
     if (new_size_int > enum_data->bot->capacity_int) {
+      fprintf(stderr, "Octree is too big\n");
+      exit_fatal_error();
+
       printf("Reallocating\n");
       int old_capacity = enum_data->bot->capacity_int;
       int new_capacity = old_capacity * 2;
@@ -739,6 +814,37 @@ void blob_ot_insert(BlobOt *bot, const HMM_Vec3 *bpos, float bradius,
   enum_data.shape_pos = *bpos;
   enum_data.shape_size = bradius + BLOB_SMOOTH + bot->max_dist_to_leaf;
   enum_data.callback = blob_ot_insert_ot_leaf;
+  enum_data.user_data = &bidx;
+
+  blob_ot_enum_leaves_sphere(&enum_data);
+}
+
+static bool blob_ot_delete_ot_leaf(BlobOtEnumData *enum_data) {
+  BlobOtNode *leaf = enum_data->curr_leaf;
+  int bidx = *(int *)enum_data->user_data;
+
+  for (int i = 0; i < leaf->leaf_blob_count; i++) {
+    int oidx = leaf->offsets[i];
+    if (oidx == bidx) {
+      void *dst = leaf->offsets + i;
+      void *src = leaf->offsets + i + 1;
+      int src_size_bytes = (leaf->leaf_blob_count - i - 1) * sizeof(int);
+      memmove(dst, src, src_size_bytes);
+      leaf->leaf_blob_count--;
+      break;
+    }
+  }
+
+  return true;
+}
+
+void blob_ot_delete(BlobOt *bot, const HMM_Vec3 *bpos, float bradius,
+                    int bidx) {
+  BlobOtEnumData enum_data;
+  enum_data.bot = bot;
+  enum_data.shape_pos = *bpos;
+  enum_data.shape_size = bradius + BLOB_SMOOTH + bot->max_dist_to_leaf;
+  enum_data.callback = blob_ot_delete_ot_leaf;
   enum_data.user_data = &bidx;
 
   blob_ot_enum_leaves_sphere(&enum_data);
