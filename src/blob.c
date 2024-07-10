@@ -7,7 +7,9 @@
 #include "blob.h"
 #include "core.h"
 
-#define LIQUID_FALL_SPEED 5.0f
+#define LIQUID_GRAVITY 9.81f
+#define LIQUID_MIN_Y_VEL -10.0f
+#define LIQUID_DRAG 0.5f
 
 #define BLOB_RAY_MAX_STEPS 32
 #define BLOB_RAY_INTERSECT 0.001f
@@ -347,52 +349,45 @@ static bool blob_simulate_liquid_ot_leaf(BlobOtEnumData *enum_data) {
     LiquidBlob *b = fixed_array_get(&bs->liquids, bidx);
     HMM_Vec3 new_pos = b->pos;
 
+    float anti_grav = 0.0f;
+
+    for (int j = 0; j < bs->liquids.count; j++) {
+      if (j == i)
+        continue;
+
+      LiquidBlob *ob = fixed_array_get(&bs->liquids, j);
+      if (ob->type != LIQUID_BASE)
+        continue;
+
+      HMM_Vec3 attraction = blob_get_attraction_to(b, ob);
+      b->vel = HMM_AddV3(b->vel, HMM_MulV3F(attraction, (float)delta * 5.0f));
+      /*
+      anti_grav += blob_get_support_with(b, ob);
+      */
+    }
+
+    b->vel.Y -= LIQUID_GRAVITY * delta * (1.0f - fminf(anti_grav, 1.0f));
+    b->vel.Y = HMM_MAX(b->vel.Y, LIQUID_MIN_Y_VEL);
+
+    // Now position + velocity * delta will be the new position before dealing
+    // with solid blobs
+
+    new_pos = HMM_AddV3(b->pos, HMM_MulV3F(b->vel, (float)delta));
+    HMM_Vec3 correction =
+        blob_get_correction_from_solids(bs, &new_pos, b->radius);
+    if (HMM_LenV3(correction) > 0.0f) {
+      HMM_Vec3 n = HMM_NormV3(correction);
+      HMM_Vec3 u = HMM_MulV3F(n, HMM_DotV3(b->vel, n));
+      HMM_Vec3 w = HMM_SubV3(b->vel, u);
+      const float f = 0.95f;
+      const float r = (b->type == LIQUID_PROJ) ? 0.1f : 0.01f;
+      b->vel = HMM_SubV3(HMM_MulV3F(w, f), HMM_MulV3F(u, r));
+    }
+    new_pos = HMM_AddV3(new_pos, correction);
+
     if (b->type == LIQUID_BASE) {
-      HMM_Vec3 velocity = {0};
-
-      float anti_grav = 0.0f;
-
-      for (int j = 0; j < bs->liquids.count; j++) {
-        if (j == i)
-          continue;
-
-        LiquidBlob *ob = fixed_array_get(&bs->liquids, j);
-        if (ob->type != LIQUID_BASE)
-          continue;
-
-        HMM_Vec3 attraction = blob_get_attraction_to(b, ob);
-        velocity = HMM_AddV3(velocity, attraction);
-        anti_grav += blob_get_support_with(b, ob);
-      }
-
-      velocity.Y -= LIQUID_FALL_SPEED * (1.0f - fminf(anti_grav, 1.0f));
-
-      // Now position + velocity * delta will be the new position before dealing
-      // with solid blobs
-
-      new_pos = HMM_AddV3(b->pos, HMM_MulV3F(velocity, (float)delta));
-      new_pos = HMM_AddV3(new_pos, HMM_MulV3F(b->vel, (float)delta));
-      HMM_Vec3 correction =
-          blob_get_correction_from_solids(bs, &new_pos, b->radius);
-      new_pos = HMM_AddV3(new_pos, correction);
-
-      b->vel = HMM_MulV3F(b->vel, 1.0f - 0.9f * (float)delta);
+      b->vel = HMM_MulV3F(b->vel, 1.0f - LIQUID_DRAG * (float)delta);
     } else if (b->type == LIQUID_PROJ) {
-      const HMM_Vec3 PROJ_GRAV = {0, -9.8f, 0};
-      b->vel = HMM_AddV3(b->vel, HMM_MulV3F(PROJ_GRAV, (float)delta));
-      new_pos = HMM_AddV3(b->pos, HMM_MulV3F(b->vel, (float)delta));
-
-      HMM_Vec3 correction =
-          blob_get_correction_from_solids(bs, &b->pos, b->radius);
-      if (HMM_LenV3(correction) > 0.0f) {
-        HMM_Vec3 n = HMM_NormV3(correction);
-        HMM_Vec3 u = HMM_MulV3F(n, HMM_DotV3(b->vel, n));
-        HMM_Vec3 w = HMM_SubV3(b->vel, u);
-        const float f = 0.95f;
-        const float r = 0.5f;
-        b->vel = HMM_SubV3(HMM_MulV3F(w, f), HMM_MulV3F(u, r));
-      }
-
       for (int c = 0; c < bs->collider_models.count; c++) {
         ColliderModel *col_mdl = fixed_array_get(&bs->collider_models, c);
         Model *mdl =
@@ -522,7 +517,7 @@ void blob_simulate(BlobSim *bs, double delta) {
 
 void blob_mdl_create(Model *mdl, const ModelBlob *mdl_blob_src,
                      int mdl_blob_count) {
-  mdl->blobs = malloc(sizeof(*mdl->blobs) * mdl_blob_count);
+  mdl->blobs = alloc_mem(sizeof(*mdl->blobs) * mdl_blob_count);
   mdl->blob_count = mdl_blob_count;
 
   for (int i = 0; i < mdl->blob_count; i++) {
@@ -622,7 +617,7 @@ void blob_ot_create(BlobOt *bot) {
 
   bot->size_int = 1 + BLOB_OT_LEAF_MAX_BLOB_COUNT;
   bot->capacity_int = BLOB_OT_DEFAULT_CAPACITY_INT;
-  bot->root = (BlobOtNode *)malloc(bot->capacity_int * sizeof(int));
+  bot->root = alloc_mem(bot->capacity_int * sizeof(int));
   bot->root->leaf_blob_count = 0;
   bot->max_dist_to_leaf = 0.0f;
 }
@@ -708,7 +703,7 @@ static bool blob_ot_insert_ot_leaf(BlobOtEnumData *enum_data) {
       int old_capacity = enum_data->bot->capacity_int;
       int new_capacity = old_capacity * 2;
 
-      void *new_data = malloc(new_capacity * sizeof(int));
+      void *new_data = alloc_mem(new_capacity * sizeof(int));
       memcpy(new_data, enum_data->bot->root,
              enum_data->bot->size_int * sizeof(int));
 

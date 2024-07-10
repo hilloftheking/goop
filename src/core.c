@@ -13,8 +13,21 @@ void exit_fatal_error() {
   // If GLFW isn't terminated, the window will be frozen
   glfwTerminate();
 
-  getchar();
+  (void)getchar();
   exit(-1);
 }
+
+void *alloc_mem(size_t n) {
+  void *mem = malloc(n);
+  if (!mem) {
+    fprintf(stderr, "Failed to allocate %zu bytes of memory\n", n);
+    exit_fatal_error();
+    return NULL;
+  }
+
+  return mem;
+}
+
+void free_mem(void *mem) { free(mem); }
 
 float rand_float() { return ((float)rand() / (float)(RAND_MAX)); }

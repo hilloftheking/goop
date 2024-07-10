@@ -52,8 +52,8 @@ typedef struct BlobRemoval {
   double timer;
 } BlobRemoval;
 
-#define BLOB_SIM_MAX_SOLIDS 1024
-#define BLOB_SIM_MAX_LIQUIDS 1024
+#define BLOB_SIM_MAX_SOLIDS 4096
+#define BLOB_SIM_MAX_LIQUIDS 4096
 #define BLOB_SIM_MAX_COLLIDER_MODELS 128
 
 #define BLOB_SIM_MAX_DELETIONS 1024

@@ -9,6 +9,7 @@
 
 #include "blob.h"
 #include "blob_render.h"
+#include "core.h"
 #include "cube.h"
 #include "resource.h"
 #include "resource_load.h"
@@ -79,8 +80,8 @@ void blob_renderer_create(BlobRenderer *br) {
 
   br->aspect_ratio = 1.0f;
 
-  br->solids_v4 = malloc(BLOB_SIM_MAX_SOLIDS * sizeof(*br->solids_v4));
-  br->liquids_v4 = malloc(BLOB_SIM_MAX_LIQUIDS * sizeof(*br->liquids_v4));
+  br->solids_v4 = alloc_mem(BLOB_SIM_MAX_SOLIDS * sizeof(*br->solids_v4));
+  br->liquids_v4 = alloc_mem(BLOB_SIM_MAX_LIQUIDS * sizeof(*br->liquids_v4));
 
   {
     Resource img;

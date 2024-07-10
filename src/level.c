@@ -32,6 +32,8 @@ static HMM_Vec3 parse_vec3(toml_array_t *arr) {
 void level_load(BlobSim *bs, const char *data, int data_size) {
   char err_buff[128];
 
+  toml_set_memutil(alloc_mem, free_mem);
+
   toml_table_t *blvl =
       toml_parse((char *)data, data_size, err_buff, sizeof(err_buff));
 

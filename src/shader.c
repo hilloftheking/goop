@@ -4,6 +4,7 @@
 
 #include <glad/glad.h>
 
+#include "core.h"
 #include "shader.h"
 
 GLuint compile_shader(const char *source, GLenum shader_type) {
@@ -22,11 +23,11 @@ GLuint compile_shader(const char *source, GLenum shader_type) {
     int log_length = 0;
     glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &log_length);
 
-    char *message = malloc(log_length);
+    char *message = alloc_mem(log_length);
     glGetShaderInfoLog(shader, log_length, NULL, message);
 
     fprintf(stderr, "Shader compilation failed: %s\n", message);
-    free(message);
+    free_mem(message);
 
     glDeleteShader(shader);
     return 0;
@@ -66,11 +67,11 @@ GLuint create_shader_program(const char *vert_shader_src,
     int log_length = 0;
     glGetProgramiv(shader_program, GL_INFO_LOG_LENGTH, &log_length);
 
-    char *message = malloc(log_length);
+    char *message = alloc_mem(log_length);
     glGetProgramInfoLog(shader_program, log_length, NULL, message);
 
     fprintf(stderr, "Shader linking: %s\n", message);
-    free(message);
+    free_mem(message);
 
     glDeleteProgram(shader_program);
     return 0;
@@ -102,11 +103,11 @@ GLuint create_compute_program(const char *source) {
     int log_length = 0;
     glGetProgramiv(shader_program, GL_INFO_LOG_LENGTH, &log_length);
 
-    char *message = malloc(log_length);
+    char *message = alloc_mem(log_length);
     glGetProgramInfoLog(shader_program, log_length, NULL, message);
 
     fprintf(stderr, "Shader linking: %s\n", message);
-    free(message);
+    free_mem(message);
 
     glDeleteProgram(shader_program);
     return 0;

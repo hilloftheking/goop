@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 
 #define ARR_SIZE(a) (sizeof(a) / sizeof(*a))
@@ -22,5 +23,10 @@ typedef struct Global {
 extern Global global;
 
 void exit_fatal_error();
+
+// Allocates n bytes. Exits on failure
+void *alloc_mem(size_t n);
+
+void free_mem(void *mem);
 
 float rand_float();

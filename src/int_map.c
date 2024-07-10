@@ -1,12 +1,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#include "core.h"
 #include "int_map.h"
 
 #define INT_MAP_START_CAPACITY 32
 
 static void int_map_alloc_data(IntMap *map) {
-  map->data = malloc(map->capacity * sizeof(*map->data));
+  map->data = alloc_mem(map->capacity * sizeof(*map->data));
   for (int i = 0; i < map->capacity; i++) {
     map->data[i].key = -1;
   }

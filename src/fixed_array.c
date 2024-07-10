@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "core.h"
 #include "fixed_array.h"
 
 void fixed_array_create(FixedArray* a, int element_size, int capacity) {
@@ -8,7 +9,7 @@ void fixed_array_create(FixedArray* a, int element_size, int capacity) {
   a->capacity = capacity;
   a->count = 0;
 
-  a->data = malloc(element_size * capacity);
+  a->data = alloc_mem(element_size * capacity);
 }
 
 void fixed_array_destroy(FixedArray *a) {

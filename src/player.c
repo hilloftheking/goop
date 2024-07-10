@@ -52,7 +52,7 @@ static void liquify_model(Entity e) {
                                  HMM_MAX(0.2f, mdl->blobs[i].radius), &p.XYZ);
       HMM_Vec3 force;
       for (int x = 0; x < 3; x++) {
-        force.Elements[x] = (rand_float() - 0.5f) * 10.0f;
+        force.Elements[x] = (rand_float() - 0.5f) * 5.0f;
       }
       force.Y += 8.0f;
       b->vel = force;
@@ -78,7 +78,7 @@ static void proj_callback(LiquidBlob *p, ColliderModel *col_mdl) {
 
       HMM_Vec3 force;
       for (int x = 0; x < 3; x++) {
-        force.Elements[x] = (rand_float() - 0.5f) * 30.0f;
+        force.Elements[x] = (rand_float() - 0.5f) * 10.0f;
       }
       b->vel = force;
     }
@@ -211,12 +211,7 @@ void player_process(Entity ent) {
     player->shoot_timer -= global.curr_delta;
   }
 
-  if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_2) == GLFW_PRESS &&
-      player->shoot_timer <= 0.0) {
-    player->shoot_timer = SHOOT_CD;
-
-    const float radius = 0.2f;
-
+  if (player->shoot_timer <= 0.0) {
     HMM_Vec3 proj_dir = cam_trans->Columns[2].XYZ;
     proj_dir = HMM_RotateV3AxisAngle_RH(proj_dir, cam_trans->Columns[1].XYZ,
                                         (rand_float() - 0.5f) * 0.1f);
@@ -230,13 +225,31 @@ void player_process(Entity ent) {
     HMM_Vec3 force = HMM_MulV3F(proj_dir, -15.0f);
     force = HMM_AddV3(force, (HMM_Vec3){0, 5.0f, 0});
 
-    LiquidBlob *p = projectile_create(global.blob_sim);
-    if (p) {
-      p->mat_idx = 6;
-      p->vel = force;
-      p->proj.callback = proj_callback;
-      liquid_blob_set_radius_pos(global.blob_sim, p, radius, &pos);
-      blob_sim_delayed_remove(global.blob_sim, REMOVE_LIQUID, p, 2.0);
+    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_2) == GLFW_PRESS) {
+      player->shoot_timer = SHOOT_CD;
+
+      const float radius = 0.2f;
+
+      LiquidBlob *p = projectile_create(global.blob_sim);
+      if (p) {
+        p->mat_idx = 6;
+        p->vel = force;
+        p->proj.callback = proj_callback;
+        liquid_blob_set_radius_pos(global.blob_sim, p, radius, &pos);
+        blob_sim_delayed_remove(global.blob_sim, REMOVE_LIQUID, p, 2.0);
+      }
+    }
+    if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
+      player->shoot_timer = SHOOT_CD;
+
+      const float radius = 0.5f;
+
+      LiquidBlob *b = liquid_blob_create(global.blob_sim);
+      if (b) {
+        b->mat_idx = 2;
+        b->vel = force;
+        liquid_blob_set_radius_pos(global.blob_sim, b, radius, &pos);
+      }
     }
   }
 
