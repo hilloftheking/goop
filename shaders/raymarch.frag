@@ -16,6 +16,7 @@ layout(location = 2) uniform mat4 proj_mat;
 layout(location = 3) uniform vec3 cam_pos;
 layout(location = 4) uniform float dist_scale;
 layout(location = 5) uniform float sdf_max_dist;
+layout(location = 6) uniform bool is_liquid;
 
 #define MARCH_STEPS 128
 #define MARCH_INTERSECT 0.0005
@@ -36,13 +37,17 @@ float get_depth_at(vec3 p) {
 }
 
 vec2 intersect_aabb(vec3 ro, vec3 rd, vec3 bmin, vec3 bmax) {
-    vec3 tmin = (bmin - ro) / rd;
-    vec3 tmax = (bmax - ro) / rd;
-    vec3 t1 = min(tmin, tmax);
-    vec3 t2 = max(tmin, tmax);
-    float tnear = max(max(t1.x, t1.y), t1.z);
-    float tfar = min(min(t2.x, t2.y), t2.z);
-    return vec2(tnear, tfar);
+  vec3 tmin = (bmin - ro) / rd;
+  vec3 tmax = (bmax - ro) / rd;
+  vec3 t1 = min(tmin, tmax);
+  vec3 t2 = max(tmin, tmax);
+  float tnear = max(max(t1.x, t1.y), t1.z);
+  float tfar = min(min(t2.x, t2.y), t2.z);
+  return vec2(tnear, tfar);
+}
+
+float get_dist_from_sdf_v4(vec4 v4) {
+  return (((1.0 - v4.a) * (sdf_max_dist - BLOB_SDF_MIN_DIST)) + BLOB_SDF_MIN_DIST) * dist_scale;
 }
 
 // Figure out the normal with a gradient
@@ -64,17 +69,16 @@ vec3 get_normal_at(vec3 p) {
 // "n" surface normal at "p"
 // "k" controls the sharpness of the blending in the transitions areas
 // "s" texture sampler
-vec4 triplanar( in sampler2D s, in vec3 p, in vec3 n, in float k )
-{
-    // project+fetch
-    vec4 x = texture( s, p.yz );
-    vec4 y = texture( s, p.zx );
-    vec4 z = texture( s, p.xy );
-    
-    // blend weights
-    vec3 w = pow( abs(n), vec3(k) );
-    // blend and return
-    return (x*w.x + y*w.y + z*w.z) / (w.x + w.y + w.z);
+vec4 triplanar(sampler2D s, vec3 p, vec3 n, float k ) {
+  // project+fetch
+  vec4 x = texture( s, p.yz );
+  vec4 y = texture( s, p.zx );
+  vec4 z = texture( s, p.xy );
+  
+  // blend weights
+  vec3 w = pow( abs(n), vec3(k) );
+  // blend and return
+  return (x*w.x + y*w.y + z*w.z) / (w.x + w.y + w.z);
 }
 
 // Returns color and distance. Negative distance means it should be discarded
@@ -87,7 +91,7 @@ vec4 ray_march(vec3 ro, vec3 rd) {
     vec3 p = ro + rd * traveled;
 
     vec4 dat = texture(sdf_tex, p + vec3(0.5));
-    float dist = (((1.0 - dat.a) * (sdf_max_dist - BLOB_SDF_MIN_DIST)) + BLOB_SDF_MIN_DIST) * dist_scale;
+    float dist = get_dist_from_sdf_v4(dat);
 
     if (dist <= MARCH_INTERSECT) {
       // Try not to give the player a seizure when the camera is clipping
@@ -139,7 +143,7 @@ void main() {
   vec4 result = ray_march(ro, rd);
   if (result.a < 0.0)
     discard;
-
-  out_color = vec4(result.rgb, 1.0);
+  
+  out_color = vec4(result.rgb, is_liquid ? 0.8 : 1.0);
   gl_FragDepth = get_depth_at(ro + rd * result.a);
 }

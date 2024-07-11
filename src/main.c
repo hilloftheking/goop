@@ -269,7 +269,7 @@ int main() {
 
     skybox_draw(&skybox, &blob_renderer.view_mat, &blob_renderer.proj_mat);
 
-    blob_render_sim(&blob_renderer, &blob_sim);
+    blob_render_start(&blob_renderer);
 
     HMM_Mat4 *plr_trans =
         entity_get_component(player_ent, COMPONENT_TRANSFORM);
@@ -284,6 +284,8 @@ int main() {
         blob_render_mdl(&blob_renderer, &blob_sim, mdl, trans);
       }
     }
+
+    blob_render_sim(&blob_renderer, &blob_sim);
 
     glfwSwapBuffers(window);
   }

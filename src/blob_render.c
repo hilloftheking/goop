@@ -30,16 +30,18 @@ void blob_renderer_create(BlobRenderer *br) {
 
   br->compute_program = create_compute_program(COMPUTE_SDF_COMP_SRC);
 
-  glGenTextures(1, &br->sdf_tex);
-  glBindTexture(GL_TEXTURE_3D, br->sdf_tex);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA8, BLOB_SIM_SDF_RES, BLOB_SIM_SDF_RES,
-               BLOB_SIM_SDF_RES, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-  glBindImageTexture(0, br->sdf_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA8);
+  unsigned int *sim_tex[] = {&br->sdf_sim_solid_tex, &br->sdf_sim_liquid_tex};
+  for (int i = 0; i < 2; i++) {
+    glGenTextures(1, sim_tex[i]);
+    glBindTexture(GL_TEXTURE_3D, *sim_tex[i]);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA8, BLOB_SIM_SDF_RES, BLOB_SIM_SDF_RES,
+                 BLOB_SIM_SDF_RES, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+  }
 
   glGenTextures(1, &br->sdf_mdl_tex);
   glBindTexture(GL_TEXTURE_3D, br->sdf_mdl_tex);
@@ -51,8 +53,6 @@ void blob_renderer_create(BlobRenderer *br) {
   glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA8, BLOB_MODEL_SDF_RES,
                BLOB_MODEL_SDF_RES, BLOB_MODEL_SDF_RES, 0, GL_RGBA,
                GL_UNSIGNED_BYTE, NULL);
-  glBindImageTexture(0, br->sdf_mdl_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY,
-                     GL_RGBA8);
 
   br->solids_ssbo_size_bytes = sizeof(HMM_Vec4) * BLOB_SIM_MAX_SOLIDS;
   glGenBuffers(1, &br->solids_ssbo);
@@ -156,6 +156,14 @@ static void draw_sdf_cube(BlobRenderer *br, unsigned int sdf_tex,
   cube_draw();
 }
 
+void blob_render_start(BlobRenderer *br) {
+  glUseProgram(br->raymarch_program);
+  glUniformMatrix4fv(1, 1, GL_FALSE, br->view_mat.Elements[0]);
+  glUniformMatrix4fv(2, 1, GL_FALSE, br->proj_mat.Elements[0]);
+  glUniform3fv(3, 1, br->cam_trans.Elements[3]);
+  glUniform1i(6, 0);
+}
+
 void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
   // Solids
   for (int i = 0; i < bs->solids.count; i++) {
@@ -177,23 +185,15 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
                 b->mat_idx);
   }
 
+  // Solids
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, br->solids_ssbo);
   glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, br->solids_ssbo_size_bytes,
                   br->solids_v4);
-
-  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, br->liquids_ssbo);
-  glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, br->liquids_ssbo_size_bytes,
-                  br->liquids_v4);
-
-  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, br->solid_ot_ssbo);
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, br->solid_ot_ssbo);
   glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0,
                   bs->solid_ot.size_int * sizeof(int), bs->solid_ot.root);
-
-  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, br->liquid_ot_ssbo);
-  glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0,
-                  bs->liquid_ot.size_int * sizeof(int), bs->liquid_ot.root);
-
-  glBindImageTexture(0, br->sdf_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA8);
+  glBindImageTexture(0, br->sdf_sim_solid_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY,
+                     GL_RGBA8);
   glUseProgram(br->compute_program);
   glUniform1i(0, -1); // Use the octree
   glUniform3fv(1, 1, bs->active_pos.Elements);
@@ -206,16 +206,41 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
                     BLOB_SIM_SDF_RES / BLOB_SDF_LOCAL_GROUP_COUNT_Y,
                     BLOB_SIM_SDF_RES / BLOB_SDF_LOCAL_GROUP_COUNT_Z);
 
+  // Liquids
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, br->liquids_ssbo);
+  glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, br->liquids_ssbo_size_bytes,
+                  br->liquids_v4);
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, br->liquid_ot_ssbo);
+  glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0,
+                  bs->liquid_ot.size_int * sizeof(int), bs->liquid_ot.root);
+  glBindImageTexture(0, br->sdf_sim_liquid_tex, 0, GL_TRUE, 0, GL_WRITE_ONLY,
+                     GL_RGBA8);
+  glUseProgram(br->compute_program);
+  glUniform1i(0, -1); // Use the octree
+  glUniform3fv(1, 1, bs->active_pos.Elements);
+  glUniform1f(2, BLOB_ACTIVE_SIZE);
+  glUniform1i(3, BLOB_SIM_SDF_RES);
+  glUniform1f(4, BLOB_SDF_MAX_DIST);
+  glUniform1f(5, BLOB_SMOOTH);
+  glUniform1f(6, bs->liquid_ot.root_size);
+  glDispatchCompute(BLOB_SIM_SDF_RES / BLOB_SDF_LOCAL_GROUP_COUNT_X,
+                    BLOB_SIM_SDF_RES / BLOB_SDF_LOCAL_GROUP_COUNT_Y,
+                    BLOB_SIM_SDF_RES / BLOB_SDF_LOCAL_GROUP_COUNT_Z);
+
   glBindVertexArray(cube_vao);
 
   glUseProgram(br->raymarch_program);
-  glUniformMatrix4fv(1, 1, GL_FALSE, br->view_mat.Elements[0]);
-  glUniformMatrix4fv(2, 1, GL_FALSE, br->proj_mat.Elements[0]);
-  glUniform3fv(3, 1, br->cam_trans.Elements[3]);
-
   glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-  draw_sdf_cube(br, br->sdf_tex, &bs->active_pos, BLOB_ACTIVE_SIZE, NULL,
-                BLOB_SDF_MAX_DIST);
+  draw_sdf_cube(br, br->sdf_sim_solid_tex, &bs->active_pos, BLOB_ACTIVE_SIZE,
+                NULL, BLOB_SDF_MAX_DIST);
+
+  glUniform1i(6, 1);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  draw_sdf_cube(br, br->sdf_sim_liquid_tex, &bs->active_pos, BLOB_ACTIVE_SIZE,
+                NULL, BLOB_SDF_MAX_DIST);
+  glUniform1i(6, 0);
+  glDisable(GL_BLEND);
 }
 
 void blob_render_mdl(BlobRenderer *br, const BlobSim *bs, const Model *mdl,
