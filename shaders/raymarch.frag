@@ -9,6 +9,7 @@ layout(location = 0) out vec4 out_color;
 layout(binding = 0) uniform sampler3D sdf_tex;
 layout(binding = 1) uniform sampler2D water_tex;
 layout(binding = 2) uniform sampler2D water_norm_tex;
+layout(binding = 3) uniform sampler2D screen_tex;
 
 layout(location = 0) uniform mat4 model_mat;
 layout(location = 1) uniform mat4 view_mat;
@@ -17,6 +18,7 @@ layout(location = 3) uniform vec3 cam_pos;
 layout(location = 4) uniform float dist_scale;
 layout(location = 5) uniform float sdf_max_dist;
 layout(location = 6) uniform bool is_liquid;
+layout(location = 7) uniform vec2 viewport_size;
 
 #define MARCH_STEPS 128
 #define MARCH_INTERSECT 0.0005
@@ -143,7 +145,12 @@ void main() {
   vec4 result = ray_march(ro, rd);
   if (result.a < 0.0)
     discard;
+
+  if (is_liquid) {
+    vec2 screen_coords = gl_FragCoord.xy / viewport_size;
+    result.rgb = mix(texture(screen_tex, screen_coords).rgb, result.rgb, 0.8);
+  }
   
-  out_color = vec4(result.rgb, is_liquid ? 0.8 : 1.0);
+  out_color = vec4(result.rgb, 1.0);
   gl_FragDepth = get_depth_at(ro + rd * result.a);
 }

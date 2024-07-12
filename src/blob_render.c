@@ -78,8 +78,6 @@ void blob_renderer_create(BlobRenderer *br) {
   glBufferData(GL_SHADER_STORAGE_BUFFER, br->liquid_ot_ssbo_size_bytes, NULL,
                GL_DYNAMIC_DRAW);
 
-  br->aspect_ratio = 1.0f;
-
   br->solids_v4 = alloc_mem(BLOB_SIM_MAX_SOLIDS * sizeof(*br->solids_v4));
   br->liquids_v4 = alloc_mem(BLOB_SIM_MAX_LIQUIDS * sizeof(*br->liquids_v4));
 
@@ -126,10 +124,55 @@ void blob_renderer_create(BlobRenderer *br) {
 
     resource_destroy(&img);
   }
+
+  glGenFramebuffers(1, &br->screen_fbo);
+  br->screen_color_tex = 0;
+  br->screen_depth_stencil_tex = 0;
+  blob_renderer_update_framebuffer(br);
 }
 
 void blob_renderer_destroy(BlobRenderer *br) {
   // TODO
+}
+
+void blob_renderer_update_framebuffer(BlobRenderer *br) {
+  glBindFramebuffer(GL_FRAMEBUFFER, br->screen_fbo);
+
+  if (br->screen_color_tex) {
+    glDeleteTextures(1, &br->screen_color_tex);
+    br->screen_color_tex = 0;
+  }
+
+  if (br->screen_depth_stencil_tex) {
+    glDeleteTextures(1, &br->screen_depth_stencil_tex);
+    br->screen_depth_stencil_tex = 0;
+  }
+
+  glGenTextures(1, &br->screen_color_tex);
+  glBindTexture(GL_TEXTURE_2D, br->screen_color_tex);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, global.win_width, global.win_height,
+               0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+  glGenTextures(1, &br->screen_depth_stencil_tex);
+  glBindTexture(GL_TEXTURE_2D, br->screen_depth_stencil_tex);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, global.win_width,
+               global.win_height, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8,
+               NULL);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+                         br->screen_color_tex, 0);
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT,
+                         GL_TEXTURE_2D, br->screen_depth_stencil_tex, 0);
+
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 // transform can be null
@@ -157,11 +200,14 @@ static void draw_sdf_cube(BlobRenderer *br, unsigned int sdf_tex,
 }
 
 void blob_render_start(BlobRenderer *br) {
+  glClear(GL_DEPTH_BUFFER_BIT);
+
   glUseProgram(br->raymarch_program);
   glUniformMatrix4fv(1, 1, GL_FALSE, br->view_mat.Elements[0]);
   glUniformMatrix4fv(2, 1, GL_FALSE, br->proj_mat.Elements[0]);
   glUniform3fv(3, 1, br->cam_trans.Elements[3]);
   glUniform1i(6, 0);
+  glUniform2f(7, (float)global.win_width, (float)global.win_height);
 }
 
 void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
@@ -234,13 +280,22 @@ void blob_render_sim(BlobRenderer *br, const BlobSim *bs) {
   draw_sdf_cube(br, br->sdf_sim_solid_tex, &bs->active_pos, BLOB_ACTIVE_SIZE,
                 NULL, BLOB_SDF_MAX_DIST);
 
+  glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, br->screen_fbo);
+  glBlitFramebuffer(0, 0, global.win_width, global.win_height, 0, 0,
+                    global.win_width, global.win_height,
+                    GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT |
+                        GL_STENCIL_BUFFER_BIT,
+                    GL_NEAREST);
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+  glActiveTexture(GL_TEXTURE3);
+  glBindTexture(GL_TEXTURE_2D, br->screen_color_tex);
+
   glUniform1i(6, 1);
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   draw_sdf_cube(br, br->sdf_sim_liquid_tex, &bs->active_pos, BLOB_ACTIVE_SIZE,
                 NULL, BLOB_SDF_MAX_DIST);
   glUniform1i(6, 0);
-  glDisable(GL_BLEND);
 }
 
 void blob_render_mdl(BlobRenderer *br, const BlobSim *bs, const Model *mdl,

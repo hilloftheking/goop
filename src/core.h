@@ -18,6 +18,7 @@ typedef struct Global {
   float cam_rot_x;
   float cam_rot_y;
   double curr_delta;
+  int win_width, win_height;
 } Global;
 
 extern Global global;

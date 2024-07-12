@@ -356,8 +356,6 @@ static bool blob_simulate_liquid_ot_leaf(BlobOtEnumData *enum_data) {
         continue;
 
       LiquidBlob *ob = fixed_array_get(&bs->liquids, j);
-      if (ob->type != LIQUID_BASE)
-        continue;
 
       HMM_Vec3 attraction = blob_get_attraction_to(b, ob);
       b->vel = HMM_AddV3(b->vel, HMM_MulV3F(attraction, (float)delta * 5.0f));

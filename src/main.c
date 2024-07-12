@@ -83,9 +83,10 @@ static void window_size_callback(GLFWwindow *window, int width, int height) {
   // Need size in pixels, not screen coordinates
   glfwGetFramebufferSize(window, &width, &height);
   glViewport(0, 0, width, height);
-  if (global.blob_renderer) {
-    global.blob_renderer->aspect_ratio = (float)width / height;
-  }
+  global.win_width = width;
+  global.win_height = height;
+  if (global.blob_renderer)
+    blob_renderer_update_framebuffer(global.blob_renderer);
 }
 
 static void glfw_fatal_error() {
@@ -114,8 +115,9 @@ int main() {
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
-  glfwWindowHint(GLFW_DEPTH_BITS, 32);
 
+  global.win_width = WIN_RES_X;
+  global.win_height = WIN_RES_Y;
   GLFWwindow *window =
       glfwCreateWindow(WIN_RES_X, WIN_RES_Y, "goop", NULL, NULL);
   if (!window)
@@ -200,7 +202,6 @@ int main() {
 
   BlobRenderer blob_renderer;
   blob_renderer_create(&blob_renderer);
-  blob_renderer.aspect_ratio = (float)WIN_RES_X / (float)WIN_RES_Y;
   global.blob_renderer = &blob_renderer;
 
   global.cam_rot_x = -0.5f;
@@ -261,15 +262,14 @@ int main() {
 
     // Render scene
 
-    blob_renderer.proj_mat = HMM_Perspective_RH_ZO(
-        60.0f * HMM_DegToRad, blob_renderer.aspect_ratio, 0.1f, 100.0f);
+    float aspect_ratio = (float)global.win_width / (float)global.win_height;
+    blob_renderer.proj_mat =
+        HMM_Perspective_RH_ZO(60.0f * HMM_DegToRad, aspect_ratio, 0.1f, 100.0f);
     blob_renderer.view_mat = HMM_InvGeneralM4(blob_renderer.cam_trans);
 
-    glClear(GL_DEPTH_BUFFER_BIT);
+    blob_render_start(&blob_renderer);
 
     skybox_draw(&skybox, &blob_renderer.view_mat, &blob_renderer.proj_mat);
-
-    blob_render_start(&blob_renderer);
 
     HMM_Mat4 *plr_trans =
         entity_get_component(player_ent, COMPONENT_TRANSFORM);
