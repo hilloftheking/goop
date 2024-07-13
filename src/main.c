@@ -23,6 +23,7 @@
 #include "level.h"
 #include "player.h"
 #include "skybox.h"
+#include "text.h"
 
 #include "resource.h"
 #include "resource_load.h"
@@ -207,6 +208,9 @@ int main() {
   global.cam_rot_x = -0.5f;
   global.cam_rot_y = HMM_PI32;
 
+  TextRenderer text_renderer;
+  text_renderer_create(&text_renderer, "C:\\Windows\\Fonts\\times.ttf", 32);
+
   uint64_t timer_freq = glfwGetTimerFrequency();
   uint64_t prev_timer = glfwGetTimerValue();
 
@@ -226,11 +230,6 @@ int main() {
       frames_this_second = 0;
       second_timer = 1.0;
     }
-
-    char win_title[100];
-    snprintf(win_title, sizeof(win_title), "%d fps  -  %lf ms", fps,
-             delta * 1000.0);
-    glfwSetWindowTitle(window, win_title);
 
     glfwPollEvents();
 
@@ -287,6 +286,12 @@ int main() {
 
     blob_render_sim(&blob_renderer, &blob_sim);
 
+    char perf_text[256];
+    snprintf(perf_text, sizeof(perf_text),
+             "%d fps\n%.3f ms\n%d solids\n%d liquids", fps, delta * 1000.0,
+             blob_sim.solids.count, blob_sim.liquids.count);
+    text_render(&text_renderer, perf_text, 32, 32);
+
     glfwSwapBuffers(window);
   }
 
@@ -294,6 +299,8 @@ int main() {
 
   blob_sim_destroy(&blob_sim);
   blob_renderer_destroy(&blob_renderer);
+
+  text_renderer_destroy(&text_renderer);
 
   glfwTerminate();
   return 0;

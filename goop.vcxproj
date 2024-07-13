@@ -240,12 +240,14 @@
     <ClInclude Include="src\shader.h" />
     <ClInclude Include="src\shader_sources.h" />
     <ClInclude Include="src\skybox.h" />
+    <ClInclude Include="src\text.h" />
     <ClInclude Include="src\toml.h" />
     <ClInclude Include="thirdparty\glad\glad.h" />
     <ClInclude Include="thirdparty\GLFW\glfw3.h" />
     <ClInclude Include="thirdparty\GLFW\glfw3native.h" />
     <ClInclude Include="thirdparty\KHR\khrplatform.h" />
     <ClInclude Include="thirdparty\stb\stb_image.h" />
+    <ClInclude Include="thirdparty\stb\stb_truetype.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\core.c" />
@@ -263,14 +265,18 @@
     <ClCompile Include="src\shader.c" />
     <ClCompile Include="src\shader_sources.c" />
     <ClCompile Include="src\skybox.c" />
+    <ClCompile Include="src\text.c" />
     <ClCompile Include="src\toml.c" />
     <ClCompile Include="thirdparty\glad\glad.c" />
     <ClCompile Include="thirdparty\stb\stb_image.c" />
+    <ClCompile Include="thirdparty\stb\stb_truetype.c" />
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\compute_sdf.comp">
       <FileType>Document</FileType>
     </None>
+    <None Include="shaders\glyph.frag" />
+    <None Include="shaders\glyph.vert" />
     <None Include="shaders\raymarch.frag">
       <DeploymentContent>false</DeploymentContent>
       <FileType>Document</FileType>

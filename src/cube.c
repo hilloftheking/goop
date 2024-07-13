@@ -28,9 +28,13 @@ void cube_create_buffers() {
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cube_ibo);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(CUBE_INDICES), CUBE_INDICES,
                GL_STATIC_DRAW);
+
+  glEnableVertexAttribArray(0);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
 }
 
 void cube_draw() {
+  glBindVertexArray(cube_vao);
   glDrawElements(GL_TRIANGLES, sizeof(CUBE_INDICES) / sizeof(*CUBE_INDICES),
                  GL_UNSIGNED_BYTE, NULL);
 }
