@@ -18,10 +18,10 @@
 #include "blob_models.h"
 #include "core.h"
 #include "creature.h"
-#include "cube.h"
 #include "ecs.h"
 #include "level.h"
 #include "player.h"
+#include "primitives.h"
 #include "skybox.h"
 #include "text.h"
 
@@ -195,8 +195,8 @@ int main() {
   }
   global.player_ent = player_ent;
 
-  // Create cube buffers for blob renderer and skybox
-  cube_create_buffers();
+  // Create primitive buffers before creating renderers
+  primitives_create_buffers();
 
   Skybox skybox;
   skybox_create(&skybox);

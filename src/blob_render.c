@@ -10,7 +10,7 @@
 #include "blob.h"
 #include "blob_render.h"
 #include "core.h"
-#include "cube.h"
+#include "primitives.h"
 #include "resource.h"
 #include "resource_load.h"
 #include "shader.h"
@@ -21,12 +21,10 @@ __declspec(dllexport) unsigned long NvOptimusEnablement = 1;
 __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 
 void blob_renderer_create(BlobRenderer *br) {
+  glBindVertexArray(cube_vao);
   br->raymarch_program =
       create_shader_program(RAYMARCH_VERT_SRC, RAYMARCH_FRAG_SRC);
   glUseProgram(br->raymarch_program);
-
-  glEnableVertexAttribArray(0);
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
 
   br->compute_program = create_compute_program(COMPUTE_SDF_COMP_SRC);
 

@@ -34,7 +34,7 @@
     <ClInclude Include="src\blob_models.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\cube.h">
+    <ClInclude Include="src\primitives.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\shader.h">
@@ -117,7 +117,7 @@
     <ClCompile Include="src\shader.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\cube.c">
+    <ClCompile Include="src\primitives.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\skybox.c">

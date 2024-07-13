@@ -2,7 +2,7 @@
 
 #include "stb/stb_image.h"
 
-#include "cube.h"
+#include "primitives.h"
 #include "resource.h"
 #include "resource_load.h"
 #include "skybox.h"

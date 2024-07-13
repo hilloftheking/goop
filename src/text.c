@@ -6,6 +6,7 @@
 #include "HandmadeMath.h"
 
 #include "core.h"
+#include "primitives.h"
 #include "shader.h"
 #include "shader_sources.h"
 #include "text.h"
@@ -13,10 +14,6 @@
 #define FONT_BITMAP_SIZE 512
 #define FONT_CHAR_START 32
 #define FONT_CHAR_COUNT 96
-
-static const HMM_Vec2 QUAD_VERTS[] = {
-    {-0.5f, -0.5f}, {0.5f, -0.5f}, {0.5f, 0.5f}, {-0.5f, 0.5f}};
-static const uint8_t QUAD_INDICES[] = {0, 1, 2, 2, 3, 0};
 
 void text_renderer_create(TextRenderer *tr, const char *font_path,
                           float font_height) {
@@ -56,21 +53,7 @@ void text_renderer_create(TextRenderer *tr, const char *font_path,
                GL_RED, GL_UNSIGNED_BYTE, font_pixels);
   free_mem(font_pixels);
 
-  glGenVertexArrays(1, &tr->vao);
-  glBindVertexArray(tr->vao);
-
-  glGenBuffers(1, &tr->vbo);
-  glBindBuffer(GL_ARRAY_BUFFER, tr->vbo);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(QUAD_VERTS), QUAD_VERTS, GL_STATIC_DRAW);
-
-  glGenBuffers(1, &tr->ibo);
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, tr->ibo);
-  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(QUAD_INDICES), QUAD_INDICES,
-               GL_STATIC_DRAW);
-
-  glEnableVertexAttribArray(0);
-  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, NULL);
-
+  glBindVertexArray(quad_vao);
   tr->glyph_program = create_shader_program(GLYPH_VERT_SRC, GLYPH_FRAG_SRC);
 }
 
@@ -86,6 +69,7 @@ void text_renderer_destroy(TextRenderer *tr) {
 }
 
 void text_render(TextRenderer *tr, const char *text, float x, float y) {
+  glBindVertexArray(quad_vao);
   glUseProgram(tr->glyph_program);
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, tr->font_tex);
@@ -95,8 +79,6 @@ void text_render(TextRenderer *tr, const char *text, float x, float y) {
   glDisable(GL_DEPTH_TEST);
 
   glDisable(GL_CULL_FACE);
-
-  glBindVertexArray(tr->vao);
 
   float start_x = x;
 
@@ -117,8 +99,7 @@ void text_render(TextRenderer *tr, const char *text, float x, float y) {
       glUniform2f(2, quad.s0, quad.t1);
       glUniform2f(3, quad.s1 - quad.s0, quad.t0 - quad.t1);
       glUniform4f(4, 0.0f, 0.0f, 0.0f, 1.0f);
-      glDrawElements(GL_TRIANGLES, sizeof(QUAD_INDICES) / sizeof(*QUAD_INDICES),
-                     GL_UNSIGNED_BYTE, NULL);
+      quad_draw();
     } else if (*text == ' ') {
       x += tr->font_height * 0.25f;
     } else if (*text == '\n') {

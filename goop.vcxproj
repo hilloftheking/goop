@@ -235,7 +235,7 @@
     <ClInclude Include="src\blob_defines.h" />
     <ClInclude Include="src\blob_models.h" />
     <ClInclude Include="src\blob_render.h" />
-    <ClInclude Include="src\cube.h" />
+    <ClInclude Include="src\primitives.h" />
     <ClInclude Include="src\resource_load.h" />
     <ClInclude Include="src\shader.h" />
     <ClInclude Include="src\shader_sources.h" />
@@ -256,7 +256,7 @@
     <ClCompile Include="src\fixed_array.c" />
     <ClCompile Include="src\blob.c" />
     <ClCompile Include="src\blob_render.c" />
-    <ClCompile Include="src\cube.c" />
+    <ClCompile Include="src\primitives.c" />
     <ClCompile Include="src\int_map.c" />
     <ClCompile Include="src\level.c" />
     <ClCompile Include="src\main.c" />
