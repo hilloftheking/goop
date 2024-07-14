@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
 #include <glad/glad.h>
 
@@ -13,33 +12,18 @@
 
 #include "HandmadeMath.h"
 
-#include "blob.h"
-#include "blob_render.h"
 #include "blob_models.h"
-#include "core.h"
 #include "creature.h"
-#include "ecs.h"
+#include "goop.h"
 #include "level.h"
 #include "player.h"
-#include "primitives.h"
-#include "skybox.h"
-#include "text.h"
 
 #include "resource.h"
 #include "resource_load.h"
 
 #include "enemies/floater.h"
 
-static void gl_debug_callback(GLenum source, GLenum type, GLuint id,
-                              GLenum severity, GLsizei length,
-                              const GLchar *message, const void *user_param) {
-  fprintf(stderr, "[GL DEBUG] %s\n", message);
-}
-
 #define DELTA_MIN (1.0/30.0)
-
-#define WIN_RES_X 1024
-#define WIN_RES_Y 768
 
 #define CAM_SENS 0.01f
 
@@ -90,78 +74,19 @@ static void window_size_callback(GLFWwindow *window, int width, int height) {
     blob_renderer_update_framebuffer(global.blob_renderer);
 }
 
-static void glfw_fatal_error() {
-  const char *err_desc;
-  glfwGetError(&err_desc);
-  fprintf(stderr, "[GLFW fatal] %s\n", err_desc);
-  exit_fatal_error();
-}
-
 int main() {
-  ecs_register_component(COMPONENT_TRANSFORM, sizeof(HMM_Mat4));
-  ecs_register_component(COMPONENT_MODEL, sizeof(Model));
-  ecs_register_component(COMPONENT_CREATURE, sizeof(Creature));
-  ecs_register_component(COMPONENT_PLAYER, sizeof(Player));
-  ecs_register_component(COMPONENT_ENEMY_FLOATER, sizeof(Floater));
+  GoopEngine goop;
+  goop_create(&goop);
 
-  unsigned int seed = time(NULL);
-  srand(seed);
-
-  if (!glfwInit())
-    glfw_fatal_error();
-
-  // OpenGL 4.3 for compute shaders
-
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-  glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
-
-  global.win_width = WIN_RES_X;
-  global.win_height = WIN_RES_Y;
-  GLFWwindow *window =
-      glfwCreateWindow(WIN_RES_X, WIN_RES_Y, "goop", NULL, NULL);
-  if (!window)
-    glfw_fatal_error();
-  global.window = window;
-
-  if (glfwRawMouseMotionSupported())
-    glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
-  else
-    fprintf(stderr, "Raw mouse input not supported\n");
-
-  glfwSetCursorPosCallback(window, cursor_position_callback);
-  glfwSetKeyCallback(window, key_callback);
-  glfwSetWindowSizeCallback(window, window_size_callback);
-
-  glfwMakeContextCurrent(window);
-  glfwSwapInterval((int)vsync_enabled);
-
-  gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
-
-  glEnable(GL_DEBUG_OUTPUT);
-  glDebugMessageCallback(gl_debug_callback, NULL);
-  glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE,
-                        GL_DEBUG_SEVERITY_NOTIFICATION, 0, NULL, GL_FALSE);
-
-  // Only back faces are rendered so that the camera can be inside of a bounding
-  // cube
-  glEnable(GL_CULL_FACE);
-  glFrontFace(GL_CCW);
-  glCullFace(GL_FRONT);
-
-  glEnable(GL_DEPTH_TEST);
-  glDepthRange(0.0, 1.0);
-
-  BlobSim blob_sim;
-  blob_sim_create(&blob_sim);
-  global.blob_sim = &blob_sim;
+  glfwSetCursorPosCallback(goop.window, cursor_position_callback);
+  glfwSetKeyCallback(goop.window, key_callback);
+  glfwSetWindowSizeCallback(goop.window, window_size_callback);
 
   // Load test level
   {
     Resource blvl_rsrc;
     resource_load(&blvl_rsrc, IDS_TEST, "BLVL");
-    level_load(&blob_sim, blvl_rsrc.data, blvl_rsrc.data_size);
+    level_load(&goop.bs, blvl_rsrc.data, blvl_rsrc.data_size);
     resource_destroy(&blvl_rsrc);
   }
 
@@ -169,9 +94,9 @@ int main() {
   for (int i = 0; i < 512; i++) {
     HMM_Vec3 pos = {(rand_float() - 0.5f) * 32.0f, rand_float() * 0.5f - 1.0f,
                     (rand_float() - 0.5f) * 32.0f};
-    SolidBlob *b = solid_blob_create(&blob_sim);
+    SolidBlob *b = solid_blob_create(&goop.bs);
     if (b) {
-      solid_blob_set_radius_pos(&blob_sim, b, 2.0f, &pos);
+      solid_blob_set_radius_pos(&goop.bs, b, 2.0f, &pos);
       b->mat_idx = 1;
     }
   }
@@ -179,9 +104,9 @@ int main() {
   for (int i = 0; i < 32; i++) {
     HMM_Vec3 pos = {rand_float() - 0.5f, rand_float() - 0.5f,
                     -20.0f - i * 2.5f};
-    SolidBlob *b = solid_blob_create(&blob_sim);
+    SolidBlob *b = solid_blob_create(&goop.bs);
     if (b) {
-      solid_blob_set_radius_pos(&blob_sim, b, 2.0f, &pos);
+      solid_blob_set_radius_pos(&goop.bs, b, 2.0f, &pos);
       b->mat_idx = 1;
     }
   }
@@ -195,21 +120,8 @@ int main() {
   }
   global.player_ent = player_ent;
 
-  // Create primitive buffers before creating renderers
-  primitives_create_buffers();
-
-  Skybox skybox;
-  skybox_create(&skybox);
-
-  BlobRenderer blob_renderer;
-  blob_renderer_create(&blob_renderer);
-  global.blob_renderer = &blob_renderer;
-
   global.cam_rot_x = -0.5f;
   global.cam_rot_y = HMM_PI32;
-
-  TextRenderer text_renderer;
-  text_renderer_create(&text_renderer, "C:\\Windows\\Fonts\\times.ttf", 32);
 
   uint64_t timer_freq = glfwGetTimerFrequency();
   uint64_t prev_timer = glfwGetTimerValue();
@@ -218,7 +130,7 @@ int main() {
   int frames_this_second = 0;
   double second_timer = 1.0;
 
-  while (!glfwWindowShouldClose(window)) {
+  while (!glfwWindowShouldClose(goop.window)) {
     uint64_t timer_val = glfwGetTimerValue();
     double delta = (timer_val - prev_timer) / (double)timer_freq;
     prev_timer = timer_val;
@@ -233,10 +145,10 @@ int main() {
 
     glfwPollEvents();
 
-    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_1) == GLFW_PRESS)
-      glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    if (glfwGetMouseButton(goop.window, GLFW_MOUSE_BUTTON_1) == GLFW_PRESS)
+      glfwSetInputMode(goop.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     else
-      glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+      glfwSetInputMode(goop.window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 
     // Avoid extremely high deltas
     delta = HMM_MIN(delta, DELTA_MIN);
@@ -245,7 +157,7 @@ int main() {
     // Simulate blobs
 
     if (blob_sim_running)
-      blob_simulate(&blob_sim, delta);
+      blob_simulate(&goop.bs, delta);
 
     // Process player (also handles camera)
 
@@ -262,13 +174,13 @@ int main() {
     // Render scene
 
     float aspect_ratio = (float)global.win_width / (float)global.win_height;
-    blob_renderer.proj_mat =
+    goop.br.proj_mat =
         HMM_Perspective_RH_ZO(60.0f * HMM_DegToRad, aspect_ratio, 0.1f, 100.0f);
-    blob_renderer.view_mat = HMM_InvGeneralM4(blob_renderer.cam_trans);
+    goop.br.view_mat = HMM_InvGeneralM4(goop.br.cam_trans);
 
-    blob_render_start(&blob_renderer);
+    blob_render_start(&goop.br);
 
-    skybox_draw(&skybox, &blob_renderer.view_mat, &blob_renderer.proj_mat);
+    skybox_draw(&goop.skybox, &goop.br.view_mat, &goop.br.proj_mat);
 
     HMM_Mat4 *plr_trans =
         entity_get_component(player_ent, COMPONENT_TRANSFORM);
@@ -280,28 +192,21 @@ int main() {
           entity_get_component(ent_model->entity, COMPONENT_TRANSFORM);
       if (HMM_LenV3(HMM_SubV3(trans->Columns[3].XYZ,
                               plr_trans->Columns[3].XYZ)) < BLOB_ACTIVE_SIZE) {
-        blob_render_mdl(&blob_renderer, &blob_sim, mdl, trans);
+        blob_render_mdl(&goop.br, &goop.bs, mdl, trans);
       }
     }
 
-    blob_render_sim(&blob_renderer, &blob_sim);
+    blob_render_sim(&goop.br, &goop.bs);
 
     char perf_text[256];
     snprintf(perf_text, sizeof(perf_text),
              "%d fps\n%.3f ms\n%d solids\n%d liquids", fps, delta * 1000.0,
-             blob_sim.solids.count, blob_sim.liquids.count);
-    text_render(&text_renderer, perf_text, 32, 32);
+             goop.bs.solids.count, goop.bs.liquids.count);
+    text_render(&goop.txtr, perf_text, 32, 32);
 
-    glfwSwapBuffers(window);
+    glfwSwapBuffers(goop.window);
   }
 
-  skybox_destroy(&skybox);
-
-  blob_sim_destroy(&blob_sim);
-  blob_renderer_destroy(&blob_renderer);
-
-  text_renderer_destroy(&text_renderer);
-
-  glfwTerminate();
+  goop_destroy(&goop);
   return 0;
 }
