@@ -1,7 +1,10 @@
 #pragma once
 
+#include <stdbool.h>
+
 #include "blob.h"
 #include "blob_render.h"
+#include "core.h"
 #include "skybox.h"
 #include "text.h"
 
@@ -15,5 +18,31 @@ typedef struct GoopEngine {
   TextRenderer txtr;
 } GoopEngine;
 
+typedef enum InputEventType {
+  INPUT_KEY = 1,
+  INPUT_MOUSE_MOTION = 2
+} InputEventType;
+
+typedef struct InputEvent {
+  InputEventType type;
+  union {
+    struct {
+      int key;
+      bool pressed;
+    } key;
+    struct {
+      double x, y;
+      double relx, rely;
+    } mouse_motion;
+  };
+} InputEvent;
+
+typedef struct InputHandler {
+  int mask;
+  void (*callback)(Entity ent, InputEvent *);
+} InputHandler;
+
 void goop_create(GoopEngine *goop);
 void goop_destroy(GoopEngine *goop);
+
+void goop_main_loop(GoopEngine *goop);

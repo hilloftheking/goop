@@ -10,6 +10,7 @@ typedef struct Player {
   HMM_Quat quat;
   HMM_Vec3 vel;
   HMM_Vec3 grav;
+  int health;
 } Player;
 
 Entity player_create();

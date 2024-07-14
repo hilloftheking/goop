@@ -18,6 +18,8 @@
 
 #define WIN_RES_X 1024
 #define WIN_RES_Y 768
+#define DELTA_MIN (1.0 / 30.0)
+#define CAM_SENS 0.01f
 
 static void glfw_fatal_error() {
   const char *err_desc;
@@ -32,7 +34,82 @@ static void gl_debug_callback(GLenum source, GLenum type, GLuint id,
   fprintf(stderr, "[GL DEBUG] %s\n", message);
 }
 
-void goop_create(GoopEngine* goop) {
+static void window_size_callback(GLFWwindow *window, int width, int height) {
+  // Need size in pixels, not screen coordinates
+  glfwGetFramebufferSize(window, &width, &height);
+  glViewport(0, 0, width, height);
+  global.win_width = width;
+  global.win_height = height;
+  if (global.blob_renderer)
+    blob_renderer_update_framebuffer(global.blob_renderer);
+}
+
+static void emit_input_event(InputEvent *event) {
+  for (EntityComponent *ec = component_begin(COMPONENT_INPUT_HANDLER);
+       ec != component_end(COMPONENT_INPUT_HANDLER);
+       ec = component_next(COMPONENT_INPUT_HANDLER, ec)) {
+    InputHandler *handler = (InputHandler *)ec->component;
+    if (handler->mask & event->type) {
+      handler->callback(ec->entity, event);
+    }
+  }
+}
+
+static void cursor_pos_callback(GLFWwindow *window, double xpos, double ypos) {
+  static double last_xpos = 0.0;
+  static double last_ypos = 0.0;
+
+  double relx = xpos - last_xpos;
+  double rely = ypos - last_ypos;
+
+  if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_1) == GLFW_PRESS) {
+    global.cam_rot_x -= (float)rely * CAM_SENS;
+    global.cam_rot_y -= (float)relx * CAM_SENS;
+
+    global.cam_rot_x =
+        HMM_Clamp(HMM_PI32 * -0.45f, global.cam_rot_x, HMM_PI32 * 0.45f);
+    global.cam_rot_y = fmodf(global.cam_rot_y, HMM_PI32 * 2.0f);
+  }
+
+  last_xpos = xpos;
+  last_ypos = ypos;
+
+  InputEvent event;
+  event.type = INPUT_MOUSE_MOTION;
+  event.mouse_motion.x = xpos;
+  event.mouse_motion.y = ypos;
+  event.mouse_motion.relx = relx;
+  event.mouse_motion.rely = rely;
+  emit_input_event(&event);
+}
+
+static bool blob_sim_running = true;
+static bool vsync_enabled = true;
+
+static void key_callback(GLFWwindow *window, int key, int scancode, int action,
+                         int mods) {
+  if (action != GLFW_PRESS)
+    return;
+
+  switch (key) {
+  case GLFW_KEY_P:
+    blob_sim_running ^= true;
+    break;
+  case GLFW_KEY_V:
+    vsync_enabled ^= true;
+    glfwSwapInterval((int)vsync_enabled);
+    break;
+  }
+
+  InputEvent event;
+  event.type = INPUT_KEY;
+  event.key.key = key;
+  event.key.pressed = action == GLFW_PRESS;
+  emit_input_event(&event);
+}
+
+void goop_create(GoopEngine *goop) {
+  ecs_register_component(COMPONENT_INPUT_HANDLER, sizeof(InputHandler));
   ecs_register_component(COMPONENT_TRANSFORM, sizeof(HMM_Mat4));
   ecs_register_component(COMPONENT_MODEL, sizeof(Model));
   ecs_register_component(COMPONENT_CREATURE, sizeof(Creature));
@@ -63,6 +140,10 @@ void goop_create(GoopEngine* goop) {
     glfwSetInputMode(goop->window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
   else
     fprintf(stderr, "Raw mouse input not supported\n");
+
+  glfwSetWindowSizeCallback(goop->window, window_size_callback);
+  glfwSetCursorPosCallback(goop->window, cursor_pos_callback);
+  glfwSetKeyCallback(goop->window, key_callback);
 
   glfwMakeContextCurrent(goop->window);
   gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
@@ -95,7 +176,7 @@ void goop_create(GoopEngine* goop) {
   text_renderer_create(&goop->txtr, "C:\\Windows\\Fonts\\times.ttf", 24);
 }
 
-void goop_destroy(GoopEngine* goop) {
+void goop_destroy(GoopEngine *goop) {
   skybox_destroy(&goop->skybox);
 
   blob_sim_destroy(&goop->bs);
@@ -104,4 +185,91 @@ void goop_destroy(GoopEngine* goop) {
   text_renderer_destroy(&goop->txtr);
 
   glfwTerminate();
+}
+
+void goop_main_loop(GoopEngine *goop) {
+  uint64_t timer_freq = glfwGetTimerFrequency();
+  uint64_t prev_timer = glfwGetTimerValue();
+
+  int fps = 0;
+  int frames_this_second = 0;
+  double second_timer = 1.0;
+
+  while (!glfwWindowShouldClose(goop->window)) {
+    uint64_t timer_val = glfwGetTimerValue();
+    double delta = (timer_val - prev_timer) / (double)timer_freq;
+    prev_timer = timer_val;
+
+    frames_this_second++;
+    second_timer -= delta;
+    if (second_timer <= 0.0) {
+      fps = frames_this_second;
+      frames_this_second = 0;
+      second_timer = 1.0;
+    }
+
+    glfwPollEvents();
+
+    if (glfwGetMouseButton(goop->window, GLFW_MOUSE_BUTTON_1) == GLFW_PRESS)
+      glfwSetInputMode(goop->window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    else
+      glfwSetInputMode(goop->window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+
+    // Avoid extremely high deltas
+    double actual_delta = delta;
+    delta = HMM_MIN(delta, DELTA_MIN);
+    global.curr_delta = delta;
+
+    // Simulate blobs
+
+    if (blob_sim_running)
+      blob_simulate(&goop->bs, delta);
+
+    // Process player (also handles camera)
+
+    for (EntityComponent *ec = component_begin(COMPONENT_PLAYER);
+         ec != component_end(COMPONENT_PLAYER);
+         ec = component_next(COMPONENT_PLAYER, ec)) {
+      player_process(ec->entity);
+    }
+
+    // Enemy behavior
+
+    for (EntityComponent *ec = component_begin(COMPONENT_ENEMY_FLOATER);
+         ec != component_end(COMPONENT_ENEMY_FLOATER);
+         ec = component_next(COMPONENT_ENEMY_FLOATER, ec)) {
+      floater_process(ec->entity);
+    }
+
+    // Render scene
+
+    float aspect_ratio = (float)global.win_width / (float)global.win_height;
+    goop->br.proj_mat =
+        HMM_Perspective_RH_ZO(60.0f * HMM_DegToRad, aspect_ratio, 0.1f, 100.0f);
+    goop->br.view_mat = HMM_InvGeneralM4(goop->br.cam_trans);
+
+    blob_render_start(&goop->br);
+
+    skybox_draw(&goop->skybox, &goop->br.view_mat, &goop->br.proj_mat);
+
+    for (EntityComponent *ent_model = component_begin(COMPONENT_MODEL);
+         ent_model != component_end(COMPONENT_MODEL);
+         ent_model = component_next(COMPONENT_MODEL, ent_model)) {
+      Model *mdl = (Model *)ent_model->component;
+      HMM_Mat4 *trans =
+          entity_get_component(ent_model->entity, COMPONENT_TRANSFORM);
+      blob_render_mdl(&goop->br, &goop->bs, mdl, trans);
+    }
+
+    blob_render_sim(&goop->br, &goop->bs);
+
+    char perf_text[256];
+    snprintf(perf_text, sizeof(perf_text),
+             "%d fps\n%.3f ms\n%d solids\n%d liquids", fps,
+             actual_delta * 1000.0, goop->bs.solids.count,
+             goop->bs.liquids.count);
+    text_render(&goop->txtr, perf_text, 32, 32);
+
+    glfwSwapBuffers(goop->window);
+  }
 }

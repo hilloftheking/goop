@@ -5,35 +5,13 @@
 #include "blob_render.h"
 #include "creature.h"
 #include "ecs.h"
+#include "goop.h"
 #include "player.h"
 
 #include "enemies/floater.h"
 
 #define PLR_SPEED 4.0f
 #define SHOOT_CD 0.01
-
-Entity player_create() {
-  Entity ent = entity_create();
-
-  HMM_Mat4 *transform = entity_add_component(ent, COMPONENT_TRANSFORM);
-  *transform = HMM_M4D(1.0f);
-
-  Creature *creature = entity_add_component(ent, COMPONENT_CREATURE);
-  creature->health = 20;
-  creature->is_enemy = false;
-
-  Player *player = entity_add_component(ent, COMPONENT_PLAYER);
-  player->shoot_timer = SHOOT_CD;
-  player->blink_timer = 0.0;
-  player->quat = HMM_Q(0, 0, 0, 1);
-  player->vel = HMM_V3(0, 0, 0);
-  player->grav = HMM_V3(0, -9.81f, 0);
-
-  Model *mdl = entity_add_component(ent, COMPONENT_MODEL);
-  blob_mdl_create(mdl, PLAYER_MDL, ARR_SIZE(PLAYER_MDL));
-
-  return ent;
-}
 
 static void liquify_model(Entity e) {
   HMM_Mat4 *trans = entity_get_component(e, COMPONENT_TRANSFORM);
@@ -58,6 +36,53 @@ static void liquify_model(Entity e) {
       b->vel = force;
     }
   }
+}
+
+static void player_input(Entity ent, InputEvent *event) {
+  if (event->type != INPUT_KEY)
+    return;
+  if (event->key.key != GLFW_KEY_K)
+    return;
+  if (event->key.pressed != true)
+    return;
+
+  Player *player = entity_get_component(ent, COMPONENT_PLAYER);
+  if (player->health > 0) {
+    player->health = 0;
+    Model *mdl = entity_get_component_or_null(ent, COMPONENT_MODEL);
+    if (mdl) {
+      liquify_model(ent);
+      entity_remove_component(ent, COMPONENT_MODEL);
+    }
+  }
+}
+
+Entity player_create() {
+  Entity ent = entity_create();
+
+  InputHandler *handler = entity_add_component(ent, COMPONENT_INPUT_HANDLER);
+  handler->mask = INPUT_KEY;
+  handler->callback = player_input;
+
+  HMM_Mat4 *transform = entity_add_component(ent, COMPONENT_TRANSFORM);
+  *transform = HMM_M4D(1.0f);
+
+  Creature *creature = entity_add_component(ent, COMPONENT_CREATURE);
+  creature->health = 20;
+  creature->is_enemy = false;
+
+  Player *player = entity_add_component(ent, COMPONENT_PLAYER);
+  player->shoot_timer = SHOOT_CD;
+  player->blink_timer = 0.0;
+  player->quat = HMM_Q(0, 0, 0, 1);
+  player->vel = HMM_V3(0, 0, 0);
+  player->grav = HMM_V3(0, -9.81f, 0);
+  player->health = 20;
+
+  Model *mdl = entity_add_component(ent, COMPONENT_MODEL);
+  blob_mdl_create(mdl, PLAYER_MDL, ARR_SIZE(PLAYER_MDL));
+
+  return ent;
 }
 
 static void proj_callback(LiquidBlob *p, ColliderModel *col_mdl) {
@@ -100,7 +125,7 @@ static void proj_callback(LiquidBlob *p, ColliderModel *col_mdl) {
 void player_process(Entity ent) {
   Player *player = entity_get_component(ent, COMPONENT_PLAYER);
   HMM_Mat4 *trans = entity_get_component(ent, COMPONENT_TRANSFORM);
-  Model *mdl = entity_get_component(ent, COMPONENT_MODEL);
+  Model *mdl = entity_get_component_or_null(ent, COMPONENT_MODEL);
 
   // Camera rotation
 
@@ -112,79 +137,83 @@ void player_process(Entity ent) {
   *cam_trans = HMM_MulM4(
       *cam_trans, HMM_Rotate_RH(global.cam_rot_x, (HMM_Vec3){{1, 0, 0}}));
 
-  // Movement/physics
-
   GLFWwindow *window = global.window;
-  bool w_press = glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS;
-  bool s_press = glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS;
-  bool a_press = glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS;
-  bool d_press = glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS;
-  HMM_Vec4 dir = {0};
-  dir.X = (float)(d_press - a_press);
-  dir.Z = (float)(s_press - w_press);
-  if (dir.X || dir.Z) {
-    dir = HMM_MulM4V4(*cam_trans, dir);
-    dir.Y = 0;
-    dir.W = 0;
-    dir = HMM_NormV4(dir);
 
-    HMM_Mat4 rot_mat = HMM_M4D(1.0f);
-    rot_mat.Columns[2].XYZ = HMM_MulV3F(dir.XYZ, -1.0f);
-    rot_mat.Columns[1].XYZ = (HMM_Vec3){0, 1, 0};
-    rot_mat.Columns[0].XYZ =
-        HMM_Cross(rot_mat.Columns[1].XYZ, rot_mat.Columns[2].XYZ);
+  if (player->health > 0) {
+    // Movement/physics
+    
+    bool w_press = glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS;
+    bool s_press = glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS;
+    bool a_press = glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS;
+    bool d_press = glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS;
+    HMM_Vec4 dir = {0};
+    dir.X = (float)(d_press - a_press);
+    dir.Z = (float)(s_press - w_press);
+    if (dir.X || dir.Z) {
+      dir = HMM_MulM4V4(*cam_trans, dir);
+      dir.Y = 0;
+      dir.W = 0;
+      dir = HMM_NormV4(dir);
 
-    float step = (HMM_PI32 * 4.0f) * (float)global.curr_delta;
-    player->quat =
-        HMM_RotateTowardsQ(player->quat, step, HMM_M4ToQ_RH(rot_mat));
-    rot_mat = HMM_QToM4(player->quat);
+      HMM_Mat4 rot_mat = HMM_M4D(1.0f);
+      rot_mat.Columns[2].XYZ = HMM_MulV3F(dir.XYZ, -1.0f);
+      rot_mat.Columns[1].XYZ = (HMM_Vec3){0, 1, 0};
+      rot_mat.Columns[0].XYZ =
+          HMM_Cross(rot_mat.Columns[1].XYZ, rot_mat.Columns[2].XYZ);
 
-    trans->Columns[0] = rot_mat.Columns[0];
-    trans->Columns[1] = rot_mat.Columns[1];
-    trans->Columns[2] = rot_mat.Columns[2];
-  }
+      float step = (HMM_PI32 * 4.0f) * (float)global.curr_delta;
+      player->quat =
+          HMM_RotateTowardsQ(player->quat, step, HMM_M4ToQ_RH(rot_mat));
+      rot_mat = HMM_QToM4(player->quat);
 
-  player->vel.X = 0;
-  player->vel.Z = 0;
-  player->vel = HMM_AddV3(player->vel,
-                          HMM_MulV3F(player->grav, (float)global.curr_delta));
-  player->vel = HMM_AddV3(player->vel, HMM_MulV3F(dir.XYZ, PLR_SPEED));
-  HMM_Vec3 test_pos = HMM_AddV3(
-      trans->Columns[3].XYZ, HMM_MulV3F(player->vel, (float)global.curr_delta));
-  HMM_Vec3 test_pos_with_offset = HMM_AddV3(test_pos, (HMM_Vec3){0, 0.5f, 0});
-  HMM_Vec3 correction = blob_get_correction_from_solids(
-      global.blob_sim, &test_pos_with_offset, 0.5f);
+      trans->Columns[0] = rot_mat.Columns[0];
+      trans->Columns[1] = rot_mat.Columns[1];
+      trans->Columns[2] = rot_mat.Columns[2];
+    }
 
-  // Avoid slowly sliding off of mostly flat surfaces
-  if (HMM_LenV3(player->vel) > 0.1f) {
-    trans->Columns[3].XYZ = HMM_AddV3(test_pos, correction);
-  }
+    player->vel.X = 0;
+    player->vel.Z = 0;
+    player->vel = HMM_AddV3(player->vel,
+                            HMM_MulV3F(player->grav, (float)global.curr_delta));
+    player->vel = HMM_AddV3(player->vel, HMM_MulV3F(dir.XYZ, PLR_SPEED));
+    HMM_Vec3 test_pos =
+        HMM_AddV3(trans->Columns[3].XYZ,
+                  HMM_MulV3F(player->vel, (float)global.curr_delta));
+    HMM_Vec3 test_pos_with_offset = HMM_AddV3(test_pos, (HMM_Vec3){0, 0.5f, 0});
+    HMM_Vec3 correction = blob_get_correction_from_solids(
+        global.blob_sim, &test_pos_with_offset, 0.5f);
 
-  if (correction.Y && HMM_DotV3(HMM_NormV3(correction), (HMM_Vec3){0, 1, 0}) >
-                          HMM_CosF(45.0f * HMM_DegToRad)) {
-    player->vel.Y = 0.0f;
-  }
+    // Avoid slowly sliding off of mostly flat surfaces
+    if (HMM_LenV3(player->vel) > 0.1f) {
+      trans->Columns[3].XYZ = HMM_AddV3(test_pos, correction);
+    }
 
-  if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
-    player->vel.Y = 5.0f;
+    if (correction.Y && HMM_DotV3(HMM_NormV3(correction), (HMM_Vec3){0, 1, 0}) >
+                            HMM_CosF(45.0f * HMM_DegToRad)) {
+      player->vel.Y = 0.0f;
+    }
 
-  // Blinking
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+      player->vel.Y = 5.0f;
 
-  const double BLINK_OCCUR = 2.0;
-  const double BLINK_TIME = 0.3;
-  const float EYE_RADIUS = 0.05f;
-  player->blink_timer += global.curr_delta;
-  mdl->blobs[8].radius = EYE_RADIUS;
-  mdl->blobs[9].radius = EYE_RADIUS;
-  if (player->blink_timer >= BLINK_OCCUR + BLINK_TIME) {
-    player->blink_timer = 0.0;
-  } else if (player->blink_timer >= BLINK_OCCUR) {
-    float x = (float)(player->blink_timer - BLINK_OCCUR);
-    float r =
-        ((cosf(((2.0f * HMM_PI32) / (float)BLINK_TIME) * x) * 0.5f) + 0.5f) *
-        EYE_RADIUS;
-    mdl->blobs[8].radius = r;
-    mdl->blobs[9].radius = r;
+    // Blinking
+
+    const double BLINK_OCCUR = 2.0;
+    const double BLINK_TIME = 0.3;
+    const float EYE_RADIUS = 0.05f;
+    player->blink_timer += global.curr_delta;
+    mdl->blobs[8].radius = EYE_RADIUS;
+    mdl->blobs[9].radius = EYE_RADIUS;
+    if (player->blink_timer >= BLINK_OCCUR + BLINK_TIME) {
+      player->blink_timer = 0.0;
+    } else if (player->blink_timer >= BLINK_OCCUR) {
+      float x = (float)(player->blink_timer - BLINK_OCCUR);
+      float r =
+          ((cosf(((2.0f * HMM_PI32) / (float)BLINK_TIME) * x) * 0.5f) + 0.5f) *
+          EYE_RADIUS;
+      mdl->blobs[8].radius = r;
+      mdl->blobs[9].radius = r;
+    }
   }
 
   // Now set the camera position
@@ -205,50 +234,52 @@ void player_process(Entity ent) {
         HMM_AddV3(ro, HMM_MulV3F(cam_trans->Columns[2].XYZ, cam_dist));
   }
 
-  // Hold right click to create projectiles
+  if (player->health > 0) {
+    // Hold right click to create projectiles
 
-  if (player->shoot_timer > 0.0) {
-    player->shoot_timer -= global.curr_delta;
-  }
-
-  if (player->shoot_timer <= 0.0) {
-    HMM_Vec3 proj_dir = cam_trans->Columns[2].XYZ;
-    proj_dir = HMM_RotateV3AxisAngle_RH(proj_dir, cam_trans->Columns[1].XYZ,
-                                        (rand_float() - 0.5f) * 0.1f);
-    proj_dir = HMM_RotateV3AxisAngle_RH(proj_dir, cam_trans->Columns[0].XYZ,
-                                        (rand_float() - 0.5f) * 0.1f);
-
-    HMM_Vec3 pos =
-        HMM_AddV3(HMM_MulV3F(proj_dir, -5.0f), cam_trans->Columns[3].XYZ);
-    pos.Y += 1.0f;
-
-    HMM_Vec3 force = HMM_MulV3F(proj_dir, -15.0f);
-    force = HMM_AddV3(force, (HMM_Vec3){0, 5.0f, 0});
-
-    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_2) == GLFW_PRESS) {
-      player->shoot_timer = SHOOT_CD;
-
-      const float radius = 0.2f;
-
-      LiquidBlob *p = projectile_create(global.blob_sim);
-      if (p) {
-        p->mat_idx = 6;
-        p->vel = force;
-        p->proj.callback = proj_callback;
-        liquid_blob_set_radius_pos(global.blob_sim, p, radius, &pos);
-        blob_sim_delayed_remove(global.blob_sim, REMOVE_LIQUID, p, 2.0);
-      }
+    if (player->shoot_timer > 0.0) {
+      player->shoot_timer -= global.curr_delta;
     }
-    if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
-      player->shoot_timer = SHOOT_CD;
 
-      const float radius = 0.5f;
+    if (player->shoot_timer <= 0.0) {
+      HMM_Vec3 proj_dir = cam_trans->Columns[2].XYZ;
+      proj_dir = HMM_RotateV3AxisAngle_RH(proj_dir, cam_trans->Columns[1].XYZ,
+                                          (rand_float() - 0.5f) * 0.1f);
+      proj_dir = HMM_RotateV3AxisAngle_RH(proj_dir, cam_trans->Columns[0].XYZ,
+                                          (rand_float() - 0.5f) * 0.1f);
 
-      LiquidBlob *b = liquid_blob_create(global.blob_sim);
-      if (b) {
-        b->mat_idx = 2;
-        b->vel = force;
-        liquid_blob_set_radius_pos(global.blob_sim, b, radius, &pos);
+      HMM_Vec3 pos =
+          HMM_AddV3(HMM_MulV3F(proj_dir, -5.0f), cam_trans->Columns[3].XYZ);
+      pos.Y += 1.0f;
+
+      HMM_Vec3 force = HMM_MulV3F(proj_dir, -15.0f);
+      force = HMM_AddV3(force, (HMM_Vec3){0, 5.0f, 0});
+
+      if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_2) == GLFW_PRESS) {
+        player->shoot_timer = SHOOT_CD;
+
+        const float radius = 0.2f;
+
+        LiquidBlob *p = projectile_create(global.blob_sim);
+        if (p) {
+          p->mat_idx = 6;
+          p->vel = force;
+          p->proj.callback = proj_callback;
+          liquid_blob_set_radius_pos(global.blob_sim, p, radius, &pos);
+          blob_sim_delayed_remove(global.blob_sim, REMOVE_LIQUID, p, 2.0);
+        }
+      }
+      if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
+        player->shoot_timer = SHOOT_CD;
+
+        const float radius = 0.5f;
+
+        LiquidBlob *b = liquid_blob_create(global.blob_sim);
+        if (b) {
+          b->mat_idx = 2;
+          b->vel = force;
+          liquid_blob_set_radius_pos(global.blob_sim, b, radius, &pos);
+        }
       }
     }
   }
