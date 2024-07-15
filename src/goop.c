@@ -11,8 +11,9 @@
 #include "goop.h"
 #include "primitives.h"
 
-// These are currently needed to register ECS components
+// These are currently needed to register/process ECS components
 #include "creature.h"
+#include "editor.h"
 #include "enemies/floater.h"
 #include "player.h"
 
@@ -45,9 +46,8 @@ static void window_size_callback(GLFWwindow *window, int width, int height) {
 }
 
 static void emit_input_event(InputEvent *event) {
-  for (EntityComponent *ec = component_begin(COMPONENT_INPUT_HANDLER);
-       ec != component_end(COMPONENT_INPUT_HANDLER);
-       ec = component_next(COMPONENT_INPUT_HANDLER, ec)) {
+  for (int i = 0; i < component_get_count(COMPONENT_INPUT_HANDLER); i++) {
+    EntityComponent *ec = component_get_from_idx(COMPONENT_INPUT_HANDLER, i);
     InputHandler *handler = (InputHandler *)ec->component;
     if (handler->mask & event->type) {
       handler->callback(ec->entity, event);
@@ -69,17 +69,26 @@ static void cursor_pos_callback(GLFWwindow *window, double xpos, double ypos) {
     global.cam_rot_x =
         HMM_Clamp(HMM_PI32 * -0.45f, global.cam_rot_x, HMM_PI32 * 0.45f);
     global.cam_rot_y = fmodf(global.cam_rot_y, HMM_PI32 * 2.0f);
+
+    InputEvent event;
+    event.type = INPUT_MOUSE_MOTION;
+    event.mouse_motion.x = xpos;
+    event.mouse_motion.y = ypos;
+    event.mouse_motion.relx = relx;
+    event.mouse_motion.rely = rely;
+    emit_input_event(&event);
   }
 
   last_xpos = xpos;
   last_ypos = ypos;
+}
 
+static void mouse_button_callback(GLFWwindow *window, int button, int action,
+                                  int mods) {
   InputEvent event;
-  event.type = INPUT_MOUSE_MOTION;
-  event.mouse_motion.x = xpos;
-  event.mouse_motion.y = ypos;
-  event.mouse_motion.relx = relx;
-  event.mouse_motion.rely = rely;
+  event.type = INPUT_MOUSE_BUTTON;
+  event.mouse_button.button = button;
+  event.mouse_button.pressed = action;
   emit_input_event(&event);
 }
 
@@ -115,6 +124,7 @@ void goop_create(GoopEngine *goop) {
   ecs_register_component(COMPONENT_CREATURE, sizeof(Creature));
   ecs_register_component(COMPONENT_PLAYER, sizeof(Player));
   ecs_register_component(COMPONENT_ENEMY_FLOATER, sizeof(Floater));
+  ecs_register_component(COMPONENT_EDITOR, sizeof(Editor));
 
   unsigned int seed = time(NULL);
   srand(seed);
@@ -143,6 +153,7 @@ void goop_create(GoopEngine *goop) {
 
   glfwSetWindowSizeCallback(goop->window, window_size_callback);
   glfwSetCursorPosCallback(goop->window, cursor_pos_callback);
+  glfwSetMouseButtonCallback(goop->window, mouse_button_callback);
   glfwSetKeyCallback(goop->window, key_callback);
 
   glfwMakeContextCurrent(goop->window);
@@ -227,18 +238,21 @@ void goop_main_loop(GoopEngine *goop) {
 
     // Process player (also handles camera)
 
-    for (EntityComponent *ec = component_begin(COMPONENT_PLAYER);
-         ec != component_end(COMPONENT_PLAYER);
-         ec = component_next(COMPONENT_PLAYER, ec)) {
-      player_process(ec->entity);
+    for (int i = 0; i < component_get_count(COMPONENT_PLAYER); i++) {
+      player_process(component_get_from_idx(COMPONENT_PLAYER, i)->entity);
+    }
+
+    // Editor
+
+    for (int i = 0; i < component_get_count(COMPONENT_EDITOR); i++) {
+      editor_process(component_get_from_idx(COMPONENT_EDITOR, i)->entity);
     }
 
     // Enemy behavior
 
-    for (EntityComponent *ec = component_begin(COMPONENT_ENEMY_FLOATER);
-         ec != component_end(COMPONENT_ENEMY_FLOATER);
-         ec = component_next(COMPONENT_ENEMY_FLOATER, ec)) {
-      floater_process(ec->entity);
+    for (int i = 0; i < component_get_count(COMPONENT_ENEMY_FLOATER); i++) {
+      floater_process(
+          component_get_from_idx(COMPONENT_ENEMY_FLOATER, i)->entity);
     }
 
     // Render scene
@@ -252,22 +266,25 @@ void goop_main_loop(GoopEngine *goop) {
 
     skybox_draw(&goop->skybox, &goop->br.view_mat, &goop->br.proj_mat);
 
-    for (EntityComponent *ent_model = component_begin(COMPONENT_MODEL);
-         ent_model != component_end(COMPONENT_MODEL);
-         ent_model = component_next(COMPONENT_MODEL, ent_model)) {
-      Model *mdl = (Model *)ent_model->component;
-      HMM_Mat4 *trans =
-          entity_get_component(ent_model->entity, COMPONENT_TRANSFORM);
+    for (int i = 0; i < component_get_count(COMPONENT_MODEL); i++) {
+      EntityComponent *ec = component_get_from_idx(COMPONENT_MODEL, i);
+      Model *mdl = (Model *)ec->component;
+      HMM_Mat4 *trans = entity_get_component(ec->entity, COMPONENT_TRANSFORM);
       blob_render_mdl(&goop->br, &goop->bs, mdl, trans);
     }
 
     blob_render_sim(&goop->br, &goop->bs);
 
+    int mem_bytes = 0;
+    mem_bytes += goop->bs.solid_ot.size_int * 4;
+    mem_bytes += goop->bs.liquid_ot.size_int * 4;
+    double mem_mb = mem_bytes / 1000000.0;
+
     char perf_text[256];
     snprintf(perf_text, sizeof(perf_text),
-             "%d fps\n%.3f ms\n%d solids\n%d liquids", fps,
+             "%d fps\n%.3f ms\n%d solids\n%d liquids\n%.3f MB", fps,
              actual_delta * 1000.0, goop->bs.solids.count,
-             goop->bs.liquids.count);
+             goop->bs.liquids.count, mem_mb);
     text_render(&goop->txtr, perf_text, 32, 32);
 
     glfwSwapBuffers(goop->window);

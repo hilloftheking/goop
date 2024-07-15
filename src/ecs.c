@@ -98,3 +98,13 @@ EntityComponent *component_end(ComponentType type) {
   RegisteredComponent *rc = &registered_components[type];
   return fixed_array_get(&rc->components, rc->components.count);
 }
+
+int component_get_count(ComponentType type) {
+  RegisteredComponent *rc = &registered_components[type];
+  return rc->components.count;
+}
+
+EntityComponent *component_get_from_idx(ComponentType type, int idx) {
+  RegisteredComponent *rc = &registered_components[type];
+  return fixed_array_get(&rc->components, idx);
+}

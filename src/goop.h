@@ -20,7 +20,8 @@ typedef struct GoopEngine {
 
 typedef enum InputEventType {
   INPUT_KEY = 1,
-  INPUT_MOUSE_MOTION = 2
+  INPUT_MOUSE_BUTTON = 2,
+  INPUT_MOUSE_MOTION = 4
 } InputEventType;
 
 typedef struct InputEvent {
@@ -30,6 +31,10 @@ typedef struct InputEvent {
       int key;
       bool pressed;
     } key;
+    struct {
+      int button;
+      bool pressed;
+    } mouse_button;
     struct {
       double x, y;
       double relx, rely;

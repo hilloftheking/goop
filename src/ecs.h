@@ -11,6 +11,7 @@ typedef enum ComponentType {
   COMPONENT_CREATURE,
   COMPONENT_PLAYER,
   COMPONENT_ENEMY_FLOATER,
+  COMPONENT_EDITOR,
   COMPONENT_MAX
 } ComponentType;
 
@@ -32,6 +33,5 @@ void *entity_get_component(Entity e, ComponentType type);
 void *entity_get_component_or_null(Entity e, ComponentType type);
 void entity_remove_component(Entity e, ComponentType type);
 
-EntityComponent *component_begin(ComponentType type);
-EntityComponent *component_next(ComponentType type, EntityComponent *ec);
-EntityComponent *component_end(ComponentType type);
+int component_get_count(ComponentType type);
+EntityComponent *component_get_from_idx(ComponentType type, int idx);

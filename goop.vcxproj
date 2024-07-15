@@ -5,6 +5,10 @@
       <Configuration>Debug</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
+    <ProjectConfiguration Include="EditorDebug|x64">
+      <Configuration>EditorDebug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
     <ProjectConfiguration Include="Release|x64">
       <Configuration>Release</Configuration>
       <Platform>x64</Platform>
@@ -19,6 +23,12 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <PlatformToolset>v143</PlatformToolset>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='EditorDebug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <PlatformToolset>v143</PlatformToolset>
     <UseDebugLibraries>true</UseDebugLibraries>
@@ -40,6 +50,12 @@
     <Import Project="props_shared.props" />
     <Import Project="props_debug.props" />
   </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='EditorDebug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="props_shared.props" />
+    <Import Project="props_debug.props" />
+    <Import Project="props_editor.props" />
+  </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="props_shared.props" />
@@ -49,10 +65,30 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <CustomBuildBeforeTargets>BuildGenerateSources</CustomBuildBeforeTargets>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='EditorDebug|x64'">
+    <CustomBuildBeforeTargets>BuildGenerateSources</CustomBuildBeforeTargets>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <CustomBuildBeforeTargets>BuildGenerateSources</CustomBuildBeforeTargets>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile />
+    <Link />
+    <PreBuildEvent />
+    <PreBuildEvent />
+    <CustomBuildStep>
+      <Command>py $(ProjectDir)embed_shaders.py</Command>
+    </CustomBuildStep>
+    <CustomBuildStep>
+      <Message>Put optimized + minified shaders into source/header</Message>
+    </CustomBuildStep>
+    <CustomBuildStep>
+      <Inputs>$(ProjectDir)shaders</Inputs>
+      <Outputs>$(ProjectDir)src\shader_sources.c;$(ProjectDir)src\shader_sources.h</Outputs>
+    </CustomBuildStep>
+    <Link />
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='EditorDebug|x64'">
     <ClCompile />
     <Link />
     <PreBuildEvent />
@@ -90,8 +126,10 @@
     <ClInclude Include="src\core.h" />
     <ClInclude Include="src\creature.h" />
     <ClInclude Include="src\ecs.h" />
+    <ClInclude Include="src\editor.h" />
     <ClInclude Include="src\enemies\floater.h" />
     <ClInclude Include="src\fixed_array.h" />
+    <ClInclude Include="src\game.h" />
     <ClInclude Include="src\goop.h" />
     <ClInclude Include="src\HandmadeMath.h" />
     <ClInclude Include="src\int_map.h" />
@@ -119,10 +157,12 @@
   <ItemGroup>
     <ClCompile Include="src\core.c" />
     <ClCompile Include="src\ecs.c" />
+    <ClCompile Include="src\editor.c" />
     <ClCompile Include="src\enemies\floater.c" />
     <ClCompile Include="src\fixed_array.c" />
     <ClCompile Include="src\blob.c" />
     <ClCompile Include="src\blob_render.c" />
+    <ClCompile Include="src\game.c" />
     <ClCompile Include="src\goop.c" />
     <ClCompile Include="src\primitives.c" />
     <ClCompile Include="src\int_map.c" />
@@ -149,6 +189,8 @@
       <DeploymentContent>false</DeploymentContent>
       <FileType>Document</FileType>
       <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      </DeploymentContent>
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='EditorDebug|x64'">
       </DeploymentContent>
       <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
       </DeploymentContent>
