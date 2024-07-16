@@ -113,6 +113,7 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action,
   InputEvent event;
   event.type = INPUT_KEY;
   event.key.key = key;
+  event.key.mods = mods;
   event.key.pressed = action == GLFW_PRESS;
   emit_input_event(&event);
 }

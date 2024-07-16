@@ -29,6 +29,7 @@ typedef struct InputEvent {
   union {
     struct {
       int key;
+      int mods;
       bool pressed;
     } key;
     struct {
