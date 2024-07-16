@@ -139,6 +139,8 @@ void player_process(Entity ent) {
 
   GLFWwindow *window = global.window;
 
+  global.mouse_captured = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_2);
+
   if (player->health > 0) {
     // Movement/physics
     
@@ -255,7 +257,7 @@ void player_process(Entity ent) {
       HMM_Vec3 force = HMM_MulV3F(proj_dir, -15.0f);
       force = HMM_AddV3(force, (HMM_Vec3){0, 5.0f, 0});
 
-      if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_2) == GLFW_PRESS) {
+      if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_1) == GLFW_PRESS) {
         player->shoot_timer = SHOOT_CD;
 
         const float radius = 0.2f;

@@ -145,6 +145,7 @@ typedef struct RaycastResult {
   HMM_Vec3 hit;
   HMM_Vec3 norm;
   float traveled;
+  int blob_idx;
 } RaycastResult;
 
 // Size of level cube. Contains inactive blobs
@@ -195,7 +196,8 @@ BlobRemoval *blob_sim_delayed_remove(BlobSim *bs, RemovalType type, void *b,
                                       double t);
 
 // rd should not be normalized
-void blob_sim_raycast(RaycastResult *r, const BlobSim *bs, HMM_Vec3 ro, HMM_Vec3 rd);
+void blob_sim_raycast(RaycastResult *r, const BlobSim *bs, HMM_Vec3 ro,
+                      HMM_Vec3 rd);
 
 void blob_simulate(BlobSim *bs, double delta);
 

@@ -62,22 +62,22 @@ static void cursor_pos_callback(GLFWwindow *window, double xpos, double ypos) {
   double relx = xpos - last_xpos;
   double rely = ypos - last_ypos;
 
-  if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_1) == GLFW_PRESS) {
+  if (global.mouse_captured) {
     global.cam_rot_x -= (float)rely * CAM_SENS;
     global.cam_rot_y -= (float)relx * CAM_SENS;
 
     global.cam_rot_x =
         HMM_Clamp(HMM_PI32 * -0.45f, global.cam_rot_x, HMM_PI32 * 0.45f);
     global.cam_rot_y = fmodf(global.cam_rot_y, HMM_PI32 * 2.0f);
-
-    InputEvent event;
-    event.type = INPUT_MOUSE_MOTION;
-    event.mouse_motion.x = xpos;
-    event.mouse_motion.y = ypos;
-    event.mouse_motion.relx = relx;
-    event.mouse_motion.rely = rely;
-    emit_input_event(&event);
   }
+
+  InputEvent event;
+  event.type = INPUT_MOUSE_MOTION;
+  event.mouse_motion.x = xpos;
+  event.mouse_motion.y = ypos;
+  event.mouse_motion.relx = relx;
+  event.mouse_motion.rely = rely;
+  emit_input_event(&event);
 
   last_xpos = xpos;
   last_ypos = ypos;
@@ -119,6 +119,7 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action,
 
 void goop_create(GoopEngine *goop) {
   ecs_register_component(COMPONENT_INPUT_HANDLER, sizeof(InputHandler));
+  ecs_register_component(COMPONENT_TEXT_BOX, sizeof(TextBox));
   ecs_register_component(COMPONENT_TRANSFORM, sizeof(HMM_Mat4));
   ecs_register_component(COMPONENT_MODEL, sizeof(Model));
   ecs_register_component(COMPONENT_CREATURE, sizeof(Creature));
@@ -221,10 +222,11 @@ void goop_main_loop(GoopEngine *goop) {
 
     glfwPollEvents();
 
-    if (glfwGetMouseButton(goop->window, GLFW_MOUSE_BUTTON_1) == GLFW_PRESS)
+    if (global.mouse_captured) {
       glfwSetInputMode(goop->window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    else
+    } else {
       glfwSetInputMode(goop->window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+    }
 
     // Avoid extremely high deltas
     double actual_delta = delta;
@@ -286,6 +288,13 @@ void goop_main_loop(GoopEngine *goop) {
              actual_delta * 1000.0, goop->bs.solids.count,
              goop->bs.liquids.count, mem_mb);
     text_render(&goop->txtr, perf_text, 32, 32);
+
+    for (int i = 0; i < component_get_count(COMPONENT_TEXT_BOX); i++) {
+      EntityComponent *ec = component_get_from_idx(COMPONENT_TEXT_BOX, i);
+      TextBox *text_box = (TextBox *)ec->component;
+      text_render(&goop->txtr, text_box->text, text_box->pos.X,
+                  text_box->pos.Y);
+    }
 
     glfwSwapBuffers(goop->window);
   }

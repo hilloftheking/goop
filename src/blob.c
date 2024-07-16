@@ -305,13 +305,20 @@ void blob_sim_raycast(RaycastResult *r, const BlobSim *bs, HMM_Vec3 ro,
 
   float traveled = 0.0f;
 
+  float closest_sphere = 1000000.0f;
+
   for (int i = 0; i < BLOB_RAY_MAX_STEPS; i++) {
     HMM_Vec3 p = HMM_AddV3(ro, HMM_MulV3F(rd_n, traveled));
 
     float dist = 100000.0f;
     for (int j = 0; j < bs->solids.count; j++) {
       const SolidBlob *b = fixed_array_get_const(&bs->solids, j);
+      float d = dist_sphere(&b->pos, b->radius, &p);
       dist = sminf(dist, dist_sphere(&b->pos, b->radius, &p), BLOB_SMOOTH);
+      if (d < closest_sphere) {
+        closest_sphere = d;
+        r->blob_idx = j;
+      }
     }
 
     traveled += dist;

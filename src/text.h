@@ -1,5 +1,7 @@
 #pragma once
 
+#include "HandmadeMath.h"
+
 #include "stb/stb_truetype.h"
 
 typedef struct TextRenderer {
@@ -8,6 +10,11 @@ typedef struct TextRenderer {
   stbtt_bakedchar *cdata;
   unsigned int font_tex, glyph_program;
 } TextRenderer;
+
+typedef struct TextBox {
+  HMM_Vec2 pos;
+  const char *text;
+} TextBox;
 
 void text_renderer_create(TextRenderer *tr, const char *font_path,
                           float font_height);

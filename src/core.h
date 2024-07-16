@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -19,6 +20,7 @@ typedef struct Global {
   float cam_rot_y;
   double curr_delta;
   int win_width, win_height;
+  bool mouse_captured;
 } Global;
 
 extern Global global;

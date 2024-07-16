@@ -6,6 +6,7 @@ typedef uint64_t Entity;
 
 typedef enum ComponentType {
   COMPONENT_INPUT_HANDLER,
+  COMPONENT_TEXT_BOX,
   COMPONENT_TRANSFORM,
   COMPONENT_MODEL,
   COMPONENT_CREATURE,
