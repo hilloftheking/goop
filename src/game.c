@@ -14,27 +14,6 @@ void game_init(GoopEngine *goop) {
     resource_destroy(&blvl_rsrc);
   }
 
-  // Ground
-  for (int i = 0; i < 512; i++) {
-    HMM_Vec3 pos = {(rand_float() - 0.5f) * 32.0f, rand_float() * 0.5f - 1.0f,
-                    (rand_float() - 0.5f) * 32.0f};
-    SolidBlob *b = solid_blob_create(&goop->bs);
-    if (b) {
-      solid_blob_set_radius_pos(&goop->bs, b, 2.0f, &pos);
-      b->mat_idx = 1;
-    }
-  }
-
-  for (int i = 0; i < 32; i++) {
-    HMM_Vec3 pos = {rand_float() - 0.5f, rand_float() - 0.5f,
-                    -20.0f - i * 2.5f};
-    SolidBlob *b = solid_blob_create(&goop->bs);
-    if (b) {
-      solid_blob_set_radius_pos(&goop->bs, b, 2.0f, &pos);
-      b->mat_idx = 1;
-    }
-  }
-
   // Player
 
   Entity player_ent = player_create();

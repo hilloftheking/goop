@@ -36,7 +36,44 @@ void editor_input(Entity ent, InputEvent *event) {
       return;
     }
 
-    if (event->key.mods & GLFW_MOD_SHIFT) {
+    if (event->key.mods & GLFW_MOD_CONTROL) {
+      if (event->key.key == GLFW_KEY_S) {
+        FILE *f = fopen("assets/_editor_out.blvl", "w");
+        if (!f) {
+          fprintf(stderr, "Failed to open assets/_editor_out.blvl\n");
+          return;
+        }
+
+        FixedArray *solids = &goop->bs.solids;
+
+        fprintf(f, "[solids]\nradius = [");
+        for (int i = 0; i < solids->count; i++) {
+          if (i != 0)
+            fprintf(f, ", ");
+          SolidBlob *b = fixed_array_get(solids, i);
+          fprintf(f, "%.2f", b->radius);
+        }
+        fprintf(f, "]\npos = [");
+        for (int i = 0; i < solids->count; i++) {
+          if (i != 0)
+            fprintf(f, ", ");
+          SolidBlob *b = fixed_array_get(solids, i);
+          fprintf(f, "[%.2f, %.2f, %.2f]", b->pos.X, b->pos.Y, b->pos.Z);
+        }
+        fprintf(f, "]\nmat_idx=[");
+        for (int i = 0; i < solids->count; i++) {
+          if (i != 0)
+            fprintf(f, ", ");
+          SolidBlob *b = fixed_array_get(solids, i);
+          fprintf(f, "%d", b->mat_idx);
+        }
+        fprintf(f, "]\n");
+
+        fclose(f);
+      }
+
+      return;
+    } else if (event->key.mods & GLFW_MOD_SHIFT) {
       switch (event->key.key) {
       case GLFW_KEY_A: {
         HMM_Vec3 pos = goop->br.cam_trans.Columns[3].XYZ;
@@ -198,7 +235,8 @@ void editor_process(Entity ent) {
 
   global.mouse_captured = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_2);
 
-  if (global.mouse_captured && !glfwGetKey(window, GLFW_KEY_LEFT_SHIFT)) {
+  if (global.mouse_captured && !glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) &&
+      !glfwGetKey(window, GLFW_KEY_LEFT_CONTROL)) {
     bool w_press = glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS;
     bool s_press = glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS;
     bool a_press = glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS;
