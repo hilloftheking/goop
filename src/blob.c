@@ -641,10 +641,10 @@ void blob_ot_reset(BlobOt *bot) {
 }
 
 // This is also in the compute shader, so be careful if it needs to be changed
-static HMM_Vec3 ot_octants[8] = {{0.5f, 0.5f, 0.5f},   {0.5f, 0.5f, -0.5f},
-                                 {0.5f, -0.5f, 0.5f},  {0.5f, -0.5f, -0.5f},
-                                 {-0.5f, 0.5f, 0.5f},  {-0.5f, 0.5f, -0.5f},
-                                 {-0.5f, -0.5f, 0.5f}, {-0.5f, -0.5f, -0.5f}};
+static const HMM_Vec3 ot_octants[8] = {
+    {-0.5f, -0.5f, -0.5f}, {-0.5f, -0.5f, 0.5f}, {-0.5f, 0.5f, -0.5f},
+    {-0.5f, 0.5f, 0.5f},   {0.5f, -0.5f, -0.5f}, {0.5f, -0.5f, 0.5f},
+    {0.5f, 0.5f, -0.5f},   {0.5f, 0.5f, 0.5f}};
 
 // Can also be used for spheres but it is less accurate. Returns bitflag of
 // octant children
@@ -655,35 +655,26 @@ static int get_octant_children_containing_cube(const HMM_Vec3 *npos,
 
   float dx = cpos->X - npos->X;
   if (dx >= chalf) {
-    ret &= 0x0F;
-  } else if (dx <= -chalf) {
     ret &= 0xF0;
+  } else if (dx <= -chalf) {
+    ret &= 0x0F;
   }
 
   float dy = cpos->Y - npos->Y;
   if (dy >= chalf) {
-    ret &= 0x33;
-  } else if (dy <= -chalf) {
     ret &= 0xCC;
+  } else if (dy <= -chalf) {
+    ret &= 0x33;
   }
 
   float dz = cpos->Z - npos->Z;
   if (dz >= chalf) {
-    ret &= 0x55;
-  } else if (dz <= -chalf) {
     ret &= 0xAA;
+  } else if (dz <= -chalf) {
+    ret &= 0x55;
   }
 
   return ret;
-}
-
-static float dist_cube(const HMM_Vec3 *c, float s, const HMM_Vec3 *p) {
-  HMM_Vec3 d;
-  for (int i = 0; i < 3; i++) {
-    d.Elements[i] =
-        HMM_MAX(0.0f, HMM_ABS(p->Elements[i] - c->Elements[i]) - s * 0.5f);
-  }
-  return HMM_LenV3(d);
 }
 
 static bool blob_ot_insert_ot_leaf(BlobOtEnumData *enum_data) {
@@ -775,41 +766,43 @@ static bool blob_ot_insert_ot_leaf(BlobOtEnumData *enum_data) {
     const HMM_Vec3 *old_leaf_pos = enum_data->curr_leaf_pos;
     float old_leaf_size = enum_data->curr_leaf_size;
 
-    for (int i = 0; i < 8; i++) {
-      BlobOtNode *child = node + node->offsets[i];
-      HMM_Vec3 child_pos =
-          HMM_AddV3(HMM_MulV3F(ot_octants[i], enum_data->curr_leaf_size * 0.5f),
-                    *enum_data->curr_leaf_pos);
-      float child_size = enum_data->curr_leaf_size * 0.5f;
+    for (int j = 0; j < BLOB_OT_LEAF_SUBDIV_BLOB_COUNT; j++) {
+      enum_data->shape_pos =
+          *enum_data->bot->get_pos_from_idx(enum_data->bot, reinsert[j]);
+      enum_data->shape_size =
+          enum_data->bot->get_radius_from_idx(enum_data->bot, reinsert[j]) +
+          BLOB_SMOOTH + enum_data->bot->max_dist_to_leaf;
 
-      for (int j = 0; j < BLOB_OT_LEAF_SUBDIV_BLOB_COUNT; j++) {
-        enum_data->shape_pos =
-            *enum_data->bot->get_pos_from_idx(enum_data->bot, reinsert[j]);
-        enum_data->shape_size =
-            enum_data->bot->get_radius_from_idx(enum_data->bot, reinsert[j]) +
-            BLOB_SMOOTH + enum_data->bot->max_dist_to_leaf;
-        float dist = dist_cube(&child_pos, child_size, &enum_data->shape_pos) -
-                     enum_data->shape_size;
-
-        if (dist <= 0.0f) {
-          // TODO: enum_data->bot might be invalidated
-          enum_data->curr_leaf_depth++;
-          enum_data->node_stack[enum_data->curr_leaf_depth] = child;
-          enum_data->curr_leaf = child;
-          enum_data->curr_leaf_pos = &child_pos;
-          enum_data->curr_leaf_size = child_size;
-          enum_data->user_data = &reinsert[j];
-
-          // If the child being inserted into also becomes subdivided, it will
-          // be fine since reinsertion will be done
-          blob_ot_insert_ot_leaf(enum_data);
-
-          enum_data->curr_leaf_depth--;
+      int cflags = get_octant_children_containing_cube(enum_data->curr_leaf_pos,
+                                                       &enum_data->shape_pos,
+                                                       enum_data->shape_size);
+      for (int i = 0; i < 8; i++) {
+        if ((cflags & (1 << i)) == 0) {
+          continue;
         }
-      }
 
-      enum_data->curr_leaf_pos = old_leaf_pos;
-      enum_data->curr_leaf_size = old_leaf_size;
+        BlobOtNode *child = node + node->offsets[i];
+        HMM_Vec3 child_pos = HMM_AddV3(
+            HMM_MulV3F(ot_octants[i], enum_data->curr_leaf_size * 0.5f),
+            *enum_data->curr_leaf_pos);
+        float child_size = enum_data->curr_leaf_size * 0.5f;
+
+        // TODO: enum_data->bot might be invalidated
+        enum_data->curr_leaf_depth++;
+        enum_data->node_stack[enum_data->curr_leaf_depth] = node + node->offsets[i];
+        enum_data->curr_leaf = child;
+        enum_data->curr_leaf_pos = &child_pos;
+        enum_data->curr_leaf_size = child_size;
+        enum_data->user_data = &reinsert[j];
+
+        // If the child being inserted into also becomes subdivided, it will
+        // be fine since reinsertion will be done
+        blob_ot_insert_ot_leaf(enum_data);
+
+        enum_data->curr_leaf_depth--;
+        enum_data->curr_leaf_pos = old_leaf_pos;
+        enum_data->curr_leaf_size = old_leaf_size;
+      }
     }
 
     enum_data->shape_pos = old_pos;
@@ -922,23 +915,6 @@ void blob_ot_enum_leaves_sphere(BlobOtEnumData *enum_data) {
   }
 }
 
-static bool cube_cube_intersect(const HMM_Vec3 *pos0, float size0,
-                                const HMM_Vec3 *pos1, float size1) {
-  float hs0 = size0 * 0.5f;
-  float hs1 = size1 * 0.5f;
-
-  if (pos0->X + hs0 < pos1->X - hs1 || pos1->X + hs1 < pos0->X - hs0)
-    return false;
-
-  if (pos0->Y + hs0 < pos1->Y - hs1 || pos1->Y + hs1 < pos0->Y - hs0)
-    return false;
-
-  if (pos0->Z + hs0 < pos1->Z - hs1 || pos1->Z + hs1 < pos0->Z - hs0)
-    return false;
-
-  return true;
-}
-
 void blob_ot_enum_leaves_cube(BlobOtEnumData *enum_data) {
   BlobOtNode *node_stack[BLOB_OT_MAX_SUBDIVISIONS + 1];
   node_stack[0] = enum_data->bot->root;
@@ -961,24 +937,26 @@ void blob_ot_enum_leaves_cube(BlobOtEnumData *enum_data) {
 
     if (node->leaf_blob_count == -1) {
       // This node has child nodes
+
+      int cflag = get_octant_children_containing_cube(
+          npos, &enum_data->shape_pos, enum_data->shape_size * 0.5f);
+
       int *i = &iter_stack[node_depth];
       for (; *i < 8; (*i)++) {
+        if ((cflag & (1 << *i)) == 0) {
+          continue;
+        }
+
         pos_stack[node_depth + 1] =
             HMM_AddV3(HMM_MulV3F(ot_octants[*i], nsize * 0.5f), *npos);
         size_stack[node_depth + 1] = nsize * 0.5f;
 
-        bool intersect = cube_cube_intersect(
-            &pos_stack[node_depth + 1], size_stack[node_depth + 1],
-            &enum_data->shape_pos, enum_data->shape_size);
-
-        if (intersect) {
-          node_stack[node_depth + 1] = node + node->offsets[*i];
-          iter_stack[node_depth + 1] = 0;
-          node_depth += 2; // Because there is a decrement at the end of the
-                           // outer loop
-          (*i)++;          // Don't check this child again
-          break;
-        }
+        node_stack[node_depth + 1] = node + node->offsets[*i];
+        iter_stack[node_depth + 1] = 0;
+        node_depth += 2; // Because there is a decrement at the end of the
+                         // outer loop
+        (*i)++;          // Don't check this child again
+        break;
       }
     } else {
       // This is a leaf node

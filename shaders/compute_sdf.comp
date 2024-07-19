@@ -24,6 +24,11 @@ layout(location = 5) uniform float blob_smooth;
 
 layout(location = 6) uniform float blob_ot_root_size;
 
+const vec3 ot_octants[8] = {vec3(-0.5f, -0.5f, -0.5f), vec3(-0.5f, -0.5f, 0.5f),
+                            vec3(-0.5f, 0.5f, -0.5f),  vec3(-0.5f, 0.5f, 0.5f),
+                            vec3(0.5f, -0.5f, -0.5f),  vec3(0.5f, -0.5f, 0.5f),
+                            vec3(0.5f, 0.5f, -0.5f),   vec3(0.5f, 0.5f, 0.5f)};
+
 vec3 colors[BLOB_MAT_COUNT] = {
   vec3(0.41, 0.04, 0.06), // red
   vec3(0.49, 0.8, 0.2), // green
@@ -43,11 +48,6 @@ float dist_sphere(vec3 c, float r, vec3 p) {
   return length(p - c) - r;
 }
 
-float dist_cube(vec3 c, float s, vec3 p) {
-  vec3 d = abs(p - c) - vec3(s * 0.5);
-  return length(max(d, 0.0));
-}
-
 float sd_box_frame(vec3 p, vec3 b, float e) {
   p = abs(p) - b;
   vec3 q = abs(p + e) - e;
@@ -57,17 +57,25 @@ float sd_box_frame(vec3 p, vec3 b, float e) {
              length(max(vec3(q.x,q.y,p.z),0.0))+min(max(q.x,max(q.y,p.z)),0.0));
 }
 
+int get_octant_containing_point(vec3 npos, vec3 p) {
+  int oct = 0;
+
+  if (p.x >= npos.x)
+    oct |= 4;
+  if (p.y >= npos.y)
+    oct |= 2;
+  if (p.z >= npos.z)
+    oct |= 1;
+
+  return oct;
+}
+
 void main() {
   bool use_octree = blob_count == -1;
 
   vec3 p =
       (vec3(gl_GlobalInvocationID) + vec3(0.5)) * (sdf_size / sdf_res) +
       sdf_pos - vec3(sdf_size) * 0.5;
-  
-  const vec3 ot_octants[8] = {vec3(0.5f, 0.5f, 0.5f),   vec3(0.5f, 0.5f, -0.5f),
-                              vec3(0.5f, -0.5f, 0.5f),  vec3(0.5f, -0.5f, -0.5f),
-                              vec3(-0.5f, 0.5f, 0.5f),  vec3(-0.5f, 0.5f, -0.5f),
-                              vec3(-0.5f, -0.5f, 0.5f), vec3(-0.5f, -0.5f, -0.5f)};
 
   float value = 1000.0;
   float color_total_influence = 0.0;
@@ -84,26 +92,11 @@ void main() {
     node_idx = 0;
     node_leaf_blob_count = blob_ot[node_idx];
     while (node_leaf_blob_count == -1) {
-      bool found_intersection = false;
-
-      // Maybe this for loop can be replaced with something else?
-      for (int i = 0; i < 8; i++) {
-        vec3 child_pos = node_pos + vec3(node_size) * ot_octants[i] * 0.5;
-        float child_size = node_size * 0.5;
-
-        if (dist_cube(child_pos, child_size, p) <= 0.0) {
-          node_pos = child_pos;
-          node_size = child_size;
-          node_idx += blob_ot[node_idx + 1 + i];
-          node_leaf_blob_count = blob_ot[node_idx];
-          found_intersection = true;
-          break;
-        }
-      }
-
-      if (!found_intersection) {
-        break;
-      }
+      int oct = get_octant_containing_point(node_pos, p);
+      node_pos += vec3(node_size) * ot_octants[oct] * 0.5;
+      node_size *= 0.5;
+      node_idx += blob_ot[node_idx + 1 + oct];
+      node_leaf_blob_count = blob_ot[node_idx];
     }
 
     actual_count = node_leaf_blob_count;

@@ -149,7 +149,7 @@ typedef struct RaycastResult {
 } RaycastResult;
 
 // Size of level cube. Contains inactive blobs
-static const float BLOB_LEVEL_SIZE = 512.0f;
+static const float BLOB_LEVEL_SIZE = 640.0f;
 // Size of active simulation cube
 static const float BLOB_ACTIVE_SIZE = 32.0f;
 
