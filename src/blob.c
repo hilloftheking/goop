@@ -358,11 +358,13 @@ static bool blob_simulate_liquid_ot_leaf(BlobOtEnumData *enum_data) {
 
     float anti_grav = 0.0f;
 
-    for (int j = 0; j < bs->liquids.count; j++) {
+    // This only works when each liquid blob has a smaller radius than SDF_MAX_DIST
+    for (int j = 0; j < leaf->leaf_blob_count; j++) {
       if (j == i)
         continue;
 
-      LiquidBlob *ob = fixed_array_get(&bs->liquids, j);
+      int o_bidx = leaf->offsets[j];
+      LiquidBlob *ob = fixed_array_get(&bs->liquids, o_bidx);
 
       HMM_Vec3 attraction = blob_get_attraction_to(b, ob);
       b->vel = HMM_AddV3(b->vel, HMM_MulV3F(attraction, (float)delta * 5.0f));

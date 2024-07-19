@@ -86,6 +86,7 @@ void main() {
     while (node_leaf_blob_count == -1) {
       bool found_intersection = false;
 
+      // Maybe this for loop can be replaced with something else?
       for (int i = 0; i < 8; i++) {
         vec3 child_pos = node_pos + vec3(node_size) * ot_quadrants[i] * 0.5;
         float child_size = node_size * 0.5;
