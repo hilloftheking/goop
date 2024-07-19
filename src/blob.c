@@ -269,7 +269,7 @@ BlobRemoval *blob_sim_queue_remove(BlobSim *bs, RemovalType type, void *b) {
 }
 
 BlobRemoval *blob_sim_delayed_remove(BlobSim *bs, RemovalType type, void *b,
-                                      double t) {
+                                     double t) {
   BlobRemoval *del = blob_sim_queue_remove(bs, type, b);
   if (del) {
     del->timer = t;
@@ -358,7 +358,8 @@ static bool blob_simulate_liquid_ot_leaf(BlobOtEnumData *enum_data) {
 
     float anti_grav = 0.0f;
 
-    // This only works when each liquid blob has a smaller radius than SDF_MAX_DIST
+    // This only works when each liquid blob has a smaller radius than
+    // SDF_MAX_DIST
     for (int j = 0; j < leaf->leaf_blob_count; j++) {
       if (j == i)
         continue;
@@ -640,10 +641,41 @@ void blob_ot_reset(BlobOt *bot) {
 }
 
 // This is also in the compute shader, so be careful if it needs to be changed
-static HMM_Vec3 ot_quadrants[8] = {{0.5f, 0.5f, 0.5f},   {0.5f, 0.5f, -0.5f},
-                                   {0.5f, -0.5f, 0.5f},  {0.5f, -0.5f, -0.5f},
-                                   {-0.5f, 0.5f, 0.5f},  {-0.5f, 0.5f, -0.5f},
-                                   {-0.5f, -0.5f, 0.5f}, {-0.5f, -0.5f, -0.5f}};
+static HMM_Vec3 ot_octants[8] = {{0.5f, 0.5f, 0.5f},   {0.5f, 0.5f, -0.5f},
+                                 {0.5f, -0.5f, 0.5f},  {0.5f, -0.5f, -0.5f},
+                                 {-0.5f, 0.5f, 0.5f},  {-0.5f, 0.5f, -0.5f},
+                                 {-0.5f, -0.5f, 0.5f}, {-0.5f, -0.5f, -0.5f}};
+
+// Can also be used for spheres but it is less accurate. Returns bitflag of
+// octant children
+static int get_octant_children_containing_cube(const HMM_Vec3 *npos,
+                                               const HMM_Vec3 *cpos,
+                                               float chalf) {
+  int ret = 0xFF;
+
+  float dx = cpos->X - npos->X;
+  if (dx >= chalf) {
+    ret &= 0x0F;
+  } else if (dx <= -chalf) {
+    ret &= 0xF0;
+  }
+
+  float dy = cpos->Y - npos->Y;
+  if (dy >= chalf) {
+    ret &= 0x33;
+  } else if (dy <= -chalf) {
+    ret &= 0xCC;
+  }
+
+  float dz = cpos->Z - npos->Z;
+  if (dz >= chalf) {
+    ret &= 0x55;
+  } else if (dz <= -chalf) {
+    ret &= 0xAA;
+  }
+
+  return ret;
+}
 
 static float dist_cube(const HMM_Vec3 *c, float s, const HMM_Vec3 *p) {
   HMM_Vec3 d;
@@ -730,8 +762,7 @@ static bool blob_ot_insert_ot_leaf(BlobOtEnumData *enum_data) {
     // Set up each child right now before inserting nodes into them since they
     // might get filled up as well
     for (int i = 0; i < 8; i++) {
-      node->offsets[i] =
-          new_node_size_int + i * (1 + max_blobs_per_child);
+      node->offsets[i] = new_node_size_int + i * (1 + max_blobs_per_child);
       BlobOtNode *child = node + node->offsets[i];
       child->leaf_blob_count = 0;
     }
@@ -746,9 +777,9 @@ static bool blob_ot_insert_ot_leaf(BlobOtEnumData *enum_data) {
 
     for (int i = 0; i < 8; i++) {
       BlobOtNode *child = node + node->offsets[i];
-      HMM_Vec3 child_pos = HMM_AddV3(
-          HMM_MulV3F(ot_quadrants[i], enum_data->curr_leaf_size * 0.5f),
-          *enum_data->curr_leaf_pos);
+      HMM_Vec3 child_pos =
+          HMM_AddV3(HMM_MulV3F(ot_octants[i], enum_data->curr_leaf_size * 0.5f),
+                    *enum_data->curr_leaf_pos);
       float child_size = enum_data->curr_leaf_size * 0.5f;
 
       for (int j = 0; j < BLOB_OT_LEAF_SUBDIV_BLOB_COUNT; j++) {
@@ -854,25 +885,26 @@ void blob_ot_enum_leaves_sphere(BlobOtEnumData *enum_data) {
 
     if (node->leaf_blob_count == -1) {
       // This node has child nodes
+
+      int cflag = get_octant_children_containing_cube(
+          npos, &enum_data->shape_pos, enum_data->shape_size);
+
       int *i = &iter_stack[node_depth];
       for (; *i < 8; (*i)++) {
+        if ((cflag & (1 << *i)) == 0) {
+          continue;
+        }
+
         pos_stack[node_depth + 1] =
-            HMM_AddV3(HMM_MulV3F(ot_quadrants[*i], nsize * 0.5f), *npos);
+            HMM_AddV3(HMM_MulV3F(ot_octants[*i], nsize * 0.5f), *npos);
         size_stack[node_depth + 1] = nsize * 0.5f;
 
-        float dist =
-            dist_cube(&pos_stack[node_depth + 1], size_stack[node_depth + 1],
-                      &enum_data->shape_pos) -
-            enum_data->shape_size;
-
-        if (dist <= 0.0f) {
-          node_stack[node_depth + 1] = node + node->offsets[*i];
-          iter_stack[node_depth + 1] = 0;
-          node_depth += 2; // Because there is a decrement at the end of the
-                           // outer loop
-          (*i)++;          // Don't check this child again
-          break;
-        }
+        node_stack[node_depth + 1] = node + node->offsets[*i];
+        iter_stack[node_depth + 1] = 0;
+        node_depth += 2; // Because there is a decrement at the end of the
+                         // outer loop
+        (*i)++;          // Don't check this child again
+        break;
       }
     } else {
       // This is a leaf node
@@ -932,7 +964,7 @@ void blob_ot_enum_leaves_cube(BlobOtEnumData *enum_data) {
       int *i = &iter_stack[node_depth];
       for (; *i < 8; (*i)++) {
         pos_stack[node_depth + 1] =
-            HMM_AddV3(HMM_MulV3F(ot_quadrants[*i], nsize * 0.5f), *npos);
+            HMM_AddV3(HMM_MulV3F(ot_octants[*i], nsize * 0.5f), *npos);
         size_stack[node_depth + 1] = nsize * 0.5f;
 
         bool intersect = cube_cube_intersect(
