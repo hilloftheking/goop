@@ -132,6 +132,7 @@
     <ClInclude Include="src\game.h" />
     <ClInclude Include="src\goop.h" />
     <ClInclude Include="src\HandmadeMath.h" />
+    <ClInclude Include="src\ik.h" />
     <ClInclude Include="src\int_map.h" />
     <ClInclude Include="src\level.h" />
     <ClInclude Include="src\player.h" />
@@ -164,6 +165,7 @@
     <ClCompile Include="src\blob_render.c" />
     <ClCompile Include="src\game.c" />
     <ClCompile Include="src\goop.c" />
+    <ClCompile Include="src\ik.c" />
     <ClCompile Include="src\primitives.c" />
     <ClCompile Include="src\int_map.c" />
     <ClCompile Include="src\level.c" />

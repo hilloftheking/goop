@@ -82,6 +82,16 @@ Entity player_create() {
   Model *mdl = entity_add_component(ent, COMPONENT_MODEL);
   blob_mdl_create(mdl, PLAYER_MDL, ARR_SIZE(PLAYER_MDL));
 
+  {
+    IKChainCreateInfo create_info = {0};
+    ik_chain_create(&player->ik_chain, &create_info);
+  }
+
+  for (int i = 0; i < 4; i++) {
+    IKChainJointInfo joint_info = {.length = 1.0f, .pos = {0, 1.7f, -0.5f - i}};
+    ik_chain_joint_add(&player->ik_chain, &joint_info);
+  }
+
   return ent;
 }
 
@@ -215,6 +225,29 @@ void player_process(Entity ent) {
           EYE_RADIUS;
       mdl->blobs[8].radius = r;
       mdl->blobs[9].radius = r;
+    }
+
+    // Testing IK
+    {
+      HMM_Vec3 origin = {0, 1.7f, -0.5f};
+      HMM_Vec3 ro = HMM_MulM4V4(*trans, HMM_V4V(origin, 1.0f)).XYZ;
+      HMM_Vec3 rd = HMM_MulV3F(trans->Columns[2].XYZ, -3.0f);
+      RaycastResult result;
+      blob_sim_raycast(&result, global.blob_sim, ro, rd);
+      
+      HMM_Vec3 goal = origin;
+      if (result.has_hit) {
+        goal.Z -= result.traveled;
+      } else {
+        goal.Z -= 3.0f;
+      }
+
+      ik_chain_solve(&player->ik_chain, &origin, &goal);
+
+      for (int i = 0; i < 4; i++) {
+        ModelBlob *b = &mdl->blobs[i + 10];
+        b->pos = ik_chain_joint_get_pos(&player->ik_chain, i);
+      }
     }
   }
 

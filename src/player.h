@@ -3,6 +3,7 @@
 #include "HandmadeMath.h"
 
 #include "core.h"
+#include "ik.h"
 
 typedef struct Player {
   double shoot_timer;
@@ -11,6 +12,7 @@ typedef struct Player {
   HMM_Vec3 vel;
   HMM_Vec3 grav;
   int health;
+  IKChain ik_chain;
 } Player;
 
 Entity player_create();
