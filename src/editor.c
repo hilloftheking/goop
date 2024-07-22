@@ -10,6 +10,62 @@
 
 enum EditorState { STATE_NONE, STATE_MOVE, STATE_RESIZE, STATE_MATERIAL };
 
+static void editor_save(Editor *editor) {
+  FILE *f = fopen("assets/_editor_out.blvl", "w");
+  if (!f) {
+    fprintf(stderr, "Failed to open assets/_editor_out.blvl\n");
+    return;
+  }
+
+  GoopEngine *goop = editor->goop;
+  FixedArray *solids = &goop->bs.solids;
+
+  fprintf(f, "[solids]\nradius = [");
+  for (int i = 0; i < solids->count; i++) {
+    if (i != 0)
+      fprintf(f, ", ");
+    SolidBlob *b = fixed_array_get(solids, i);
+    fprintf(f, "%.2f", b->radius);
+  }
+  fprintf(f, "]\npos = [");
+  for (int i = 0; i < solids->count; i++) {
+    if (i != 0)
+      fprintf(f, ", ");
+    SolidBlob *b = fixed_array_get(solids, i);
+    fprintf(f, "[%.2f, %.2f, %.2f]", b->pos.X, b->pos.Y, b->pos.Z);
+  }
+  fprintf(f, "]\nmat_idx=[");
+  for (int i = 0; i < solids->count; i++) {
+    if (i != 0)
+      fprintf(f, ", ");
+    SolidBlob *b = fixed_array_get(solids, i);
+    fprintf(f, "%d", b->mat_idx);
+  }
+  fprintf(f, "]\n");
+
+  fclose(f);
+}
+
+static void editor_move_update(Editor *editor) {
+  GoopEngine *goop = editor->goop;
+
+  SolidBlob *b = fixed_array_get(&goop->bs.solids, editor->selected);
+
+  HMM_Vec3 rel = {0};
+  rel = HMM_AddV3(rel, HMM_MulV4F(goop->br.cam_trans.Columns[0],
+                                  (float)editor->move.relx * 0.03f)
+                           .XYZ);
+  rel = HMM_AddV3(rel, HMM_MulV4F(goop->br.cam_trans.Columns[1],
+                                  (float)-editor->move.rely * 0.03f)
+                           .XYZ);
+  rel.X *= (editor->move.axis & MOVE_X) != 0;
+  rel.Y *= (editor->move.axis & MOVE_Y) != 0;
+  rel.Z *= (editor->move.axis & MOVE_Z) != 0;
+  HMM_Vec3 new_pos = HMM_AddV3(editor->move.start_pos, rel);
+
+  solid_blob_set_radius_pos(&goop->bs, b, b->radius, &new_pos);
+}
+
 void editor_input(Entity ent, InputEvent *event) {
   Editor *editor = entity_get_component(ent, COMPONENT_EDITOR);
   GoopEngine *goop = editor->goop;
@@ -19,6 +75,13 @@ void editor_input(Entity ent, InputEvent *event) {
       return;
 
     if (event->key.key == GLFW_KEY_ESCAPE) {
+      if (editor->state == STATE_MOVE) {
+        // Reset position of selection
+        SolidBlob *b = fixed_array_get(&goop->bs.solids, editor->selected);
+        solid_blob_set_radius_pos(&goop->bs, b, b->radius,
+                                  &editor->move.start_pos);
+      }
+
       editor->state = STATE_NONE;
       return;
     }
@@ -32,44 +95,36 @@ void editor_input(Entity ent, InputEvent *event) {
       }
     }
 
+    if (editor->state == STATE_MOVE) {
+      int desired_axis = 0;
+      if (event->key.key == GLFW_KEY_X) {
+        desired_axis = MOVE_X;
+      } else if (event->key.key == GLFW_KEY_Y) {
+        desired_axis = MOVE_Y;
+      } else if (event->key.key == GLFW_KEY_Z) {
+        desired_axis = MOVE_Z;
+      }
+
+      if (desired_axis) {
+        if (event->key.mods & GLFW_MOD_SHIFT) {
+          editor->move.axis = MOVE_ALL ^ desired_axis;
+        } else if (editor->move.axis != desired_axis) {
+          editor->move.axis = desired_axis;
+        } else {
+          editor->move.axis = MOVE_ALL;
+        }
+
+        editor_move_update(editor);
+      }
+    }
+
     if (editor->state != STATE_NONE) {
       return;
     }
 
     if (event->key.mods & GLFW_MOD_CONTROL) {
       if (event->key.key == GLFW_KEY_S) {
-        FILE *f = fopen("assets/_editor_out.blvl", "w");
-        if (!f) {
-          fprintf(stderr, "Failed to open assets/_editor_out.blvl\n");
-          return;
-        }
-
-        FixedArray *solids = &goop->bs.solids;
-
-        fprintf(f, "[solids]\nradius = [");
-        for (int i = 0; i < solids->count; i++) {
-          if (i != 0)
-            fprintf(f, ", ");
-          SolidBlob *b = fixed_array_get(solids, i);
-          fprintf(f, "%.2f", b->radius);
-        }
-        fprintf(f, "]\npos = [");
-        for (int i = 0; i < solids->count; i++) {
-          if (i != 0)
-            fprintf(f, ", ");
-          SolidBlob *b = fixed_array_get(solids, i);
-          fprintf(f, "[%.2f, %.2f, %.2f]", b->pos.X, b->pos.Y, b->pos.Z);
-        }
-        fprintf(f, "]\nmat_idx=[");
-        for (int i = 0; i < solids->count; i++) {
-          if (i != 0)
-            fprintf(f, ", ");
-          SolidBlob *b = fixed_array_get(solids, i);
-          fprintf(f, "%d", b->mat_idx);
-        }
-        fprintf(f, "]\n");
-
-        fclose(f);
+        editor_save(editor);
       }
 
       return;
@@ -111,9 +166,16 @@ void editor_input(Entity ent, InputEvent *event) {
 
     if (editor->selected == -1)
       return;
+
+    SolidBlob *b = fixed_array_get(&goop->bs.solids, editor->selected);
+
     switch (event->key.key) {
     case GLFW_KEY_G:
       editor->state = STATE_MOVE;
+      editor->move.relx = 0.0;
+      editor->move.rely = 0.0;
+      editor->move.start_pos = b->pos;
+      editor->move.axis = MOVE_ALL;
       break;
     case GLFW_KEY_R:
       editor->state = STATE_RESIZE;
@@ -177,16 +239,10 @@ void editor_input(Entity ent, InputEvent *event) {
     SolidBlob *b = fixed_array_get(&goop->bs.solids, editor->selected);
 
     if (editor->state == STATE_MOVE) {
-      HMM_Vec3 rel = {0};
-      rel = HMM_AddV3(rel, HMM_MulV4F(goop->br.cam_trans.Columns[0],
-                                      (float)event->mouse_motion.relx * 0.03f)
-                               .XYZ);
-      rel = HMM_AddV3(rel, HMM_MulV4F(goop->br.cam_trans.Columns[1],
-                                      (float)-event->mouse_motion.rely * 0.03f)
-                               .XYZ);
-      HMM_Vec3 new_pos = HMM_AddV3(b->pos, rel);
+      editor->move.relx += event->mouse_motion.relx;
+      editor->move.rely += event->mouse_motion.rely;
 
-      solid_blob_set_radius_pos(&goop->bs, b, b->radius, &new_pos);
+      editor_move_update(editor);
     } else if (editor->state == STATE_RESIZE) {
       float radius = b->radius;
       radius += (float)event->mouse_motion.relx * 0.05f;

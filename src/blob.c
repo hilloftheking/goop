@@ -369,9 +369,7 @@ static bool blob_simulate_liquid_ot_leaf(BlobOtEnumData *enum_data) {
 
       HMM_Vec3 attraction = blob_get_attraction_to(b, ob);
       b->vel = HMM_AddV3(b->vel, HMM_MulV3F(attraction, (float)delta * 5.0f));
-      /*
       anti_grav += blob_get_support_with(b, ob);
-      */
     }
 
     b->vel.Y -= LIQUID_GRAVITY * delta * (1.0f - fminf(anti_grav, 1.0f));

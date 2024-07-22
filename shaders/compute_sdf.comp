@@ -104,6 +104,8 @@ void main() {
     actual_count = blob_count;
   }
 
+  float min_d = 10000.0;
+
   for (int i = 0; i < actual_count; i++) {
     vec4 blob;
     if (use_octree) {
@@ -117,13 +119,22 @@ void main() {
     float radius = (int(blob.a) / BLOB_MAT_COUNT) / float(BLOB_RADIUS_MULT);
 
     float d = dist_sphere(blob.xyz, radius, p);
+    float old_value = value;
     value = smin(value, d, blob_smooth);
 
-    // TODO: this will break if a bunch of blobs are stacked
-    float color_influence = clamp(blob_smooth - d, 0.0, 1.0);
-    color_influence *= color_influence;
-    color_total_influence += color_influence;
-    color += colors[mat_idx] * color_influence;
+    if (blob_smooth == 0.0) {
+      if (d < min_d) {
+        min_d = d;
+        color = colors[mat_idx];
+        color_total_influence = 1.0;
+      }
+    } else {
+      // TODO: this will break if a bunch of blobs are stacked
+      float color_influence = clamp(blob_smooth - d, 0.0, 1.0);
+      color_influence *= color_influence;
+      color_total_influence += color_influence;
+      color += colors[mat_idx] * color_influence;
+    }
   }
 
   // Debug visualization
