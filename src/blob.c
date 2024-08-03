@@ -462,12 +462,20 @@ void blob_simulate(BlobSim *bs, double delta) {
       }
       int bidx = del->bidx;
 
-      if (bt == REMOVE_LIQUID) {
+      if (bt == REMOVE_SOLID || bt == REMOVE_LIQUID) {
         // Remove this blob from the octree and decrement any indices
         // TODO: anything but this
-        LiquidBlob *b = fixed_array_get(ba, bidx);
-        BlobOt *bot = &bs->liquid_ot;
-        blob_ot_remove(bot, &b->pos, b->radius, bidx);
+        BlobOt *bot = NULL;
+        if (bt == REMOVE_SOLID) {
+          SolidBlob *b = fixed_array_get(ba, bidx);
+          bot = &bs->solid_ot;
+          blob_ot_remove(bot, &b->pos, b->radius, bidx);
+        } else if (bt == REMOVE_LIQUID) {
+          LiquidBlob *b = fixed_array_get(ba, bidx);
+          bot = &bs->liquid_ot;
+          blob_ot_remove(bot, &b->pos, b->radius, bidx);
+        }
+
         BlobOtNode *node_stack[BLOB_OT_MAX_SUBDIVISIONS + 1];
         node_stack[0] = bot->root;
         int iter_stack[BLOB_OT_MAX_SUBDIVISIONS + 1];

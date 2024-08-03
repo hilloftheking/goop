@@ -253,10 +253,12 @@ void goop_main_loop(GoopEngine *goop) {
 
     // Enemy behavior
 
+    #ifndef GOOP_EDITOR
     for (int i = 0; i < component_get_count(COMPONENT_ENEMY_FLOATER); i++) {
       floater_process(
           component_get_from_idx(COMPONENT_ENEMY_FLOATER, i)->entity);
     }
+    #endif
 
     // Render scene
 

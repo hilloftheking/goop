@@ -1,10 +1,12 @@
 #include <stdio.h>
+#include <string.h>
 
 #include <GLFW/glfw3.h>
 
 #include "ecs.h"
 #include "editor.h"
 #include "goop.h"
+#include "level.h"
 
 #define CAM_SPEED 4.0f
 
@@ -44,6 +46,34 @@ static void editor_save(Editor *editor) {
   fprintf(f, "]\n");
 
   fclose(f);
+}
+
+static void editor_open(Editor *editor) {
+  printf("Open file: ");
+  char filename[128];
+  fgets(filename, sizeof(filename), stdin);
+  int filename_len = strlen(filename);
+  if (filename_len > 0 && filename[filename_len - 1] == '\n') {
+    filename[filename_len - 1] = '\0';
+  }
+
+  FILE *blvl_f = fopen(filename, "rb");
+  if (!blvl_f) {
+    fprintf(stderr, "Failed to open %s\n", filename);
+    return;
+  }
+
+  fseek(blvl_f, 0, SEEK_END);
+  int blvl_size = ftell(blvl_f);
+  fseek(blvl_f, 0, SEEK_SET);
+
+  char *blvl_data = alloc_mem(blvl_size);
+  fread(blvl_data, 1, blvl_size, blvl_f);
+  fclose(blvl_f);
+
+  level_load(&editor->goop->bs, blvl_data, blvl_size);
+
+  free_mem(blvl_data);
 }
 
 static void editor_move_update(Editor *editor) {
@@ -123,8 +153,13 @@ void editor_input(Entity ent, InputEvent *event) {
     }
 
     if (event->key.mods & GLFW_MOD_CONTROL) {
-      if (event->key.key == GLFW_KEY_S) {
+      switch (event->key.key) {
+      case GLFW_KEY_S:
         editor_save(editor);
+        break;
+      case GLFW_KEY_O:
+        editor_open(editor);
+        break;
       }
 
       return;
@@ -182,6 +217,10 @@ void editor_input(Entity ent, InputEvent *event) {
       break;
     case GLFW_KEY_M:
       editor->state = STATE_MATERIAL;
+      break;
+    case GLFW_KEY_X:
+      blob_sim_queue_remove(&editor->goop->bs, REMOVE_SOLID, b);
+      editor->selected = -1;
       break;
     default:
       break;
@@ -272,6 +311,8 @@ void editor_init(GoopEngine* goop) {
   goop->br.cam_trans =
       HMM_LookAt_RH(HMM_V3(0, 0, 0), HMM_V3(0, 0, -2), HMM_V3(0, 1, 0));
   goop->br.view_mat = HMM_InvGeneralM4(goop->br.cam_trans);
+
+  global.player_ent = -1;
 }
 
 void editor_process(Entity ent) {
